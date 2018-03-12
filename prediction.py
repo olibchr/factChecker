@@ -189,15 +189,15 @@ def hmm_prediction(facts, transactions):
         early_correct.append(last_cor/(len(p)*1.0))
 
 
-    print('Correct class could be detected after {} % of all tweets'.format(sum(early_correct) / (1.0* len(early_correct))))
 
-    print('Accuracy: {}, Correct: {}, Total: {}'.format(sum(match) / (len(match) * 1.0), sum(match), len(match)))
-    print('Accuracy over time in 10pp steps: {}'.format(accuracy_per_iter))
     f1_score = sklearn.metrics.f1_score(truth, pred, average='micro')
     print('F1 Score: {}'.format(f1_score))
+    print('Accuracy: {}, Correct: {}, Total: {}'.format(sum(match) / (len(match) * 1.0), sum(match), len(match)))
+    print('\tAccuracy over time in 10pp steps: {}'.format(accuracy_per_iter))
+    print('\tCorrect class could be detected after {} % of all tweets'.format(sum(early_correct) / (1.0* len(early_correct))))
     print('Categories: {}'.format(Counter(truth)))
     print('Predicted Categories: {}'.format(Counter(pred)))
-    print('Missclassified facts with labels: {}'.format(Counter([truth[idx] for idx,m in enumerate(match) if m == 0])))
+    print('\tMissclassified facts with labels: {}'.format(Counter([truth[idx] for idx,m in enumerate(match) if m == 0])))
     result_analysis(facts, transactions, truth, pred)
     return f1_score, misclassified_per_label, misclassified_hash
 
@@ -207,18 +207,24 @@ def result_analysis(facts, transactions, truth, pred):
     misclassified_hash = [hsh for hsh, m in zip(facts.as_matrix(['hash']).flatten(), match) if m == 0]
     corclassified_hash = [hsh for hsh, m in zip(facts.as_matrix(['hash']).flatten(), match) if m == 1]
 
+    print('$$$$ Detailed Analyiss $$$$')
+    print('\tCorrectly classified')
+    classification_analysis(facts, transactions, corclassified_hash)
+    print('\tIncorrectly classified')
+    classification_analysis(facts, transactions, misclassified_hash)
 
-    print('Correctly classified')
+
+def classification_analysis(facts, transactions, classified_hash):
     support = []
     reject = []
     duration = []
     certainty = []
     topics = []
     start = []
-    for hsh in corclassified_hash:
+    for hsh in classified_hash:
         fact_transactions = transactions[transactions.fact == hsh].sort_values(by=['fact', 'timestamp'])
 
-        topics.append(facts[facts.hash == hsh]['topic'])
+        topics.extend(facts[facts.hash == hsh].as_matrix(['topic']).flatten())
 
         support.append(fact_transactions[fact_transactions.stance == 'supporting'].shape[0])
         reject.append(fact_transactions[fact_transactions.stance == 'denying'].shape[0])
@@ -233,59 +239,20 @@ def result_analysis(facts, transactions, truth, pred):
         hours_in_range = int(duration[-1].days + 1)*24
         dens_s = {k:0 for k in [first_time.replace(minute=0, second=0) + timedelta(hours=dt) for dt in range(hours_in_range + 1)]}
         dens_r = {k:0 for k in [first_time.replace(minute=0, second=0) + timedelta(hours=dt) for dt in range(hours_in_range + 1)]}
+
         for idx, dt in fact_transactions.iterrows():
             if dt['stance'] == 'supporting':
                 dens_s[dt['timestamp'].replace(minute=0, second=0)] += 1
             elif dt['stance'] == 'denying':
                 dens_r[dt['timestamp'].replace(minute=0, second=0)] += 1
-        time_multi_plot(dens_s, dens_r, {}, title=facts[facts.hash == hsh]['text'])
-    print('Topcis: {}'.format(Counter(topics)))
-    print('Certainty: {}'.format(Counter(certainty)))
-    print('Avg supporting tweets: {}'.format(sum(support) / (1.0 * len(support))))
-    print('Avg denying tweets: {}'.format(sum(reject) / (1.0 * len(reject))))
-    print('Avg duration: {}'.format(sum(duration) / (1.0 * len(duration))))
-    print('Avg start: {}'.format(sum(start) / (1.0 * len(start))))
-
-
-
-
-    print('Incorrectly classified')
-    support = []
-    reject = []
-    duration = []
-    certainty = []
-    topics = []
-    start = []
-    for hsh in misclassified_hash:
-        fact_transactions = transactions[transactions.fact == hsh].sort_values(by=['fact', 'timestamp'])
-
-        topics.append(facts[facts.hash == hsh]['topic'])
-
-        support.append(fact_transactions[fact_transactions.stance == 'supporting'].shape[0])
-        reject.append(fact_transactions[fact_transactions.stance == 'denying'].shape[0])
-
-        duration.append(fact_transactions.iloc[-1].timestamp - fact_transactions.iloc[0].timestamp)
-
-        certainty.extend(fact_transactions.as_matrix(['weight']).flatten())
-
-        start.append(fact_transactions.iloc[0].timestamp)
-
-        first_time = fact_transactions.iloc[0].timestamp
-        hours_in_range = int(duration.days + 1)*24
-        dens_s = {k:0 for k in [first_time.replace(minute=0, second=0) + datetime.timedelta(hours=dt) for dt in range(hours_in_range + 1)]}
-        dens_r = {k:0 for k in [first_time.replace(minute=0, second=0) + datetime.timedelta(hours=dt) for dt in range(hours_in_range + 1)]}
-        for dt in fact_transactions.iterrows():
-            if dt['stance'] == 'supporting':
-                dens_s[dt['timestamp'].replace(minute=0, second=0)] += 1
-            elif dt['stance'] == 'denying':
-                dens_r[dt['timestamp'].replace(minute=0, second=0)] += 1
-        time_multi_plot(dens_s, dens_r, {}, title=facts[facts.hash == hsh]['text'])
-    print('Topcis: {}'.format(Counter(topics)))
-    print('Certainty: {}'.format(Counter(certainty)))
-    print('Avg supporting tweets: {}'.format(sum(support) / (1.0 * len(support))))
-    print('Avg denying tweets: {}'.format(sum(reject) / (1.0 * len(reject))))
-    print('Avg duration: {}'.format(sum(duration) / (1.0 * len(duration))))
-    print('Avg start: {}'.format(sum(start) / (1.0 * len(start))))
+        tmp = {k:0 for k in [first_time.replace(minute=0, second=0) + timedelta(hours=dt) for dt in range(hours_in_range + 1)]}
+        #time_multi_plot(dens_s, dens_r, tmp, title=facts[facts.hash == hsh]['text'])
+    print('\t\tTopcis: {}'.format(Counter(topics)))
+    print('\t\tCertainty: {}'.format(Counter(certainty)))
+    print('\t\tAvg supporting tweets: {}'.format(sum(support) / (1.0 * len(support))))
+    print('\t\tAvg denying tweets: {}'.format(sum(reject) / (1.0 * len(reject))))
+    print('\t\tAvg duration: {}'.format(sum(duration, timedelta(0)) / (len(duration))))
+    print('\t\tAvg start: {}'.format(sum((d_i-start[0] for d_i in start), timedelta(0)) / (len(start))))
 
 
 def main():
