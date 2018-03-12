@@ -1,6 +1,6 @@
 .DS_STORE
 ./*.DS_STORE
-./idea/
-./ven*/
+./.idea/
+./venv*/
 __pycache*
 *.pyc
