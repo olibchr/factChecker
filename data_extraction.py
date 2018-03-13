@@ -119,9 +119,9 @@ def data_extraction():
             truth_value = tweet_annot['true'] if 'true' in tweet_annot else 'unknown'
             is_turnaround = tweet_annot['is_turnaround'] if 'is_turnaround' in tweet_annot else 'unknown'
             if hashlib.md5(tweet_annot['category'].encode()).hexdigest() not in FACT_MEMORY:
-                fact = Fact(tweet_annot['is_rumour'], TOPIC, tweet_annot['category'], truth_value, tweet_annot['misinformation'], is_turnaround)
+                fact = Fact(tweet_annot['is_rumour'], TOPIC, tweet_annot['category'], truth_value, tweet_annot['misinformation'], is_turnaround, source_tweet['id'])
                 FACTS.append(fact)
-                FACTS_DUMP.append([fact.rumor_type, fact.hash, fact.topic, fact.text, fact.true, fact.proven_false, fact.is_turnaround])
+                FACTS_DUMP.append([fact.rumor_type, fact.hash, fact.topic, fact.text, fact.true, fact.proven_false, fact.is_turnaround, fact.source_tweet])
                 FACT_MEMORY.append(hashlib.md5(tweet_annot['category'].encode()).hexdigest())
             # Transaction
             # <ID, USER ID, FACT ID, TIMESTAMP, {support, reject}, weight>
