@@ -170,10 +170,10 @@ def data_extraction():
                 TRANSACTIONS.append(Transaction(comment[0], comment[1], comment[2], comment[3], comment[4], comment[5], comment[6]))
 
 def store_result():
-    with open(DIR + 'factTransaction.json', 'w') as out_file:
+    with open(DIR + '../factTransaction.json', 'w') as out_file:
         out_file.write(json.dumps([t.__dict__ for t in TRANSACTIONS], default=datetime_converter))
 
-    with open(DIR + 'facts.json', 'w') as out_file:
+    with open(DIR + '../facts.json', 'w') as out_file:
         out_file.write(json.dumps([f.__dict__ for f in FACTS], default=datetime_converter))
 
 

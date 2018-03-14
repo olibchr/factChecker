@@ -1,7 +1,7 @@
 import pandas as pd
 from hmmlearn import hmm
 import sklearn.metrics
-from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer
+from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer, MinMaxScaler
 from sklearn.metrics import roc_curve, auc
 import random, math
 from datetime import datetime, timedelta
@@ -23,8 +23,8 @@ DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/R
 SHOW_PLOTS = False
 
 def get_data():
-    facts = pd.read_json(DIR + 'facts.json')
-    transactions = pd.read_json(DIR + 'factTransaction.json')
+    facts = pd.read_json(DIR + '../facts.json')
+    transactions = pd.read_json(DIR + '../factTransaction.json')
     return facts, transactions
 
 
@@ -134,6 +134,8 @@ def wisdom_certainty(facts, transactions):
 def hmm_prediction(facts, transactions):
     print('\n%%%%%%%%%%%%%%%%%%%%')
     print('Prediction using HMM')
+
+    #Preprocessing
     hmm_transactions = transactions[['fact', 'stance', 'weight', 'timestamp']].sort_values(by=['fact', 'timestamp'])
     facts = facts.sample(frac=1)
     facts_train = facts[:100].sort_values(by=['hash'])
@@ -143,17 +145,20 @@ def hmm_prediction(facts, transactions):
     hmm_transactions = hmm_transactions[hmm_transactions.stance != 'comment']
     hmm_transactions = hmm_transactions[hmm_transactions.stance != 'underspecified']
 
-    hmm_transactions.loc[hmm_transactions['weight'] == 'certain', 'weight'] = 3
-    hmm_transactions.loc[hmm_transactions['weight'] == 'somewhat-certain', 'weight'] = 2
-    hmm_transactions.loc[hmm_transactions['weight'] == 'uncertain', 'weight'] = 1
-    hmm_transactions.loc[hmm_transactions['weight'] == 'underspecified', 'weight'] = 0
+    hmm_transactions.loc[hmm_transactions['weight'] == 'certain', 'weight'] = 3.0
+    hmm_transactions.loc[hmm_transactions['weight'] == 'somewhat-certain', 'weight'] = 2.0
+    hmm_transactions.loc[hmm_transactions['weight'] == 'uncertain', 'weight'] = 1.0
+    hmm_transactions.loc[hmm_transactions['weight'] == 'underspecified', 'weight'] = 0.0
 
-    hmm_transactions.loc[hmm_transactions['stance'] == 'supporting', 'stance'] = 1
-    hmm_transactions.loc[hmm_transactions['stance'] == 'denying', 'stance'] = 0
+    hmm_transactions.loc[hmm_transactions['stance'] == 'supporting', 'stance'] = 1.0
+    hmm_transactions.loc[hmm_transactions['stance'] == 'denying', 'stance'] = 0.0
+
+    for t in hmm_transactions.iterrows():
+        hmm_transactions.loc[t[0], 'weekday'] = t[1][3].to_datetime().weekday()
+        hmm_transactions.loc[t[0], 'hour_of_day'] = t[1][3].to_datetime().hour
 
     def to_stamp(x):
         return time.mktime(x.to_datetime().timetuple())
-
     hmm_transactions['timestamp'] = hmm_transactions['timestamp'].apply(to_stamp)
 
     for hsh in facts.as_matrix(['hash']).flatten():
@@ -162,22 +167,29 @@ def hmm_prediction(facts, transactions):
         for t in fact_transactions.iterrows():
             hmm_transactions.loc[t[0], 'since_start'] = t[1][3] - min_ts
 
+    hmm_transactions[['since_start']] /= hmm_transactions[['since_start']].max()
+    hmm_transactions[['weekday']] /= hmm_transactions[['weekday']].max()
+    hmm_transactions[['hour_of_day']] /= hmm_transactions[['hour_of_day']].max()
+
+    # Split data set
     facts_true = facts_train[(facts_train.true.astype(str) == '1')]
     facts_false = facts_train[(facts_train.true.astype(str) == '0')]
     facts_unknown = facts_train[(facts_train.true.astype(str) != '0') & (facts_train.true.astype(str) != '1')]
 
     X_true = hmm_transactions[hmm_transactions.fact.isin(facts_true['hash'])].as_matrix(
-        ['stance', 'weight', 'timestamp', 'since_start'])
+        ['stance', 'weight', 'timestamp', 'weekday', 'hour_of_day'])
     X_false = hmm_transactions[hmm_transactions.fact.isin(facts_false['hash'])].as_matrix(
-        ['stance', 'weight', 'timestamp', 'since_start'])
+        ['stance', 'weight', 'timestamp', 'weekday', 'hour_of_day'])
     X_unknown = hmm_transactions[hmm_transactions.fact.isin(facts_unknown['hash'])].as_matrix(
-        ['stance', 'weight', 'timestamp', 'since_start'])
+        ['stance', 'weight', 'timestamp', 'weekday', 'hour_of_day'])
 
     lengths_t = [len(np.where(hmm_transactions.fact == f)[0]) for f in sorted(facts_true.as_matrix(['hash']).flatten())]
     lengths_f = [len(np.where(hmm_transactions.fact == f)[0]) for f in
                  sorted(facts_false.as_matrix(['hash']).flatten())]
     lengths_u = [len(np.where(hmm_transactions.fact == f)[0]) for f in
                  sorted(facts_unknown.as_matrix(['hash']).flatten())]
+
+    # Train it
 
     model_t = hmm.GaussianHMM(n_components=5, covariance_type="diag", algorithm='map').fit(X_true, lengths_t)
     model_f = hmm.GaussianHMM(n_components=5, covariance_type="diag", algorithm='map').fit(X_false, lengths_f)
@@ -199,11 +211,12 @@ def hmm_prediction(facts, transactions):
         else:
             truth.append(-1)
 
-        t = hmm_transactions[hmm_transactions.fact == f].as_matrix(['stance', 'weight', 'timestamp', 'since_start'])
+        t = hmm_transactions[hmm_transactions.fact == f].as_matrix(['stance', 'weight', 'timestamp', 'weekday', 'hour_of_day'])
         t_pred = []
         t_conf = []
         if len(t) == 1:
             for i in range(10):
+                t = [list(map(float, tr)) for tr in t]
                 log_t = model_t.score(t)
                 log_f = model_f.score(t)
                 log_u = model_u.score(t)
@@ -217,13 +230,17 @@ def hmm_prediction(facts, transactions):
                 conf = abs(max([log_t, log_f, log_u]) - min([log_t, log_f, log_u]))
                 t_conf.append(conf)
         else:
+            # If theres more than one transaction, split whole timeframe into ten buckets, make predicion up to each bucket
             first_ts = int(t[0][2])
             last_ts = int(t[-1][2])
             diff = int(round((last_ts - first_ts) * 0.1 + 0.5))
             first_ts += diff
             last_ts += diff
             for i in range(first_ts, last_ts, diff):
-                this_t = [l for l in t if int(l[2]) <= i]
+                this_t = np.asarray([l for l in t if int(l[2]) <= i])
+
+                # Print the transactions that are passed to the model
+                # print([list(map(int,t)) for t in this_t])
                 log_t = model_t.score(this_t)
                 log_f = model_f.score(this_t)
                 log_u = model_u.score(this_t)
@@ -236,7 +253,8 @@ def hmm_prediction(facts, transactions):
                     t_pred.append(-1)
                 conf = abs(max([log_t, log_f, log_u]) - min([log_t, log_f, log_u]))
                 t_conf.append(conf)
-        print(t_pred, truth[-1])
+        # Print prediction after each bucket and actual truth value
+        #print(t_pred, truth[-1])
         confidence_all_classes.append([log_t, log_f, log_u])
         confidence.append(t_conf)
         pred.append(t_pred[-1])
@@ -259,6 +277,7 @@ def hmm_prediction(facts, transactions):
 
 
 def result_analysis(facts, transactions, truth, pred, iter_pred, confidence):
+    # Details on accuracy, confidence, and labels
     match = [1 if t == p else 0 for t, p in zip(truth, pred)]
     match_per_iter = [[1 if p == truth else 0 for p in prediction] for truth, prediction in zip(truth, iter_pred)]
     match_per_iter_t = list(map(list, zip(*match_per_iter)))
@@ -448,7 +467,7 @@ def classification_analysis(facts, transactions, classified_hash):
     print('\t\tAvg start: {}'.format(sum((start[0] - d_i for d_i in start), timedelta(0)) / (len(start))))
 
 
-def aggregation_analysis(facts, transactions, mismatches_hsh, corrmatches_hash):
+def aggregated_analysis(facts, transactions, mismatches_hsh, corrmatches_hash):
     transactions = transactions[transactions.stance != 'appeal-for-more-information']
     transactions = transactions[transactions.stance != 'comment']
     transactions = transactions[transactions.stance != 'underspecified']
@@ -472,13 +491,13 @@ def aggregation_analysis(facts, transactions, mismatches_hsh, corrmatches_hash):
 
 
 def main():
-    wisdom_crowd(*get_data())
-    wisdom_certainty(*get_data())
+    #wisdom_crowd(*get_data())
+    #wisdom_certainty(*get_data())
     avg = []
     mismatches_label = []
     mismatches_hash = []
     matches_hash = []
-    for i in range(2):
+    for i in range(20):
         try:
             score, mism_label, mism_hash, m_hash = hmm_prediction(*get_data())
             avg.append(score)
@@ -492,7 +511,7 @@ def main():
     # print('Misclassified hash: {}'.format(Counter(mismatches_hash)))
     # print('Correct classified hash: {}'.format(Counter(matches_hash)))
     # facts, transactions = get_data()
-    # aggregation_analysis(facts, transactions, Counter(mismatches_hash), Counter(matches_hash))
+    # aggregated_analysis(facts, transactions, Counter(mismatches_hash), Counter(matches_hash))
 
 
 if __name__ == "__main__":
