@@ -21,6 +21,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/RAW/'
 SHOW_PLOTS = False
+HMM_COMPONENTS = [7,7,5]
 
 def get_data():
     facts = pd.read_json(DIR + '../facts.json')
@@ -72,6 +73,7 @@ def wisdom_crowd(facts, transactions):
     # print('\tIncorrectly classified')
     # classification_analysis(facts, transactions, misclassified_hash)
     precision_recall(truth, pred, 2)
+    aggregated_analysis(facts, transactions, Counter(misclassified_hash), Counter(corclassified_hash))
 
 
 def wisdom_certainty(facts, transactions):
@@ -129,6 +131,7 @@ def wisdom_certainty(facts, transactions):
     #print('\tIncorrectly classified')
     #classification_analysis(facts, transactions, misclassified_hash)
     precision_recall(truth, pred, 2)
+    aggregated_analysis(facts, transactions, Counter(misclassified_hash), Counter(corclassified_hash))
 
 
 def hmm_prediction(facts, transactions):
@@ -191,9 +194,9 @@ def hmm_prediction(facts, transactions):
 
     # Train it
 
-    model_t = hmm.GaussianHMM(n_components=5, covariance_type="diag", algorithm='map').fit(X_true, lengths_t)
-    model_f = hmm.GaussianHMM(n_components=5, covariance_type="diag", algorithm='map').fit(X_false, lengths_f)
-    model_u = hmm.GaussianHMM(n_components=5, covariance_type="diag", algorithm='map').fit(X_unknown, lengths_u)
+    model_t = hmm.GaussianHMM(n_components=HMM_COMPONENTS[0], covariance_type="diag").fit(X_true, lengths_t)
+    model_f = hmm.GaussianHMM(n_components=HMM_COMPONENTS[1], covariance_type="diag").fit(X_false, lengths_f)
+    model_u = hmm.GaussianHMM(n_components=HMM_COMPONENTS[2], covariance_type="diag").fit(X_unknown, lengths_u)
 
     # Scoring
     pred = []
@@ -254,7 +257,7 @@ def hmm_prediction(facts, transactions):
                 conf = abs(max([log_t, log_f, log_u]) - min([log_t, log_f, log_u]))
                 t_conf.append(conf)
         # Print prediction after each bucket and actual truth value
-        #print(t_pred, truth[-1])
+        # print(t_pred, truth[-1])
         confidence_all_classes.append([log_t, log_f, log_u])
         confidence.append(t_conf)
         pred.append(t_pred[-1])
@@ -270,7 +273,7 @@ def hmm_prediction(facts, transactions):
     print('F1 Score: {}'.format(f1_score))
     print('Accuracy: {}, Correct: {}, Total: {}'.format(sum(match) / (len(match) * 1.0), sum(match), len(match)))
 
-    #result_analysis(facts, transactions, truth, pred, iter_pred, confidence)
+    result_analysis(facts, transactions, truth, pred, iter_pred, confidence)
     roc_analysis(truth, confidence_all_classes)
     precision_recall(truth, pred, 3)
     return f1_score, misclassified_per_label, misclassified_hash, corclassified_hash
@@ -419,8 +422,9 @@ def precision_recall(Y_test, y_score, n_classes):
 
 
 def classification_analysis(facts, transactions, classified_hash):
-    support = []
-    reject = []
+    support, reject = [],[]
+    support_true, support_false, support_unknown = [], [], []
+    reject_true, reject_false, reject_unknown = [], [], []
     duration = []
     certainty = []
     topics = []
@@ -434,6 +438,16 @@ def classification_analysis(facts, transactions, classified_hash):
         fact_transactions = transactions[transactions.fact == hsh].sort_values(by=['fact', 'timestamp'])
 
         topics.extend(facts[facts.hash == hsh].as_matrix(['topic']).flatten())
+
+        if str(facts[facts.hash == hsh].as_matrix(['true']).flatten()[0]) == '1':
+            support_true.append(fact_transactions[fact_transactions.stance == 'supporting'].shape[0])
+            reject_true.append(fact_transactions[fact_transactions.stance == 'denying'].shape[0])
+        if str(facts[facts.hash == hsh].as_matrix(['true']).flatten()[0]) == '0':
+            support_false.append(fact_transactions[fact_transactions.stance == 'supporting'].shape[0])
+            reject_false.append(fact_transactions[fact_transactions.stance == 'denying'].shape[0])
+        if str(facts[facts.hash == hsh].as_matrix(['true']).flatten()[0]) == 'unknown':
+            support_unknown.append(fact_transactions[fact_transactions.stance == 'supporting'].shape[0])
+            reject_unknown.append(fact_transactions[fact_transactions.stance == 'denying'].shape[0])
 
         support.append(fact_transactions[fact_transactions.stance == 'supporting'].shape[0])
         reject.append(fact_transactions[fact_transactions.stance == 'denying'].shape[0])
@@ -462,7 +476,17 @@ def classification_analysis(facts, transactions, classified_hash):
     print('\t\tTopcis: {}'.format(Counter(topics)))
     print('\t\tCertainty: {}'.format(Counter(certainty)))
     print('\t\tAvg supporting tweets: {}'.format(sum(support) / (1.0 * len(support))))
+
+    print('\t\t\tAvg support tweets for true facts: {}'.format(sum(support_true) / (1.0 * len(support_true))))
+    print('\t\t\tAvg support tweets for false facts: {}'.format(sum(support_false) / (1.0 * len(support_false))))
+    if len(support_unknown)>0: print('\t\t\tAvg support tweets for unknown facts: {}'.format(sum(support_unknown) / (1.0 * len(support_unknown))))
+
     print('\t\tAvg denying tweets: {}'.format(sum(reject) / (1.0 * len(reject))))
+
+    print('\t\t\tAvg reject tweets for true facts: {}'.format(sum(reject_true) / (1.0 * len(reject_true))))
+    print('\t\t\tAvg reject tweets for false facts: {}'.format(sum(reject_unknown) / (1.0 * len(reject_false))))
+    if len(reject_unknown)>0: print('\t\t\tAvg reject tweets for unknown facts: {}'.format(sum(reject_unknown) / (1.0 * len(reject_unknown))))
+
     print('\t\tAvg duration: {}'.format(sum(duration, timedelta(0)) / (len(duration))))
     print('\t\tAvg start: {}'.format(sum((start[0] - d_i for d_i in start), timedelta(0)) / (len(start))))
 
@@ -480,14 +504,14 @@ def aggregated_analysis(facts, transactions, mismatches_hsh, corrmatches_hash):
         hsh = f[0]
         print(facts[facts.hash == hsh].as_matrix(['topic', 'true', 'text']).flatten())
         print(transactions[transactions.fact == hsh].sort_values(by=['timestamp']).as_matrix(
-            ['timestamp', 'stance', 'weight', 'id']))
+            ['timestamp', 'stance', 'weight']))
     print('\n &&&&&&&&&&&&&&&&&&&&&&\n'
           'Details False Predictions')
     for f in mism[:5]:
         hsh = f[0]
         print(facts[facts.hash == hsh].as_matrix(['topic', 'true', 'text']).flatten())
         print(transactions[transactions.fact == hsh].sort_values(by=['timestamp']).as_matrix(
-            ['timestamp', 'stance', 'weight', 'id']))
+            ['timestamp', 'stance', 'weight']))
 
 
 def main():
@@ -497,7 +521,7 @@ def main():
     mismatches_label = []
     mismatches_hash = []
     matches_hash = []
-    for i in range(20):
+    for i in range(2):
         try:
             score, mism_label, mism_hash, m_hash = hmm_prediction(*get_data())
             avg.append(score)
@@ -510,8 +534,8 @@ def main():
     print('Misclassified ones: {}'.format(Counter(mismatches_label)))
     # print('Misclassified hash: {}'.format(Counter(mismatches_hash)))
     # print('Correct classified hash: {}'.format(Counter(matches_hash)))
-    # facts, transactions = get_data()
-    # aggregated_analysis(facts, transactions, Counter(mismatches_hash), Counter(matches_hash))
+    facts, transactions = get_data()
+    #aggregated_analysis(facts, transactions, Counter(mismatches_hash), Counter(matches_hash))
 
 
 if __name__ == "__main__":
