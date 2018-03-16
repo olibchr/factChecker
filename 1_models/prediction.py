@@ -1,16 +1,18 @@
 import pandas as pd
 from hmmlearn import hmm
 import sklearn.metrics
-from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer, MinMaxScaler
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_curve, auc
-import random, math
+import random
 from datetime import datetime, timedelta
-from dateutil import parser
+import sys, glob, os
+sys.path.insert(0, os.path.dirname(__file__) + '../0_data')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import time
 import numpy as np
 import warnings
 from collections import Counter
-from data_extraction import time_multi_plot
+from data_extraction_pheme import time_multi_plot
 from scipy import interp
 import matplotlib.pyplot as plt
 from itertools import cycle
@@ -21,7 +23,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/RAW/'
 SHOW_PLOTS = False
-HMM_COMPONENTS = [7,7,5]
+HMM_COMPONENTS = [7, 7, 5]
+
 
 def get_data():
     facts = pd.read_json(DIR + '../facts.json')
@@ -125,11 +128,11 @@ def wisdom_certainty(facts, transactions):
     misclassified_hash = [hsh for hsh, m in zip(facts.as_matrix(['hash']).flatten(), match) if m == 0]
     corclassified_hash = [hsh for hsh, m in zip(facts.as_matrix(['hash']).flatten(), match) if m == 1]
 
-    #print('$$$$ Detailed Analyiss $$$$')
-    #print('\tCorrectly classified')
-    #classification_analysis(facts, transactions, corclassified_hash)
-    #print('\tIncorrectly classified')
-    #classification_analysis(facts, transactions, misclassified_hash)
+    # print('$$$$ Detailed Analyiss $$$$')
+    # print('\tCorrectly classified')
+    # classification_analysis(facts, transactions, corclassified_hash)
+    # print('\tIncorrectly classified')
+    # classification_analysis(facts, transactions, misclassified_hash)
     precision_recall(truth, pred, 2)
     aggregated_analysis(facts, transactions, Counter(misclassified_hash), Counter(corclassified_hash))
 
@@ -138,7 +141,7 @@ def hmm_prediction(facts, transactions):
     print('\n%%%%%%%%%%%%%%%%%%%%')
     print('Prediction using HMM')
 
-    #Preprocessing
+    # Preprocessing
     hmm_transactions = transactions[['fact', 'stance', 'weight', 'timestamp']].sort_values(by=['fact', 'timestamp'])
     facts = facts.sample(frac=1)
     facts_train = facts[:100].sort_values(by=['hash'])
@@ -162,6 +165,7 @@ def hmm_prediction(facts, transactions):
 
     def to_stamp(x):
         return time.mktime(x.to_datetime().timetuple())
+
     hmm_transactions['timestamp'] = hmm_transactions['timestamp'].apply(to_stamp)
 
     for hsh in facts.as_matrix(['hash']).flatten():
@@ -214,7 +218,8 @@ def hmm_prediction(facts, transactions):
         else:
             truth.append(-1)
 
-        t = hmm_transactions[hmm_transactions.fact == f].as_matrix(['stance', 'weight', 'timestamp', 'weekday', 'hour_of_day'])
+        t = hmm_transactions[hmm_transactions.fact == f].as_matrix(
+            ['stance', 'weight', 'timestamp', 'weekday', 'hour_of_day'])
         t_pred = []
         t_conf = []
         if len(t) == 1:
@@ -399,7 +404,7 @@ def precision_recall(Y_test, y_score, n_classes):
 
     # A "micro-average": quantifying score on all classes jointly
     precision["micro"], recall["micro"], _ = precision_recall_curve(Y_test.ravel(),
-        y_score.ravel())
+                                                                    y_score.ravel())
     average_precision["micro"] = average_precision_score(Y_test, y_score,
                                                          average="micro")
     print('Average precision score, micro-averaged over all classes: {0:0.2f}'
@@ -416,13 +421,13 @@ def precision_recall(Y_test, y_score, n_classes):
     plt.xlim([0.0, 1.0])
     plt.title(
         'Average precision score, micro-averaged over all classes: AP={0:0.2f}'
-        .format(average_precision["micro"]))
+            .format(average_precision["micro"]))
     if SHOW_PLOTS:
         plt.show()
 
 
 def classification_analysis(facts, transactions, classified_hash):
-    support, reject = [],[]
+    support, reject = [], []
     support_true, support_false, support_unknown = [], [], []
     reject_true, reject_false, reject_unknown = [], [], []
     duration = []
@@ -479,13 +484,15 @@ def classification_analysis(facts, transactions, classified_hash):
 
     print('\t\t\tAvg support tweets for true facts: {}'.format(sum(support_true) / (1.0 * len(support_true))))
     print('\t\t\tAvg support tweets for false facts: {}'.format(sum(support_false) / (1.0 * len(support_false))))
-    if len(support_unknown)>0: print('\t\t\tAvg support tweets for unknown facts: {}'.format(sum(support_unknown) / (1.0 * len(support_unknown))))
+    if len(support_unknown) > 0: print(
+        '\t\t\tAvg support tweets for unknown facts: {}'.format(sum(support_unknown) / (1.0 * len(support_unknown))))
 
     print('\t\tAvg denying tweets: {}'.format(sum(reject) / (1.0 * len(reject))))
 
     print('\t\t\tAvg reject tweets for true facts: {}'.format(sum(reject_true) / (1.0 * len(reject_true))))
     print('\t\t\tAvg reject tweets for false facts: {}'.format(sum(reject_unknown) / (1.0 * len(reject_false))))
-    if len(reject_unknown)>0: print('\t\t\tAvg reject tweets for unknown facts: {}'.format(sum(reject_unknown) / (1.0 * len(reject_unknown))))
+    if len(reject_unknown) > 0: print(
+        '\t\t\tAvg reject tweets for unknown facts: {}'.format(sum(reject_unknown) / (1.0 * len(reject_unknown))))
 
     print('\t\tAvg duration: {}'.format(sum(duration, timedelta(0)) / (len(duration))))
     print('\t\tAvg start: {}'.format(sum((start[0] - d_i for d_i in start), timedelta(0)) / (len(start))))
@@ -515,8 +522,8 @@ def aggregated_analysis(facts, transactions, mismatches_hsh, corrmatches_hash):
 
 
 def main():
-    #wisdom_crowd(*get_data())
-    #wisdom_certainty(*get_data())
+    # wisdom_crowd(*get_data())
+    # wisdom_certainty(*get_data())
     avg = []
     mismatches_label = []
     mismatches_hash = []
@@ -535,7 +542,7 @@ def main():
     # print('Misclassified hash: {}'.format(Counter(mismatches_hash)))
     # print('Correct classified hash: {}'.format(Counter(matches_hash)))
     facts, transactions = get_data()
-    #aggregated_analysis(facts, transactions, Counter(mismatches_hash), Counter(matches_hash))
+    # aggregated_analysis(facts, transactions, Counter(mismatches_hash), Counter(matches_hash))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
-import pandas as pd
-from datetime import datetime, timedelta
-from dateutil import parser
-import time
-import numpy as np
+from datetime import datetime
 import nltk
 import spotlight
 import warnings, json, glob
+import sys, os, requests
+from SPARQLWrapper import SPARQLWrapper, JSON
+
+sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from Fact import Fact
 from Transaction import Transaction
 
@@ -14,9 +14,11 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
 SHOW_PLOTS = False
 
+
 def datetime_converter(o):
     if isinstance(o, datetime):
         return o.__str__()
+
 
 def fact_decoder(obj):
     # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
@@ -42,29 +44,29 @@ def extract_entity_names(t):
     return entity_names
 
 
-def preprocess(facts):
-    for fact in facts:
-        sentences = nltk.sent_tokenize(fact.text)
-        tokenized_sentences = [nltk.word_tokenize(sentence) for sentence in sentences]
-        tagged_sentences = [nltk.pos_tag(sentence) for sentence in tokenized_sentences]
-        chunked_sentences = nltk.ne_chunk_sents(tagged_sentences, binary=True)
-
-        entity_names = []
-        for tree in chunked_sentences:
-            entity_names.extend(extract_entity_names(tree))
-        fact.set_entities(entity_names)
-
-
 def get_linked_entities_spotlight(facts):
+    sparql = SPARQLWrapper("http://dbpedia.org/sparql")
+
     for fact in facts:
         print(fact.text)
         try:
-            annotations = spotlight.annotate('http://model.dbpedia-spotlight.org/en/annotate',fact.text, confidence=0.4, support=20)
+            annotations = spotlight.annotate('http://model.dbpedia-spotlight.org/en/annotate', fact.text,
+                                             confidence=0.4, support=20)
         except spotlight.SpotlightException as e:
             print('No annotaions')
             continue
-        print([a['surfaceForm'] for a in annotations])
         fact.set_entities(annotations)
+        for annot in annotations:
+            query_string = ("""
+                PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+                SELECT ?isPrimaryTopicOf
+                WHERE { <%s> foaf:isPrimaryTopicOf ?isPrimaryTopicOf }
+            """)% annot['URI']
+            sparql.setQuery(query_string)
+            sparql.setReturnFormat(JSON)
+            results = sparql.query().convert()
+            for result in results["results"]["bindings"]:
+                fact.set_wp_link(result["isPrimaryTopicOf"]["value"])
 
 
 def store_result(facts):
@@ -72,10 +74,8 @@ def store_result(facts):
         out_file.write(json.dumps([f.__dict__ for f in facts], default=datetime_converter))
 
 
-
 def main():
     facts, transactions = get_data()
-    #preprocess(facts)
     get_linked_entities_spotlight(facts)
     store_result(facts)
 
