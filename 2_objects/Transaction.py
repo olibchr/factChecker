@@ -1,9 +1,9 @@
 
 
 class Transaction:
-    def __init__(self, sourceID, id, user_id, fact, timestamp, stance, weight):
-        # <sourceID, id, user_id, fact, timestamp, stance, weight>
-        self.sourceId = sourceID
+    def __init__(self, sourceId, id, user_id, fact, timestamp, stance, weight):
+        # <sourceId, id, user_id, fact, timestamp, stance, weight>
+        self.sourceId = sourceId
         self.id = id
         self.user_id = user_id
         self.fact = fact

@@ -6,7 +6,7 @@ from sklearn.metrics import roc_curve, auc
 import random
 from datetime import datetime, timedelta
 import sys, glob, os
-sys.path.insert(0, os.path.dirname(__file__) + '../0_data')
+sys.path.insert(0, os.path.dirname(__file__) + '../0_data_retrieval')
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import time
 import numpy as np
