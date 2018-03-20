@@ -40,12 +40,15 @@ def get_data():
         yield user
 
 
-def parse_link_in_tweet(tweet):
-    urls = re.findall('https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', url)
+def parse_links_in_tweet(tweet):
+    tweet_text = tweet['text']
+    urls = re.findall('https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', tweet_text)
     for url in urls:
-        if 'https://t.co/' not in url: continue
-
-    pass
+        if 'https://t.co/' in url:
+            tweet_text = tweet_text.replace(url, '')
+    if 'quoted_status' in tweet:
+        tweet_text = tweet_text + ' ' + tweet['quoted_status']
+    return tweet_text
 
 
 def get_web_doc_sentences(url):
@@ -80,10 +83,9 @@ def get_bing_documents_for_tweet(user):
     # todo: save user once, then each tweet with docs on one line
     for tweet in user.tweets:
         # If tweet contains link to another tweet, link should be resolved and tweet parsed..
-        parse_link_in_tweet(tweet['text'])
-
-        search_term = tweet['text']
+        search_term = parse_links_in_tweet(tweet)
         print(search_term)
+
         headers = {"Ocp-Apim-Subscription-Key": SUBSCRIPTION_KEY}
         params = {"q": search_term, "textDecorations": True, "textFormat": "HTML", "answerCount": 30, "promote": "News"}
         # params  = {"q": search_term, "textDecorations":True, "textFormat":"HTML", "count": 30, "promote": "News"}
@@ -95,11 +97,8 @@ def get_bing_documents_for_tweet(user):
                               'url': doc['url'],
                               'content': get_web_doc_sentences(doc['url'])
                           } for doc in found_pages] if found_pages is not None else []
-        web_documents = {
-            'text': tweet['text'],
-            'created_at': tweet['created_at'],
-            'docs': docs_formatted
-        }
+        web_documents = tweet
+        web_documents['docs'] = docs_formatted
         tweets_with_docs.append(web_documents)
     user.tweets = tweets_with_docs
     store_result(user)
