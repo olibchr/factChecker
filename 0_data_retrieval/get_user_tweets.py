@@ -51,7 +51,10 @@ def get_user_tweets(api, transactions, user_files):
             if str(user_id) in user_files: continue
             user_tweets = []
             for status in tweepy.Cursor(api.user_timeline, id=user_id).items():
-                user_tweets.append({'text':status._json['text'], 'created_at':status._json['created_at']})
+                parsed_status = {'text':status._json['text'], 'created_at':status._json['created_at']}
+                if 'quoted_status' in status:
+                    parsed_status['quoted_status'] = status['quoted_status']['text']
+                user_tweets.append(parsed_status)
             # <user_id, tweets, fact, transactions, credibility, controversy>
             this_user = User(user_id, transactions=[tr], tweets=user_tweets)
             print('Got tweets for user: {}, found: {}'.format(user_id, len(this_user.tweets)))

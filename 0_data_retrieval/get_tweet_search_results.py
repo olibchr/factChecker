@@ -1,6 +1,6 @@
 from datetime import datetime
 import warnings, json, glob, subprocess, time
-import sys, os
+import sys, os, multiprocessing
 from six.moves import urllib
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
@@ -11,7 +11,9 @@ from Transaction import Transaction
 from IPython.display import HTML
 from bs4 import BeautifulSoup
 from nltk.stem import WordNetLemmatizer
+from joblib import Parallel, delayed
 
+NUM_CORES = multiprocessing.cpu_count()
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
 SUBSCRIPTION_KEY = "28072856698a426799cbab6f002c741b"
 
@@ -29,15 +31,22 @@ def user_decoder(obj):
 
 
 def get_data():
+    pre_crawled_files = [user_file for user_file in glob.glob(DIR + 'user_tweet_web_search/' + 'user_*.json') if 'user_' in user_file]
+    pre_crawled_files = [user_file[user_file.rfind('/')+1:] for user_file in pre_crawled_files]
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     for user_file in user_files:
+        if user_file in pre_crawled_files: continue
         user = json.loads(open(user_file).readline(), object_hook=user_decoder)
-        print(user.user_id)
         yield user
 
 
 def parse_link_in_tweet(tweet):
+    urls = re.findall('https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', url)
+    for url in urls:
+        if 'https://t.co/' not in url: continue
+
     pass
+
 
 def get_web_doc_sentences(url):
     print(url)
@@ -68,6 +77,7 @@ def get_bing_documents_for_tweet(user):
     search_url = "https://api.cognitive.microsoft.com/bing/v7.0/search"
     print('Web search for: {}'.format(user.user_id))
     tweets_with_docs = []
+    # todo: save user once, then each tweet with docs on one line
     for tweet in user.tweets:
         # If tweet contains link to another tweet, link should be resolved and tweet parsed..
         parse_link_in_tweet(tweet['text'])
@@ -80,22 +90,24 @@ def get_bing_documents_for_tweet(user):
         response = requests.get(search_url, headers=headers, params=params)
         response.raise_for_status()
         search_results = response.json()
-        web_documents = {'tweet': tweet['text'],
-                         'created_at': tweet['created_at'],
-                         'docs': [
-                             {
-                                 'url': doc['url'],
-                                 'content': get_web_doc_sentences(doc['url'])
-                             } for doc in search_results['webPages']['value']]
-                         }
+        found_pages = search_results['webPages']['value'] if 'webPages' in search_results else None
+        docs_formatted = [{
+                              'url': doc['url'],
+                              'content': get_web_doc_sentences(doc['url'])
+                          } for doc in found_pages] if found_pages is not None else []
+        web_documents = {
+            'text': tweet['text'],
+            'created_at': tweet['created_at'],
+            'docs': docs_formatted
+        }
         tweets_with_docs.append(web_documents)
-    return tweets_with_docs
+    user.tweets = tweets_with_docs
+    store_result(user)
 
 
 def calculate_similarity(tweet, web_documents):
     ungrams = nltk.sent_tokenize(tweet)
     possible_snippets = [''.join(web_documents[i:i + 4]) for i in range(len(web_documents) - 4)]
-
     pass
 
 
@@ -106,9 +118,8 @@ def store_result(user):
 
 def main():
     users = get_data()
-    for user in users:
-        user.tweets = get_bing_documents_for_tweet(user)
-        store_result(user)
+    #Parallel(n_jobs=NUM_CORES)(delayed(get_bing_documents_for_tweet)(user) for user in users)
+    for user in users: get_bing_documents_for_tweet(user)
 
 
 if __name__ == "__main__":
