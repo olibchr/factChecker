@@ -56,7 +56,7 @@ def get_user_tweets(api, transactions, user_files):
                     parsed_status['quoted_status'] = status._json['quoted_status']['text']
                 user_tweets.append(parsed_status)
             # <user_id, tweets, fact, transactions, credibility, controversy>
-            this_user = User(user_id, transactions=[tr], tweets=user_tweets)
+            this_user = User(user_id, transactions=tr, tweets=user_tweets)
             print('Got tweets for user: {}, found: {}'.format(user_id, len(this_user.tweets)))
             yield this_user
         except tweepy.error.TweepError as e:
@@ -67,7 +67,7 @@ def get_user_tweets(api, transactions, user_files):
                 i -= 1
         except Exception as e:
             print('Error: {}'.format(e))
-            yield User(tr.user_id, transactions=[tr])
+            yield User(tr.user_id, transactions=tr)
 
 
 def store_result(user):
