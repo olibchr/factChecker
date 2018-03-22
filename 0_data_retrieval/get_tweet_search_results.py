@@ -88,7 +88,7 @@ def get_web_doc_sentences(url):
 
 def is_tweet_fact(tweet):
     # Heuristics to consider a tweet an expression towards some factual statement
-    # If the length of the tweet is more than 2 words
+    # If the length of the tweet is at least 5 words
     # If the tweet is a response to another tweet
     # If the tweet contains an url
     # If the tweet contains NE's
