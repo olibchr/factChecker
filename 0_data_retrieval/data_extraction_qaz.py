@@ -3,6 +3,7 @@ import csv
 
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/Qaz/'
+# DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 TRANSACTIONS = []
 FACTS = []
 

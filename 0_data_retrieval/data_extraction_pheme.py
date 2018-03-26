@@ -10,6 +10,7 @@ import matplotlib.dates as mdates
 import numpy as np
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/RAW/'
+# DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 LANG = 'both'
 THREADS = 'threads/' + LANG + '/'
 ANNOTATIONS = 'annotations/'

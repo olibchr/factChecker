@@ -2,7 +2,6 @@ from datetime import datetime
 import warnings, json, glob, subprocess, time
 import sys, os, multiprocessing
 from six.moves import urllib
-
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import requests
 import re, nltk, threading
@@ -11,9 +10,11 @@ from bs4 import BeautifulSoup
 from nltk.stem import WordNetLemmatizer
 from joblib import Parallel, delayed
 from nltk.corpus import stopwords
+from nltk.corpus import wordnet as wn
 
 NUM_CORES = multiprocessing.cpu_count()
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
+DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 SUBSCRIPTION_KEY = "28072856698a426799cbab6f002c741b"
 
 WNL = WordNetLemmatizer()
@@ -117,6 +118,7 @@ def get_bing_documents_for_tweet(user):
     # Create user file if it does not exist
     if user.user_id not in pre_crawled_files:
         create_user_file(user)
+
     for tweet in user.tweets:
         # if not is_tweet_fact(tweet): continue
         # If tweet contains link to another tweet, link should be resolved and tweet parsed..
@@ -163,6 +165,11 @@ def get_ngram_snippets(tweet_text, web_document, url):
     # uni_tweet_tokens = [t.strip() for t in nltk.word_tokenize(tweet_text) if t not in NLTK_STOPWORDS]
     uni_tweet_tokens = [WNL.lemmatize(i) for i in nltk.word_tokenize(tweet_text) if i not in NLTK_STOPWORDS]
     bi_tweet_tokens = [' '.join(uni_tweet_tokens[i:i + 2]) for i in range(len(uni_tweet_tokens) - 1)]
+    if len(uni_tweet_tokens) == 0:
+        return {'unigrams': [],
+                'bigrams': [],
+                'url': url
+                }
     if len(bi_tweet_tokens) == 0: bi_tweet_tokens = uni_tweet_tokens
 
     # Split doc into senctences, remove stopwords and to lowercase
@@ -215,16 +222,16 @@ def query_manager(user):
     if user.user_id in pre_crawled_files:
         # Get user file, skip tweets that have been searched for already
         user = skip_pre_searched_tweets(user)
-        if len(user.tweets) == 0:
-            return
+    if len(user.tweets) == 0:
+        return
     get_bing_documents_for_tweet(user)
     return
-
 
 
 def main():
     global pre_crawled_files
     global lock
+    wn.ensure_loaded()
     lock = threading.Lock()
     pre_crawled_files = [user_file for user_file in glob.glob(DIR + 'user_tweet_web_search/' + 'user_*.json') if
                          'user_' in user_file]

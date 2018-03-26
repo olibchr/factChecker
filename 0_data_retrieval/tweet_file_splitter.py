@@ -9,6 +9,7 @@ import re, nltk
 from User import User
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
+# DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
 def datetime_converter(o):
     if isinstance(o, datetime):

@@ -12,6 +12,7 @@ from Transaction import Transaction
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
+# DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 SHOW_PLOTS = False
 
 
