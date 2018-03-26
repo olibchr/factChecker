@@ -11,6 +11,7 @@ from nltk.stem import WordNetLemmatizer
 from joblib import Parallel, delayed
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
+from google import google
 
 NUM_CORES = multiprocessing.cpu_count()
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
@@ -49,6 +50,7 @@ def skip_pre_searched_tweets(user):
 
 def get_data():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
+    if len(user_files) < 10: print('WRONG DIR?')
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=user_decoder)
         yield user
@@ -128,25 +130,23 @@ def get_bing_documents_for_tweet(user):
         search_term = extract_query_term(tweet)
         print('SEARCH FOR: {}'.format(search_term))
         try:
-            headers = {"Ocp-Apim-Subscription-Key": SUBSCRIPTION_KEY}
-            params = {"q": search_term, "textDecorations": True, "textFormat": "HTML", "answerCount": 1,
-                      "promote": "News", "mkt": "en-US"}
-            lock.acquire()
-            response = requests.get(search_url, headers=headers, params=params)
-            response.raise_for_status()
-            search_results = response.json()
-            lock.release()
+            print('Making query')
+            num_pages = 1
+            search_results = google.search(search_term, num_pages)
+            #lock.acquire()
+            #lock.release()
         except Exception as e:
             print('Search error for query: {};\nError: {} '.format(search_term, e))
-            lock.release()
+            #lock.release()
             continue
-        relevant_pages = search_results['webPages']['value'] if 'webPages' in search_results else None
+        #relevant_pages = search_results['webPages']['value'] if 'webPages' in search_results else None
+        relevant_pages = [result.link for result in search_results]
         if relevant_pages: print('Found results: {}'.format(len(relevant_pages)))
         # user.tweets <text, created_at, quoted_status, docs>
         docs_formatted = [{
-                              'url': doc['url'],
-                              'content': get_web_doc_sentences(doc['url'])
-                          } for doc in relevant_pages] if relevant_pages is not None else []
+                              'url': url,
+                              'content': get_web_doc_sentences(url)
+                          } for url in relevant_pages] if len(relevant_pages) > 0 else []
         # Parse unigram and bigram overlaps of search results with query
         tweet['snippets'] = []
         for doc in docs_formatted:
@@ -230,9 +230,8 @@ def query_manager(user):
 
 def main():
     global pre_crawled_files
-    global lock
     wn.ensure_loaded()
-    lock = threading.Lock()
+    #lock = threading.Lock()
     pre_crawled_files = [user_file for user_file in glob.glob(DIR + 'user_tweet_web_search/' + 'user_*.json') if
                          'user_' in user_file]
     pre_crawled_files = list(
