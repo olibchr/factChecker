@@ -266,8 +266,7 @@ def main():
     users = get_data()
     # Can we parallelize this pls?
     Parallel(n_jobs=NUM_CORES, backend="threading")(delayed(query_manager)(user) for user in users)
-    #for user in users: query_manager(user)
-
+    # for user in users: query_manager(user)
 
 if __name__ == "__main__":
     main()
