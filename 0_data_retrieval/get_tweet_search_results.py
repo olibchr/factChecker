@@ -2,6 +2,7 @@ from datetime import datetime
 import warnings, json, glob, subprocess, time
 import sys, os, multiprocessing
 from six.moves import urllib
+
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import requests
 import re, nltk, threading
@@ -11,9 +12,9 @@ from nltk.stem import WordNetLemmatizer
 from joblib import Parallel, delayed
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
-from google import google
+from GoogleScraper import scrape_with_config, GoogleSearchError
 
-NUM_CORES = multiprocessing.cpu_count()
+NUM_CORES = 8 # multiprocessing.cpu_count()
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
 DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 SUBSCRIPTION_KEY = "28072856698a426799cbab6f002c741b"
@@ -21,6 +22,32 @@ SUBSCRIPTION_KEY = "28072856698a426799cbab6f002c741b"
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 OVERLAP_THRESHOLD = 0.4
+
+
+def make_web_query(keywords, userid):
+    config = {
+        'use_own_ip': 'True',
+        'keywords': keywords,
+        'search_engines': ['bing'],
+        'num_pages_for_keyword': 1,
+        'scrape_method': 'http',
+        'do_caching': 'True',
+        'output_filename': '../99_tmp/' + str(userid) + '_search_results.csv'
+    }
+    try:
+        search = scrape_with_config(config)
+    except GoogleSearchError as e:
+        print(e)
+        return None
+    if not search.serps: return None
+
+    results = []
+    for idx, serp in enumerate(search.serps):
+        links = []
+        for link in serp.links:
+            links.append(link)
+        results.append({'query': keywords[idx], 'results': links, 'serp': str(serp)})
+    return results
 
 
 def datetime_converter(o):
@@ -68,7 +95,7 @@ def extract_query_term(tweet):
     return tweet_text
 
 
-def get_web_doc_sentences(url):
+def get_web_doc(url):
     try:
         html_document = urllib.request.urlopen(url)
         soup = BeautifulSoup(html_document.read(), 'lxml')
@@ -115,44 +142,45 @@ def is_tweet_fact(tweet):
 
 
 def get_bing_documents_for_tweet(user):
-    search_url = "https://api.cognitive.microsoft.com/bing/v7.0/search"
     print('Web search for: {}'.format(user.user_id))
     # Create user file if it does not exist
     if user.user_id not in pre_crawled_files:
         create_user_file(user)
-
-    for tweet in user.tweets:
+    search_terms = []
+    tweets = user.tweets
+    for tweet in tweets:
+        # user.tweets <text, created_at, quoted_status>
         # if not is_tweet_fact(tweet): continue
         # If tweet contains link to another tweet, link should be resolved and tweet parsed..
         if not is_tweet_fact(tweet):
-            print('Gonna skip: {}'.format(tweet['text']))
+            # print('Gonna skip: {}'.format(tweet['text']))
             continue
-        search_term = extract_query_term(tweet)
-        print('SEARCH FOR: {}'.format(search_term))
-        try:
-            print('Making query')
-            num_pages = 1
-            search_results = google.search(search_term, num_pages)
-            #lock.acquire()
-            #lock.release()
-        except Exception as e:
-            print('Search error for query: {};\nError: {} '.format(search_term, e))
-            #lock.release()
-            continue
-        #relevant_pages = search_results['webPages']['value'] if 'webPages' in search_results else None
-        relevant_pages = [result.link for result in search_results]
-        if relevant_pages: print('Found results: {}'.format(len(relevant_pages)))
-        # user.tweets <text, created_at, quoted_status, docs>
-        docs_formatted = [{
-                              'url': url,
-                              'content': get_web_doc_sentences(url)
-                          } for url in relevant_pages] if len(relevant_pages) > 0 else []
-        # Parse unigram and bigram overlaps of search results with query
-        tweet['snippets'] = []
-        for doc in docs_formatted:
-            if doc['content']:
-                tweet['snippets'].append(get_ngram_snippets(search_term, doc['content'], doc['url']))
+        query_term = extract_query_term(tweet)
+        tweet['search_instance'] = len(search_terms)
+        if is_tweet_fact(tweet):
+            search_terms.append(query_term)
 
+    print(len(search_terms))
+    results = make_web_query(search_terms, user.user_id)
+
+    for tweet in tweets:
+        tweet['snippets'] = []
+        if tweet['search_instance']:
+            search_instance = tweet['search_instance']
+            del tweet['search_instance']
+            query_term = results[search_instance]['query']
+            relevant_pages = [result['link'] for result in results[search_instance]]
+
+            if relevant_pages: print('Found results: {}'.format(len(relevant_pages)))
+            docs_formatted = [{
+                                  'url': url,
+                                  'content': get_web_doc(url)
+                              } for url in relevant_pages] if len(relevant_pages) > 0 else []
+            # Parse unigram and bigram overlaps of search results with query
+            # user.tweets <text, created_at, quoted_status, snippets<unigrams, bigrams, url>>
+            for doc in docs_formatted:
+                if doc['content']:
+                    tweet['snippets'].append(get_ngram_snippets(query_term, doc['content'], doc['url']))
         # Append search result to user file
         store_search_result(user.user_id, tweet)
 
@@ -231,7 +259,6 @@ def query_manager(user):
 def main():
     global pre_crawled_files
     wn.ensure_loaded()
-    #lock = threading.Lock()
     pre_crawled_files = [user_file for user_file in glob.glob(DIR + 'user_tweet_web_search/' + 'user_*.json') if
                          'user_' in user_file]
     pre_crawled_files = list(
@@ -240,7 +267,6 @@ def main():
     # Can we parallelize this pls?
     Parallel(n_jobs=NUM_CORES, backend="threading")(delayed(query_manager)(user) for user in users)
     #for user in users: query_manager(user)
-
 
 
 if __name__ == "__main__":
