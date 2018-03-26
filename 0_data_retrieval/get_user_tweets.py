@@ -14,7 +14,7 @@ OAUTH_TOKEN = '1207416314-pX3roPjOm0xNuGJxxRFfE6H0CyHRCgnzXvNfFII'
 OAUTH_TOKEN_SECRET = 'NVS29lZafbCF4kvc1yCEKg0f00AYE3Ogj7XkygHsBI5LD'
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
-#DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
 
 def datetime_converter(o):
@@ -77,6 +77,7 @@ def store_result(user):
 
 
 def main():
+    print(DIR)
     facts, transactions, user_files = get_data()
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
