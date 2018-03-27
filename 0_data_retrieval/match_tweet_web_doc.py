@@ -10,11 +10,14 @@ from joblib import Parallel, delayed
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
+from pyspark import SparkContext
 
 
-NUM_CORES = 4 # multiprocessing.cpu_count()
+# NUM_CORES = 4 # multiprocessing.cpu_count()
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
 # DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+
+sc = SparkContext("yarn", "Warc Pages")
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
@@ -75,7 +78,7 @@ def get_web_doc(url):
         return None
 
 
-def extract_tweet_search_results(tweet, results, user_id):
+def extract_tweet_search_results(tweet, results):
     tweet['snippets'] = []
     if tweet['search_instance']:
         search_instance = tweet['search_instance']
@@ -93,8 +96,7 @@ def extract_tweet_search_results(tweet, results, user_id):
         for doc in docs_formatted:
             if doc['content']:
                 tweet['snippets'].append(get_ngram_snippets(query_term, doc['content'], doc['url']))
-
-    store_search_result(user_id, tweet)
+    return [user_id, tweet]
 
 
 def get_ngram_snippets(tweet_text, web_document, url):
@@ -147,9 +149,11 @@ def get_ngram_snippets(tweet_text, web_document, url):
             'url': url
             }
 
+
 def create_user_file(user):
     with open(DIR + 'user_tweet_web_search/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
         out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
+
 
 def store_search_result(user_id, tweet):
     with open(DIR + 'user_tweet_web_search/' + 'user_' + str(user_id) + '.json', 'a') as out_file:
@@ -163,10 +167,10 @@ def query_manager(user):
         # Get user file, skip tweets that have been searched for already
         user = skip_pre_searched_tweets(user)
     if len(user.tweets) == 0:
-        return
-
+        return None
+    for tweet in user.tweets:
+        extract_tweet_search_results(tweet, results)
     # Extract documents and do uni/bi-gram matching and store results
-    Parallel(n_jobs=NUM_CORES)(delayed(extract_tweet_search_results)(tweet, results, user.user_id) for tweet in tweets)
     print('Sucessfully processed user: {}'.format(user.user_id))
 
 
@@ -177,5 +181,11 @@ def main():
                          'user_' in user_file]
     pre_crawled_files = list(
         map(int, [user_file[user_file.rfind('_') + 1:user_file.rfind('.')] for user_file in pre_crawled_files]))
+
+    rdd = sc.emptyRDD()
+    rdd = rdd.flatMap(get_data)
+    rdd = rdd.flatMap(query_manager)
+
     users = get_data()
+
     for user in users: query_manager(user)

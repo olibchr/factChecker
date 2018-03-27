@@ -13,7 +13,6 @@ from nltk.corpus import wordnet as wn
 from GoogleScraper import scrape_with_config, GoogleSearchError
 
 SERVER_RUN = True
-NUM_CORES = 4 # multiprocessing.cpu_count()
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
 if SERVER_RUN: DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
