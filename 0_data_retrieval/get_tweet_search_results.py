@@ -12,9 +12,11 @@ from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from GoogleScraper import scrape_with_config, GoogleSearchError
 
+SERVER_RUN = True
 NUM_CORES = 4 # multiprocessing.cpu_count()
+
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
-# DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+if SERVER_RUN: DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
@@ -31,7 +33,7 @@ def make_web_query(keywords, userid):
         'num_pages_for_keyword': 1,
         'scrape_method': 'http-async',
         'do_caching': 'True',
-        'output_filename': '../99_tmp/' + str(userid) + '_search_results.csv'
+        'output_filename': '../../3_Data/user_tweet_query/' + str(userid) + '_search_results.csv'
     }
     try:
         search = scrape_with_config(config)
@@ -63,6 +65,7 @@ def user_decoder(obj):
 
 def get_data():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
+    if SERVER_RUN: sorted(user_files, reverse=True)
     if len(user_files) < 10: print('WRONG DIR?')
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=user_decoder)
@@ -174,7 +177,7 @@ def query_manager(user):
 def main():
     global pre_crawled_files
     wn.ensure_loaded()
-    pre_crawled_files = glob.glob('../99_tmp/' + '*_search_results.csv')
+    pre_crawled_files = glob.glob('../../3_Data/user_tweet_query/' + '*_search_results.csv')
     pre_crawled_files = list(
         map(int, [user_file[user_file.rfind('/') + 1:user_file.rfind('_search')] for user_file in pre_crawled_files]))
     users = get_data()
