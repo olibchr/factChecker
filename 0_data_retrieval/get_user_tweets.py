@@ -7,8 +7,8 @@ from User import User
 from Transaction import Transaction
 import tweepy
 
-SERVER_RUN = False
-ALT_ACCOUNT = False
+SERVER_RUN = True
+ALT_ACCOUNT = True
 
 # Generate your own at https://apps.twitter.com/app
 CONSUMER_KEY = '4Y897wHsZJ2Qud1EgncojnoNS'
