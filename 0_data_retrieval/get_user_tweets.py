@@ -8,17 +8,18 @@ from Transaction import Transaction
 import tweepy
 
 SERVER_RUN = False
+ALT_ACCOUNT = False
 
 # Generate your own at https://apps.twitter.com/app
 CONSUMER_KEY = '4Y897wHsZJ2Qud1EgncojnoNS'
 CONSUMER_SECRET = 'sMpckIKpf00c1slGciCe4FvWlUTkFUGKkMAu88x2SBdJRW3laR'
 OAUTH_TOKEN = '1207416314-pX3roPjOm0xNuGJxxRFfE6H0CyHRCgnzXvNfFII'
 OAUTH_TOKEN_SECRET = 'NVS29lZafbCF4kvc1yCEKg0f00AYE3Ogj7XkygHsBI5LD'
-if not SERVER_RUN:
-    CONSUMER_KEY = 'lfMnguNJoZ8AZeBFA4KFmgur4'
-    CONSUMER_SECRET = 'JNO00pOrG5v5PB5neFkdOi0gczQSUFisPVGPqFpH3qkMqnyMFJ'
-    OAUTH_TOKEN = '1207416314-pPwEYxeYE4WoGO65WJYW9aTpNABi6kaPcB20bvJ'
-    OAUTH_TOKEN_SECRET = 'vwQOruls9kIfbiMOP8D1cefohY42u0azkweZNvmx1hj8j'
+if ALT_ACCOUNT:
+    CONSUMER_KEY = '0pUhFi92XQbPTB70eEnhJ0fTH'
+    CONSUMER_SECRET = 'DLjLTOoonzO5ADVfIppnLmMpCL1qM9fOHkhoXfXYIQXe3hvC9W'
+    OAUTH_TOKEN = '978935525464858624-uBlhj4nIUr2eEJghiNkSzFO25hcHW2I'
+    OAUTH_TOKEN_SECRET = 'eqgP2jzCzJVqcWxaqwTbFeHWKjDvMEKD6YR78UNhse6qp'
 
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
@@ -47,7 +48,7 @@ def get_data():
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
     facts = json.load(open(fact_file), object_hook=fact_decoder)
     transactions = json.load(open(transactions_file), object_hook=transaction_decoder)
-    if not SERVER_RUN: transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
+    if ALT_ACCOUNT: transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
     else: transactions = sorted(transactions, reverse=False, key=lambda t: t.user_id)
     user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets/' + 'user_*.json') if 'user_' in user_file]
     user_files = [user_file[user_file.rfind('_')+1:user_file.rfind('.')] for user_file in user_files]
