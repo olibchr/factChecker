@@ -7,14 +7,22 @@ from User import User
 from Transaction import Transaction
 import tweepy
 
+SERVER_RUN = False
+
 # Generate your own at https://apps.twitter.com/app
 CONSUMER_KEY = '4Y897wHsZJ2Qud1EgncojnoNS'
 CONSUMER_SECRET = 'sMpckIKpf00c1slGciCe4FvWlUTkFUGKkMAu88x2SBdJRW3laR'
 OAUTH_TOKEN = '1207416314-pX3roPjOm0xNuGJxxRFfE6H0CyHRCgnzXvNfFII'
 OAUTH_TOKEN_SECRET = 'NVS29lZafbCF4kvc1yCEKg0f00AYE3Ogj7XkygHsBI5LD'
+if not SERVER_RUN:
+    CONSUMER_KEY = 'lfMnguNJoZ8AZeBFA4KFmgur4'
+    CONSUMER_SECRET = 'JNO00pOrG5v5PB5neFkdOi0gczQSUFisPVGPqFpH3qkMqnyMFJ'
+    OAUTH_TOKEN = '1207416314-pPwEYxeYE4WoGO65WJYW9aTpNABi6kaPcB20bvJ'
+    OAUTH_TOKEN_SECRET = 'vwQOruls9kIfbiMOP8D1cefohY42u0azkweZNvmx1hj8j'
+
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
-DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+if SERVER_RUN: DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
 
 def datetime_converter(o):
@@ -35,8 +43,12 @@ def transaction_decoder(obj):
 
 
 def get_data():
-    facts = json.load(open(glob.glob(DIR + 'facts.json')[0]), object_hook=fact_decoder)
-    transactions = json.load(open(glob.glob(DIR + 'factTransaction.json')[0]), object_hook=transaction_decoder)
+    fact_file = glob.glob(DIR + 'facts.json')[0]
+    transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
+    facts = json.load(open(fact_file), object_hook=fact_decoder)
+    transactions = json.load(open(transactions_file), object_hook=transaction_decoder)
+    if not SERVER_RUN: transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
+    else: transactions = sorted(transactions, reverse=False, key=lambda t: t.user_id)
     user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets/' + 'user_*.json') if 'user_' in user_file]
     user_files = [user_file[user_file.rfind('_')+1:user_file.rfind('.')] for user_file in user_files]
     return facts, transactions, user_files
@@ -47,9 +59,11 @@ def get_user_tweets(api, transactions, user_files):
     while i < len(transactions):
         tr = transactions[i]
         i += 1
+        user_id = tr.user_id
+        if str(user_id) in user_files:
+            print("User {} has been crawled before".format(user_id))
+            continue
         try:
-            user_id = tr.user_id
-            if str(user_id) in user_files: continue
             user_tweets = []
             for status in tweepy.Cursor(api.user_timeline, id=user_id).items():
                 parsed_status = {'text':status._json['text'], 'created_at':status._json['created_at']}

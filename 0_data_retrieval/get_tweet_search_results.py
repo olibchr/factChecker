@@ -64,7 +64,10 @@ def user_decoder(obj):
 
 def get_data():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
-    if SERVER_RUN: sorted(user_files, reverse=True)
+
+    if SERVER_RUN: user_files = sorted(user_files, reverse=False)
+    else: user_files = sorted(user_files, reverse=True)
+
     if len(user_files) < 10: print('WRONG DIR?')
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=user_decoder)
