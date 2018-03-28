@@ -156,7 +156,7 @@ def query_manager(user):
         # Get user file, skip tweets that have been searched for already
         print('Skipping User {}'.format(user.user_id))
         return
-    if len(user.tweets) == 0:
+    if not user.tweets or len(user.tweets) == 0:
         return
 
     # Get documents from bing search related to tweet
