@@ -15,16 +15,16 @@ PWD=`pwd`
 TMPFILEREPO="factChecker-master.zip"
 REPO="https://github.com/olibchr/factChecker/archive/master.zip"
 PWD=`pwd`
-#wget $REPO -O $TMPFILEREPO
-#unzip -d $PWD $TMPFILEREPO
-#rm $TMPFILEREPO
+wget $REPO -O $TMPFILEREPO
+unzip -d $PWD $TMPFILEREPO
+rm $TMPFILEREPO
 cd factChecker-master/
 
 # Install dependencies
 # Setup VENV
 pip install --user virtualenv
-#mkdir venv
-#python3 -m venv venv/
+mkdir venv
+python3 -m venv venv/
 source venv/bin/activate
 pip3 install --upgrade pip --user
 pip3 install --user -r requirements.txt
@@ -34,9 +34,9 @@ pip3 uninstall aiohttp
 cd ../
 mkdir 9_packages/
 cd 9_packages
-#wget https://github.com/aio-libs/aiohttp/archive/4v0.21.6.zip -O aiohttp.zip
-#unzip aiohttp.zip
-#rm aiohttp.zip
+wget https://github.com/aio-libs/aiohttp/archive/4v0.21.6.zip -O aiohttp.zip
+unzip aiohttp.zip
+rm aiohttp.zip
 cd aiohttp-4v0.21.6/
 python3 setup.py install --user
 cd ..
