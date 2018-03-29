@@ -2,23 +2,16 @@ from datetime import datetime
 import json, glob, time, random
 import sys, os
 from six.moves import urllib
-
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import re, nltk
 from User import User
 from bs4 import BeautifulSoup
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
-from nltk.corpus import wordnet as wn
 from GoogleScraper import scrape_with_config, GoogleSearchError
 
-SERVER_RUN = True
+SERVER_RUN = False
 
-DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
-if SERVER_RUN: DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+DIR = os.path.dirname(__file__) + '../../3_Data/'
 
-WNL = WordNetLemmatizer()
-NLTK_STOPWORDS = set(stopwords.words('english'))
 OVERLAP_THRESHOLD = 0.4
 
 watchdog = 0
@@ -64,7 +57,9 @@ def user_decoder(obj):
 
 def get_data():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
-
+    preset_first_occurence = [idx for idx, uf in enumerate(user_files) if 'user_' + user_file_preset in uf][0]
+    user_files = user_files[preset_first_occurence:]
+    print('Getting Search Results for {} users'.format(len(user_files)))
     if SERVER_RUN: user_files = sorted(user_files, reverse=False)
     else: user_files = sorted(user_files, reverse=True)
 
@@ -178,12 +173,15 @@ def query_manager(user):
 
 def main():
     global pre_crawled_files
-    wn.ensure_loaded()
     pre_crawled_files = glob.glob('../../3_Data/user_tweet_query/' + '*_search_results.csv')
     pre_crawled_files = list(
         map(int, [user_file[user_file.rfind('/') + 1:user_file.rfind('_search')] for user_file in pre_crawled_files]))
     users = get_data()
     for user in users: query_manager(user)
 
+
+# noinspection PyPackageRequirements
 if __name__ == "__main__":
+    global user_file_preset
+    user_file_preset = sys.argv[1]
     main()
