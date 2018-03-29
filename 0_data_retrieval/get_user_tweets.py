@@ -73,6 +73,7 @@ def get_user_tweets(api, transactions, user_files):
                 user_tweets.append(parsed_status)
             # <user_id, tweets, fact, transactions, credibility, controversy>
             this_user = User(user_id, transactions=tr, tweets=user_tweets)
+            user_files.append(str(user_id))
             print('Got tweets for user: {}, found: {}'.format(user_id, len(this_user.tweets)))
             yield this_user
         except tweepy.error.TweepError as e:
@@ -93,6 +94,8 @@ def store_result(user):
 
 def main():
     print(DIR)
+    if ALT_ACCOUNT: print("Using alt account")
+    else: print("Using reg account")
     facts, transactions, user_files = get_data()
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
