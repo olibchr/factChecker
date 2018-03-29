@@ -88,6 +88,7 @@ def get_user_tweets(api, transactions, user_files):
 
 
 def store_result(user):
+    # TODO: was previosuly append, need to scan files and make sure we dont have duplicates
     with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
         out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
 
