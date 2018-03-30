@@ -8,7 +8,7 @@ from User import User
 from Transaction import Transaction
 import tweepy
 
-SERVER_RUN = False
+SERVER_RUN = True
 ALT_ACCOUNT = True
 
 # Generate your own at https://apps.twitter.com/app
@@ -112,7 +112,7 @@ def get_user_tweets(api, transactions, user_files):
 def store_result(user):
     # TODO: was previosuly append, need to scan files and make sure we dont have duplicates
     # Todo: can just check if files have more than one line and omit other lines
-    with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
+    with open(DIR + 'user_tweets_extended/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
         out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
 
 
