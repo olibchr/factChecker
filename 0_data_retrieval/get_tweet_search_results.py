@@ -132,7 +132,8 @@ def get_bing_documents_for_tweet(user):
     # Create user file if it does not exist
 
     search_terms = []
-    tweets = user.tweets
+    tweets = sorted(user.tweets, key=lambda t: t['created_at'])
+    if len(tweets) > 300: tweets = tweets[:300]
     for tweet in tweets:
         # user.tweets <text, created_at, quoted_status>
         # if not is_tweet_fact(tweet): continue
