@@ -52,7 +52,7 @@ def get_data():
         transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
     else:
         transactions = sorted(transactions, reverse=False, key=lambda t: t.user_id)
-    user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets/' + 'user_*.json') if 'user_' in user_file]
+    user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets_extended/' + 'user_*.json') if 'user_' in user_file]
     user_files = [user_file[user_file.rfind('_') + 1:user_file.rfind('.')] for user_file in user_files]
     return facts, transactions, user_files
 
