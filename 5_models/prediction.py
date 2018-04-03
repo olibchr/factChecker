@@ -522,8 +522,8 @@ def aggregated_analysis(facts, transactions, mismatches_hsh, corrmatches_hash):
 
 
 def main():
-    # wisdom_crowd(*get_data())
-    # wisdom_certainty(*get_data())
+    # wisdom_crowd(*get_users())
+    # wisdom_certainty(*get_users())
     avg = []
     mismatches_label = []
     mismatches_hash = []

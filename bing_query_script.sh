@@ -28,6 +28,7 @@ python3 -m venv venv/
 source venv/bin/activate
 pip3 install --upgrade pip --user
 pip3 install --user -r requirements.txt
+python3 -m nltk.downloader all
 
 # Get right AIOHTTP Version
 pip3 uninstall aiohttp

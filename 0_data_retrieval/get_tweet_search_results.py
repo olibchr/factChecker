@@ -136,7 +136,7 @@ def get_bing_documents_for_tweet(user):
     if len(tweets) > 300: tweets = tweets[:300]
     for tweet in tweets:
         # user.tweets <text, created_at, quoted_status>
-        # if not is_tweet_fact(tweet): continue
+        # if not is_tweet_fact (tweet): continue
         # If tweet contains link to another tweet, link should be resolved and tweet parsed..
         if not is_tweet_fact(tweet):
             # print('Gonna skip: {}'.format(tweet['text']))
