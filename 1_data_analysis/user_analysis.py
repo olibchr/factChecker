@@ -17,7 +17,7 @@ from sklearn.cluster import KMeans, DBSCAN
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 
-NEW_CORPUS = False
+NEW_CORPUS = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -77,7 +77,7 @@ def build_sparse_matrix(users, word_to_idx):
     y = []
     positions = []
     data = []
-    BUILD_NEW_SPARSE = False
+    BUILD_NEW_SPARSE = True
     if not BUILD_NEW_SPARSE:
         with open('positions.txt', 'rb') as f:
             positions = pickle.load(f)
