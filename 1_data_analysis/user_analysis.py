@@ -1,18 +1,19 @@
 import datetime
 import json, glob, time, random
 import sys, os
-from sklearn.cluster import KMeans
 import numpy as np
 from dateutil import parser
 import pickle
+
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import re, nltk
-from User import User
 from nltk.corpus import wordnet as wn
+#from User import User
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
 from scipy.sparse import lil_matrix
+from sklearn.cluster import KMeans, DBSCAN
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 
@@ -105,9 +106,8 @@ def build_sparse_matrix(users, word_to_idx):
             data.append(this_data)
         with open('positions.txt', 'wb') as tmpfile:
             pickle.dump(positions, tmpfile)
-        with open('data.txt','wb') as tmpfile:
+        with open('data.txt', 'wb') as tmpfile:
             pickle.dump(data, tmpfile)
-
     print(len(data), len(word_to_idx))
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
@@ -120,9 +120,13 @@ def k_means_clustering(users, word_to_idx, idx_to_word):
     print("KMeans Clustering")
     X = build_sparse_matrix(users, word_to_idx)
     print("Training K means")
-    kmeans = KMeans(n_clusters=10, random_state=0)
+    kmeans = KMeans(n_clusters=100)
     kmeans.fit(X)
     print(kmeans.labels_[:100])
+    print("Training DBSCAN")
+    dbscan = DBSCAN(eps=0.05, min_samples=50)
+    dbscan.fit(X.toarray())
+    print(dbscan.labels_[:100])
 
 
 def temporal_analysis(users):
@@ -131,7 +135,7 @@ def temporal_analysis(users):
     for user in users:
         if not user.tweets: t_deltas.append(0); continue
         datetimes = [parser.parse(tweet['created_at']) for tweet in user.tweets]
-        timedeltas = [datetimes[i-1]-datetimes[i] for i in range(1, len(datetimes))]
+        timedeltas = [datetimes[i - 1] - datetimes[i] for i in range(1, len(datetimes))]
         if len(timedeltas) == 0: continue
         average_timedelta = sum(timedeltas, datetime.timedelta(0)) / len(timedeltas)
         t_deltas.append(average_timedelta)
@@ -161,11 +165,12 @@ def main():
         bow_corpus = get_corpus()
     save_corpus(bow_corpus)
 
-    word_to_idx = {k[0]:idx for idx, k in enumerate(bow_corpus.items()) if k[1] > 10}
-    idx_to_word = {idx:k for k, idx in bow_corpus.items()}
+    bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 50]
+    word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
+    idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
-    #corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
-    #temporal_analysis(get_users())
+    corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
+    # temporal_analysis(get_users())
     k_means_clustering(get_users(), word_to_idx, idx_to_word)
 
 
