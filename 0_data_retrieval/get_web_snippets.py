@@ -1,5 +1,6 @@
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
+from pyspark.sql.functions import lit, col, udf, explode
 from pyspark.sql.types import *
 import nltk, re, os
 from bs4 import BeautifulSoup
@@ -8,6 +9,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 import hashlib
+import requests
 
 SERVER_RUN = False
 
@@ -20,10 +22,12 @@ OVERLAP_THRESHOLD = 0.4
 sc = SparkContext("local", "Tweet Web Crawl")
 sqlContext = SQLContext(sc)
 
-df = sqlContext.read.load(DIR + "user_tweet_query/14723131_search_results.csv",
+df = sqlContext.read.load(DIR + "user_tweet_query/0000000_search_results copy.csv",
                       format='com.databricks.spark.csv',
                       header='true',
                       inferSchema='true')
+
+df_users = sqlContext.read.json(DIR + "user_tweets/*14723131.json")
 
 
 def get_ngram_snippets(tweet_text, web_document, url):
@@ -75,14 +79,12 @@ def get_ngram_snippets(tweet_text, web_document, url):
             'url': url
             }
 
-def match_to_user(hash):
-    pass
-
 
 def get_web_doc(url):
     try:
-        html_document = urllib.request.urlopen(url)
-        soup = BeautifulSoup(html_document.read(), 'lxml')
+        #html_document = urllib.request.urlopen(url)
+        html_document = requests.get(url)
+        soup = BeautifulSoup(html_document.text, 'lxml')
         for script in soup(["script", "style"]):
             script.decompose()
         # get text
@@ -93,24 +95,60 @@ def get_web_doc(url):
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         # drop blank lines
         text = '\n'.join(chunk for chunk in chunks if chunk).lower()
-
         return text
     except Exception as e:
         print('Parsing error: {}, for url: {}'.format(e, url))
         return None
 
 
+def extract_query_term(tweet):
+    if not tweet: return ""
+    tweet_text = tweet['text']
+    urls = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', tweet_text)
+    for url in urls:
+        if 'https://t.co/' in url:
+            tweet_text = tweet_text.replace(url, '')
+    if 'quoted_status' in tweet and tweet['quoted_status']:
+        tweet_text = tweet_text + ' ' + tweet['quoted_status']
+    if tweet_text[:2].lower() == 'rt': tweet_text = tweet_text[2:]
+    return hashlib.md5(tweet_text.encode()).hexdigest()
+
+
 def extract_tweet_search_results(df):
-    df.withColumn("content", get_web_doc(df['link']))
-    df.withColumn("snippets", get_ngram_snippets(df['query'], df['content'], df['link']))
-    df.withColumn("hash", hashlib.md5(df['query'].encode()).hexdigest())
+    get_web_doc_udf = udf(get_web_doc, StringType())
+    get_ngram_snippets_udf = udf(get_ngram_snippets, MapType(StringType(), ArrayType(StructType([
+            StructField("snippet", StringType(), False),
+            StructField("score", FloatType(), False)
+        ])
+    )))
+    get_hash = udf(lambda query: hashlib.md5(query.encode()).hexdigest(), StringType())
+
+    df = df.withColumn("content", get_web_doc_udf(df['link']))
+    df = df.withColumn("snippets", get_ngram_snippets_udf(df['query'], df['content'], df['link']))
+    df = df.withColumn("hash", get_hash(df['query']))
+    df = df.drop('content')
+    df.show()
     return df
 
 
+def get_hash_for_user_tweets(df_users):
+    get_hash = udf(extract_query_term, StringType())
+    df_users = df_users.select(explode('tweets').alias("tweet"), 'user_id', 'was_correct','features','credibility','transactions','fact')
+    df_users.show()
+    df_users = df_users.withColumn("hash", get_hash(df_users['tweet']))
+    return df_users
+
+
 wn.ensure_loaded()
-df = df.drop('domain', 'effective_query', 'link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title')
+df = df.drop('domain', 'effective_query', 'visible_link','link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name', 'no_results', )
 df = extract_tweet_search_results(df)
-df = df.write.partitionBy("hash").format('json').save(DIR + 'user_tweet_web_search/queries.json')
+df_users = get_hash_for_user_tweets(df_users)
+
+df1 = df.alias('df1')
+df2 = df_users.alias('df2')
+df = df1.join(df2, df1.hash == df2.hash).select('df1.*', 'df2.tweet', 'df2.user_id', 'df2.was_correct','df2.features','df2.credibility','df2.transactions','df2.fact')
+df.show()
+df.write.mode('overwrite').partitionBy("hash").format('json').save(DIR + 'user_snippets/queries.json')
 # root
 #  |-- domain: string (nullable = true)
 #  |-- effective_query: string (nullable = true)

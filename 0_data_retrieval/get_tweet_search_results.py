@@ -8,7 +8,7 @@ from User import User
 from bs4 import BeautifulSoup
 from GoogleScraper import scrape_with_config, GoogleSearchError
 
-SERVER_RUN = False
+SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -163,7 +163,7 @@ def query_manager(user):
         get_bing_documents_for_tweet(user)
     except Exception as e:
         print('Resting for a bit: {}'.format(e))
-        time.sleep(random.randrange(60,120))
+        time.sleep(random.randrange(10,20))
         try:
             get_bing_documents_for_tweet(user)
         except Exception as e:
