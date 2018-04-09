@@ -8,7 +8,6 @@ from User import User
 from Transaction import Transaction
 import tweepy
 
-SERVER_RUN = True
 ALT_ACCOUNT = True
 
 # Generate your own at https://apps.twitter.com/app
@@ -22,8 +21,7 @@ if ALT_ACCOUNT:
     OAUTH_TOKEN = '978935525464858624-uBlhj4nIUr2eEJghiNkSzFO25hcHW2I'
     OAUTH_TOKEN_SECRET = 'eqgP2jzCzJVqcWxaqwTbFeHWKjDvMEKD6YR78UNhse6qp'
 
-DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
-if SERVER_RUN: DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
 def datetime_converter(o):
@@ -52,7 +50,8 @@ def get_data():
         transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
     else:
         transactions = sorted(transactions, reverse=False, key=lambda t: t.user_id)
-    user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets_extended/' + 'user_*.json') if 'user_' in user_file]
+    user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets_extended/' + 'user_*.json') if
+                  'user_' in user_file]
     user_files = [user_file[user_file.rfind('_') + 1:user_file.rfind('.')] for user_file in user_files]
     return facts, transactions, user_files
 
@@ -109,10 +108,43 @@ def get_user_tweets(api, transactions, user_files):
             yield User(tr.user_id, transactions=tr)
 
 
+def get_users():
+    user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
+    print('{} users'.format(len(user_files)))
+    if len(user_files) < 10: print('WRONG DIR?')
+    for user_file in user_files:
+        user = json.loads(open(user_file).readline(), object_hook=user_decoder)
+        yield user
+
+
+def user_decoder(obj):
+    if 'user_id' not in obj.keys(): return obj
+    # <user_id, tweets, fact, transactions, credibility, controversy>
+    return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
+                obj['controversy'])
+
+
+def was_user_correct(user, facts, transactions):
+    for tr in transactions:
+        if str(tr.user_id) == str(user.user_id):
+            transaction = tr
+            user.transactions = tr
+            transactions.remove(tr)
+            break
+    for fact in facts:
+        if fact.hash == transaction.fact:
+            if (fact.true == '1' and transaction.stance == 'supporting') or (
+                            fact.true == '0' and transaction.stance == 'denying'):
+                user.was_correct = 1
+            else:
+                user.was_correct = 0
+    return user
+
+
 def store_result(user):
     # TODO: was previosuly append, need to scan files and make sure we dont have duplicates
     # Todo: can just check if files have more than one line and omit other lines
-    with open(DIR + 'user_tweets_extended/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
+    with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
         out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
 
 
@@ -126,11 +158,11 @@ def main():
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
     api = tweepy.API(auth)
-    users = get_user_tweets(api, transactions, user_files)
+    #users = get_user_tweets(api, transactions, user_files)
+    users = get_users()
+    users = [was_user_correct(user, facts, transactions) for user in users]
     for user in users:
         store_result(user)
-
-        # store_result(users.values())
 
 
 if __name__ == "__main__":

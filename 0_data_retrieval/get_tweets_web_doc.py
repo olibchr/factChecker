@@ -1,7 +1,7 @@
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from pyspark.sql.types import *
-import nltk, re
+import nltk, re, os
 from bs4 import BeautifulSoup
 from six.moves import urllib
 from nltk.stem import WordNetLemmatizer
@@ -11,8 +11,7 @@ import hashlib
 
 SERVER_RUN = False
 
-DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/'
-if SERVER_RUN: DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
@@ -76,6 +75,9 @@ def get_ngram_snippets(tweet_text, web_document, url):
             'url': url
             }
 
+def match_to_user(hash):
+    pass
+
 
 def get_web_doc(url):
     try:
@@ -98,16 +100,17 @@ def get_web_doc(url):
         return None
 
 
-def extract_tweet_search_results(batch):
-    batch.withColumn("content", get_web_doc(batch['link']))
-    batch.withColumn("snippets", get_ngram_snippets(batch['query'], batch['content'], batch['link']))
-    batch.withColumn("hash", hashlib.md5(batch['query'].encode()).hexdigest())
-    return batch
+def extract_tweet_search_results(df):
+    df.withColumn("content", get_web_doc(df['link']))
+    df.withColumn("snippets", get_ngram_snippets(df['query'], df['content'], df['link']))
+    df.withColumn("hash", hashlib.md5(df['query'].encode()).hexdigest())
+    return df
 
 
 wn.ensure_loaded()
-df = df.drop('domain', 'effective_query', 'link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title').rdd
-df = df.flatMap(extract_tweet_search_results).write.format('json').save(DIR + 'user_tweet_web_search/' + df['hash'] + 'json')
+df = df.drop('domain', 'effective_query', 'link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title')
+df = extract_tweet_search_results(df)
+df = df.write.partitionBy("hash").format('json').save(DIR + 'user_tweet_web_search/queries.json')
 # root
 #  |-- domain: string (nullable = true)
 #  |-- effective_query: string (nullable = true)
