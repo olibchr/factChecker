@@ -114,13 +114,9 @@ def extract_query_term(tweet):
     return hashlib.md5(tweet_text.encode()).hexdigest()
 
 
-def extract_tweet_search_results(df):
+def get_tweet_search_results(df):
     get_web_doc_udf = udf(get_web_doc, StringType())
-    get_ngram_snippets_udf = udf(get_ngram_snippets, MapType(StringType(), ArrayType(StructType([
-            StructField("snippet", StringType(), False),
-            StructField("score", FloatType(), False)
-        ])
-    )))
+    get_ngram_snippets_udf = udf(get_ngram_snippets, MapType(StringType(), ArrayType(ArrayType(StringType()))))
     get_hash = udf(lambda query: hashlib.md5(query.encode()).hexdigest(), StringType())
 
     df = df.withColumn("content", get_web_doc_udf(df['link']))
@@ -140,8 +136,8 @@ def get_hash_for_user_tweets(df_users):
 
 
 wn.ensure_loaded()
-df = df.drop('domain', 'effective_query', 'visible_link','link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name', 'no_results', )
-df = extract_tweet_search_results(df)
+df = df.drop('domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name', 'no_results', )
+df = get_tweet_search_results(df)
 df_users = get_hash_for_user_tweets(df_users)
 
 df1 = df.alias('df1')
