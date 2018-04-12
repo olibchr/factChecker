@@ -161,7 +161,7 @@ df = sqlContext.read.load(search_engine_files,
                           header='true',
                           inferSchema='true')
 
-df_users = sqlContext.read.json(DIR + user_files)
+df_users = sqlContext.read.json(user_files)
 
 df = df.drop('domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
              'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
