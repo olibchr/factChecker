@@ -17,11 +17,6 @@ def lemmatize(x):
     return WNL.lemmatize(x)
 
 
-def loaded():
-    from nltk.corpus import wordnet as wn
-    wn.ensure_loaded()
-
-
 def get_soup(html_document):
     from bs4 import BeautifulSoup
     return BeautifulSoup(html_document.text, 'lxml')
@@ -160,8 +155,6 @@ def get_hash_for_user_tweets(df_users):
     df_users = df_users.withColumn("hash", get_hash(df_users['tweet']))
     return df_users
 
-
-loaded()
 
 df = sqlContext.read.load(search_engine_files,
                           format='com.databricks.spark.csv',
