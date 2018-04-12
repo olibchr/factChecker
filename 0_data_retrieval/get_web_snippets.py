@@ -2,11 +2,10 @@ from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from pyspark.sql.functions import lit, col, udf, explode
 from pyspark.sql.types import *
-import nltk, re, os
+import nltk
+import re, os
 from bs4 import BeautifulSoup
-from six.moves import urllib
 from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 import hashlib
 import requests
@@ -15,10 +14,27 @@ TEST_RUN = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
-WNL = WordNetLemmatizer()
-NLTK_STOPWORDS = set(stopwords.words('english'))
-OVERLAP_THRESHOLD = 0.4
 
+def lemmatize(x):
+    from nltk.stem import WordNetLemmatizer
+    WNL = WordNetLemmatizer()
+    return WNL.lemmatize(x)
+
+
+WNL = WordNetLemmatizer()
+NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
+                  'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
+                  'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that',
+                  'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+                  'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as',
+                  'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through',
+                  'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off',
+                  'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how',
+                  'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
+                  'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should',
+                  'now']
+
+OVERLAP_THRESHOLD = 0.4
 conf = SparkConf().setAppName("tweet_web_crawl")
 
 sc = SparkContext(conf=conf)
@@ -30,9 +46,9 @@ if TEST_RUN: search_engine_files = "user_tweet_query/0000000_search_results copy
 if TEST_RUN: user_files = "user_tweets/user_14723131.json"
 
 df = sqlContext.read.load(DIR + search_engine_files,
-                      format='com.databricks.spark.csv',
-                      header='true',
-                      inferSchema='true')
+                          format='com.databricks.spark.csv',
+                          header='true',
+                          inferSchema='true')
 
 df_users = sqlContext.read.json(DIR + user_files)
 
@@ -89,7 +105,7 @@ def get_ngram_snippets(tweet_text, web_document, url):
 
 def get_web_doc(url):
     try:
-        #html_document = urllib.request.urlopen(url)
+        # html_document = urllib.request.urlopen(url)
         html_document = requests.get(url)
         soup = BeautifulSoup(html_document.text, 'lxml')
         for script in soup(["script", "style"]):
@@ -136,20 +152,24 @@ def get_tweet_search_results(df):
 
 def get_hash_for_user_tweets(df_users):
     get_hash = udf(extract_query_term, StringType())
-    df_users = df_users.select(explode('tweets').alias("tweet"), 'user_id', 'was_correct','features','credibility','transactions','fact')
+    df_users = df_users.select(explode('tweets').alias("tweet"), 'user_id', 'was_correct', 'features', 'credibility',
+                               'transactions', 'fact')
     df_users.show()
     df_users = df_users.withColumn("hash", get_hash(df_users['tweet']))
     return df_users
 
 
 wn.ensure_loaded()
-df = df.drop('domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type', 'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name', 'no_results', )
+df = df.drop('domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
+             'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
+             'no_results', )
 df = get_tweet_search_results(df)
 df_users = get_hash_for_user_tweets(df_users)
 
 df1 = df.alias('df1')
 df2 = df_users.alias('df2')
-df = df1.join(df2, df1.hash == df2.hash).select('df1.*', 'df2.tweet', 'df2.user_id', 'df2.was_correct','df2.features','df2.credibility','df2.transactions','df2.fact')
+df = df1.join(df2, df1.hash == df2.hash).select('df1.*', 'df2.tweet', 'df2.user_id', 'df2.was_correct', 'df2.features',
+                                                'df2.credibility', 'df2.transactions', 'df2.fact')
 df.show()
 df.write.mode('overwrite').partitionBy("hash").format('json').save(DIR + 'user_snippets/queries.json')
 # root
