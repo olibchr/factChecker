@@ -11,7 +11,7 @@ from nltk.corpus import wordnet as wn
 import hashlib
 import requests
 
-SERVER_RUN = False
+TEST_RUN = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -19,15 +19,22 @@ WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 OVERLAP_THRESHOLD = 0.4
 
-sc = SparkContext("local", "Tweet Web Crawl")
+conf = SparkConf().setAppName("tweet_web_crawl")
+
+sc = SparkContext(conf=conf)
 sqlContext = SQLContext(sc)
 
-df = sqlContext.read.load(DIR + "user_tweet_query/0000000_search_results copy.csv",
+search_engine_files = "user_tweet_query/*_search_results.csv"
+user_files = "user_tweets/user_*.json"
+if TEST_RUN: search_engine_files = "user_tweet_query/0000000_search_results copy.csv"
+if TEST_RUN: user_files = "user_tweets/user_14723131.json"
+
+df = sqlContext.read.load(DIR + search_engine_files,
                       format='com.databricks.spark.csv',
                       header='true',
                       inferSchema='true')
 
-df_users = sqlContext.read.json(DIR + "user_tweets/*14723131.json")
+df_users = sqlContext.read.json(DIR + user_files)
 
 
 def get_ngram_snippets(tweet_text, web_document, url):

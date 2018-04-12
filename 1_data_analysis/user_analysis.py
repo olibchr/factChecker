@@ -4,7 +4,7 @@ import sys, os
 import numpy as np
 from dateutil import parser
 import pickle
-from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
 from sklearn.pipeline import make_pipeline
@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import SGDClassifier
 from sklearn import metrics
+from sklearn.decomposition import NMF, LatentDirichletAllocation
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import re, nltk
@@ -29,6 +30,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 
 NEW_CORPUS = False
+BUILD_NEW_SPARSE = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -108,7 +110,6 @@ def build_sparse_matrix(users, word_to_idx):
     y = []
     positions = []
     data = []
-    BUILD_NEW_SPARSE = False
     if not BUILD_NEW_SPARSE:
         with open('positions.txt', 'rb') as f:
             positions = pickle.load(f)
@@ -152,6 +153,16 @@ def build_sparse_matrix(users, word_to_idx):
     return X, np.array(y)
 
 
+def get_user_documents(users):
+    X = []
+    y = []
+    for user in users:
+        if not user.tweets: continue
+        X.append(' '.join([tweet['text'] for tweet in user.tweets]))
+        y.append(int(user.was_correct))
+    return np.array(X), np.array(y)
+
+
 def benchmark(clf, X_train, y_train, X_test, y_test):
     print('_' * 80)
     print("Training: ")
@@ -164,7 +175,7 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
     print("accuracy:   %0.3f" % score)
 
 
-def clustering(users, word_to_idx, idx_to_word):
+def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
     print("KMeans Clustering")
     X, y = build_sparse_matrix(users, word_to_idx)
     y_r = y == 1
@@ -174,7 +185,7 @@ def clustering(users, word_to_idx, idx_to_word):
     X_r_s = np.argsort(X_r_s)[:10]
     print('Common terms for users that are correct: {}'.format([idx_to_word[xrs] for xrs in X_r_s]))
     X_r_r = X_r.sum() * 1.0 / len(y_r)
-    #print('# of terms for correct users on avg: {}'.format(X_r_r))
+    # print('# of terms for correct users on avg: {}'.format(X_r_r))
 
     y_w = y == 0
     y_w = y_w.nonzero()[0]
@@ -183,7 +194,7 @@ def clustering(users, word_to_idx, idx_to_word):
     X_w_s = np.argsort(X_w_s)[:10]
     print('Common terms for users that are incorrect: {}'.format([idx_to_word[xws] for xws in X_w_s]))
     Y_w_r = X_w.sum() * 1.0 / len(y_w)
-    #print('# of terms for incorrect users on avg: {}'.format(Y_w_r))
+    # print('# of terms for incorrect users on avg: {}'.format(Y_w_r))
 
     transformer = TfidfTransformer(smooth_idf=False)
     X_weighted = transformer.fit_transform(X)
@@ -207,6 +218,17 @@ def clustering(users, word_to_idx, idx_to_word):
         print("% of correct users in class: {}".format(sum(y[this_cl]) * 1.0 / len(y[this_cl])))
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
+
+def truth_prediction_for_users(users, word_to_idx):
+    X, y = build_sparse_matrix(users, word_to_idx)
+
+    transformer = TfidfTransformer(smooth_idf=False)
+    X_weighted = transformer.fit_transform(X)
+
+    svd = TruncatedSVD(20)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd, normalizer)
+    X_pca = lsa.fit_transform(X_weighted)
     X_train, X_test, y_train, y_test = train_test_split(X_pca, y, test_size=0.2)
 
     results = []
@@ -220,6 +242,47 @@ def clustering(users, word_to_idx, idx_to_word):
         # Train SGD model
         results.append(benchmark(SGDClassifier(alpha=.0001, n_iter=50,
                                                penalty=penalty), X_train, y_train, X_test, y_test))
+
+
+def print_top_words(model, feature_names, n_top_words):
+    for topic_idx, topic in enumerate(model.components_):
+        message = "Topic #%d: " % topic_idx
+        message += " ".join([feature_names[i]
+                             for i in topic.argsort()[:-n_top_words - 1:-1]])
+        print(message)
+    print()
+
+
+def lda_analysis(users):
+    n_samples = 2000
+    n_features = 1000
+    n_components = 50
+    n_top_words = 20
+    print("Constructing user docs")
+    X, y = get_user_documents(users)
+    print("TF fitting user docs")
+    tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
+                                    max_features=n_features,
+                                    stop_words='english')
+    tf = tf_vectorizer.fit_transform(X)
+
+    print("Training LDA model")
+    lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
+                                    learning_method='online',
+                                    learning_offset=50.,
+                                    random_state=0)
+    lda.fit(tf)
+    tf_feature_names = tf_vectorizer.get_feature_names()
+    print_top_words(lda, tf_feature_names, n_top_words)
+    user_topics = []
+    for user_vector in tf:
+        user_topics.append(lda.transform(user_vector))
+    flat_user_topics = [item for user_topic in user_topics for item in user_topic]
+    # https://stackoverflow.com/questions/20984841/topic-distribution-how-do-we-see-which-document-belong-to-which-topic-after-doi
+    threshold = sum(flat_user_topics) / len(flat_user_topics)
+    user_topics_thresholded = []
+    for ut in user_topics:
+        user_topics_thresholded.append([idx for idx, score in enumerate(ut) if score > threshold])
 
 
 def temporal_analysis(users):
@@ -240,8 +303,10 @@ def temporal_analysis(users):
         if len(timedeltas) == 0: continue
         average_timedelta = round((sum(timedeltas, datetime.timedelta(0)) / len(timedeltas)).seconds / 60)
         t_deltas.append(average_timedelta)
-        if user.was_correct == 1: t_deltas_r.append(average_timedelta)
-        else: t_deltas_w.append(average_timedelta)
+        if user.was_correct == 1:
+            t_deltas_r.append(average_timedelta)
+        else:
+            t_deltas_w.append(average_timedelta)
     n, bins, patches = plt.hist(t_deltas, 50, normed=1, facecolor='green', alpha=0.75)
     plt.show()
 
@@ -272,9 +337,11 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
-    corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
+    # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
-    clustering(get_users(), word_to_idx, idx_to_word)
+    # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
+    # truth_prediction_for_users(get_users(), word_to_idx)
+    lda_analysis(get_users())
 
 
 if __name__ == "__main__":
