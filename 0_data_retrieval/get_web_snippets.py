@@ -2,11 +2,7 @@ from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext
 from pyspark.sql.functions import lit, col, udf, explode
 from pyspark.sql.types import *
-import nltk
 import re, os
-from bs4 import BeautifulSoup
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet as wn
 import hashlib
 import requests
 
@@ -21,7 +17,15 @@ def lemmatize(x):
     return WNL.lemmatize(x)
 
 
-WNL = WordNetLemmatizer()
+def loaded():
+    from nltk.corpus import wordnet as wn
+    wn.ensure_loaded()
+
+
+def get_soup(html_document):
+    from bs4 import BeautifulSoup
+    return BeautifulSoup(html_document.text, 'lxml')
+
 NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
                   'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
                   'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that',
@@ -47,15 +51,10 @@ if TEST_RUN: search_engine_files = DIR + "user_tweet_query/0000000_search_result
 if TEST_RUN: user_files = DIR + "user_tweets/user_14723131.json"
 if TEST_RUN: out_dir = DIR + 'user_snippets/'
 
-df = sqlContext.read.load(search_engine_files,
-                          format='com.databricks.spark.csv',
-                          header='true',
-                          inferSchema='true')
-
-df_users = sqlContext.read.json(DIR + user_files)
-
 
 def get_ngram_snippets(tweet_text, web_document, url):
+    from nltk.stem import WordNetLemmatizer
+    WNL = WordNetLemmatizer()
     # Remove odd characters from tweet, to lowercast and remove stopword. Parse into uni and bigrams
     tweet_text = re.sub(r'[^a-z0-9]', ' ', tweet_text.lower())
 
@@ -109,7 +108,8 @@ def get_web_doc(url):
     try:
         # html_document = urllib.request.urlopen(url)
         html_document = requests.get(url)
-        soup = BeautifulSoup(html_document.text, 'lxml')
+        soup = get_soup(html_document)
+
         for script in soup(["script", "style"]):
             script.decompose()
         # get text
@@ -161,7 +161,15 @@ def get_hash_for_user_tweets(df_users):
     return df_users
 
 
-wn.ensure_loaded()
+loaded()
+
+df = sqlContext.read.load(search_engine_files,
+                          format='com.databricks.spark.csv',
+                          header='true',
+                          inferSchema='true')
+
+df_users = sqlContext.read.json(DIR + user_files)
+
 df = df.drop('domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
              'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
              'no_results', )
