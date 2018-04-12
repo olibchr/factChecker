@@ -1,4 +1,4 @@
-from pyspark import SparkContext
+from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext
 from pyspark.sql.functions import lit, col, udf, explode
 from pyspark.sql.types import *
@@ -35,17 +35,19 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
                   'now']
 
 OVERLAP_THRESHOLD = 0.4
-conf = SparkConf().setAppName("tweet_web_crawl")
 
+conf = SparkConf().setAppName("tweet_web_crawl")
 sc = SparkContext(conf=conf)
 sqlContext = SQLContext(sc)
 
-search_engine_files = "user_tweet_query/*_search_results.csv"
-user_files = "user_tweets/user_*.json"
-if TEST_RUN: search_engine_files = "user_tweet_query/0000000_search_results copy.csv"
-if TEST_RUN: user_files = "user_tweets/user_14723131.json"
+search_engine_files = "3_data/user_tweet_query/*_search_results.csv"
+user_files = "3_data/user_tweets/user_*.json"
+out_dir = "3_data/user_snippets/"
+if TEST_RUN: search_engine_files = DIR + "user_tweet_query/0000000_search_results copy.csv"
+if TEST_RUN: user_files = DIR + "user_tweets/user_14723131.json"
+if TEST_RUN: out_dir = DIR + 'user_snippets/'
 
-df = sqlContext.read.load(DIR + search_engine_files,
+df = sqlContext.read.load(search_engine_files,
                           format='com.databricks.spark.csv',
                           header='true',
                           inferSchema='true')
@@ -171,7 +173,7 @@ df2 = df_users.alias('df2')
 df = df1.join(df2, df1.hash == df2.hash).select('df1.*', 'df2.tweet', 'df2.user_id', 'df2.was_correct', 'df2.features',
                                                 'df2.credibility', 'df2.transactions', 'df2.fact')
 df.show()
-df.write.mode('overwrite').partitionBy("hash").format('json').save(DIR + 'user_snippets/queries.json')
+df.write.mode('overwrite').partitionBy("hash").format('json').save(out_dir)
 # root
 #  |-- domain: string (nullable = true)
 #  |-- effective_query: string (nullable = true)
