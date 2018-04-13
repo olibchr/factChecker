@@ -42,19 +42,21 @@ sqlContext = SQLContext(sc)
 search_engine_files = "3_data/user_tweet_query/*_search_results.csv"
 user_files = "3_data/user_tweets/user_*.json"
 out_dir = "3_data/user_snippets/"
-if TEST_RUN: search_engine_files = DIR + "user_tweet_query/0000000_search_results copy.csv"
-if TEST_RUN: user_files = DIR + "user_tweets/user_14723131.json"
+if TEST_RUN: search_engine_files = DIR + "user_tweet_query_mod/5*_results.csv"
+if TEST_RUN: user_files = DIR + "user_tweets/user_5*.json"
 if TEST_RUN: out_dir = DIR + 'user_snippets/'
 
 
 def get_ngram_snippets(tweet_text, web_document, url):
     from nltk.stem import WordNetLemmatizer
+    from nltk import word_tokenize, sent_tokenize
+    if web_document is None or tweet_text is None: return None
     WNL = WordNetLemmatizer()
     # Remove odd characters from tweet, to lowercast and remove stopword. Parse into uni and bigrams
     tweet_text = re.sub(r'[^a-z0-9]', ' ', tweet_text.lower())
 
     # Lemamtization of tweet, remove stopwords, put into uni and bigrams
-    uni_tweet_tokens = [WNL.lemmatize(i) for i in nltk.word_tokenize(tweet_text) if i not in NLTK_STOPWORDS]
+    uni_tweet_tokens = [WNL.lemmatize(i) for i in word_tokenize(tweet_text) if i not in NLTK_STOPWORDS]
     bi_tweet_tokens = [' '.join(uni_tweet_tokens[i:i + 2]) for i in range(len(uni_tweet_tokens) - 1)]
     if len(uni_tweet_tokens) == 0:
         return {'unigrams': [],
@@ -64,7 +66,7 @@ def get_ngram_snippets(tweet_text, web_document, url):
     if len(bi_tweet_tokens) == 0: bi_tweet_tokens = uni_tweet_tokens
 
     # Split doc into senctences, lemmatize, remove stopwords and to lowercase
-    doc_sents = nltk.sent_tokenize(web_document)
+    doc_sents = sent_tokenize(web_document)
     doc_sents = [" ".join([WNL.lemmatize(i) for i in sent.split() if i not in NLTK_STOPWORDS])
                      .replace('\n', ' ')
                  for sent in doc_sents]
@@ -90,8 +92,8 @@ def get_ngram_snippets(tweet_text, web_document, url):
             bigram_snippets.append([snip, overlap_score_b])
 
     # Unigrams<Snippets<text, score>>, Bigrams<Snippets<text, score>>
-    if len(unigram_snippets) > 0:
-        print('Unigrams: {}; bigrams: {}; UrL: {}'.format(len(unigram_snippets), len(bigram_snippets), url))
+    #if len(unigram_snippets) > 0:
+        #print('Unigrams: {}; bigrams: {}; UrL: {}'.format(len(unigram_snippets), len(bigram_snippets), url))
 
     return {'unigrams': unigram_snippets,
             'bigrams': bigram_snippets,
@@ -100,8 +102,10 @@ def get_ngram_snippets(tweet_text, web_document, url):
 
 
 def get_web_doc(url):
+    if url is None: return None
     try:
         # html_document = urllib.request.urlopen(url)
+        if 'http' not in url[:5]: url = 'http://' + url
         html_document = requests.get(url)
         soup = get_soup(html_document)
 
@@ -131,19 +135,24 @@ def extract_query_term(tweet):
     if 'quoted_status' in tweet and tweet['quoted_status']:
         tweet_text = tweet_text + ' ' + tweet['quoted_status']
     if tweet_text[:2].lower() == 'rt': tweet_text = tweet_text[2:]
+    tweet_text = tweet_text.replace('\0','').replace('\n', ' ')
     return hashlib.md5(tweet_text.encode()).hexdigest()
 
 
 def get_tweet_search_results(df):
+    df.show()
+    if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return df
     get_web_doc_udf = udf(get_web_doc, StringType())
     get_ngram_snippets_udf = udf(get_ngram_snippets, MapType(StringType(), ArrayType(ArrayType(StringType()))))
-    get_hash = udf(lambda query: hashlib.md5(query.encode()).hexdigest(), StringType())
+    get_hash = udf(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest(), StringType())
 
+    df.where(col('query').isNotNull())
     df = df.withColumn("content", get_web_doc_udf(df['link']))
+    df.where(col('content').isNotNull())
     df = df.withColumn("snippets", get_ngram_snippets_udf(df['query'], df['content'], df['link']))
     df = df.withColumn("hash", get_hash(df['query']))
     df = df.drop('content')
-    df.show()
+    #df.show()
     return df
 
 
@@ -159,6 +168,8 @@ def get_hash_for_user_tweets(df_users):
 df = sqlContext.read.load(search_engine_files,
                           format='com.databricks.spark.csv',
                           header='true',
+                          delimiter=',',
+                          quote='"',
                           inferSchema='true')
 
 df_users = sqlContext.read.json(user_files)
@@ -173,7 +184,7 @@ df1 = df.alias('df1')
 df2 = df_users.alias('df2')
 df = df1.join(df2, df1.hash == df2.hash).select('df1.*', 'df2.tweet', 'df2.user_id', 'df2.was_correct', 'df2.features',
                                                 'df2.credibility', 'df2.transactions', 'df2.fact')
-df.show()
+#df.show()
 df.write.mode('overwrite').partitionBy("hash").format('json').save(out_dir)
 # root
 #  |-- domain: string (nullable = true)
