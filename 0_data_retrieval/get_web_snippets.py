@@ -35,15 +35,15 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
 
 OVERLAP_THRESHOLD = 0.4
 
-conf = SparkConf().setAppName("tweet_web_crawl").set("spark.sql.broadcastTimeout",  36000).set("spark.sql.files.maxPartitionBytes", 536870912).set("autoBroadcastJoinThreshold", 134217728)
+conf = SparkConf().setAppName("tweet_web_crawl").set("spark.sql.broadcastTimeout",  36000).set("spark.sql.files.maxPartitionBytes", 536870912).set("spark.sql.autoBroadcastJoinThreshold", 134217728)
 sc = SparkContext(conf=conf)
 sqlContext = SQLContext(sc)
 
-search_engine_files = "3_data/user_tweet_query/*_search_results.csv"
+search_engine_files = "3_data/user_tweet_query_mod/*_search_results.csv"
 user_files = "3_data/user_tweets/user_*.json"
 out_dir = "3_data/user_snippets/"
-if TEST_RUN: search_engine_files = DIR + "user_tweet_query_mod/5*_results.csv"
-if TEST_RUN: user_files = DIR + "user_tweets/user_5*.json"
+if TEST_RUN: search_engine_files = DIR + "user_tweet_query_mod/14*_results.csv"
+if TEST_RUN: user_files = DIR + "user_tweets/user_14*.json"
 if TEST_RUN: out_dir = DIR + 'user_snippets/'
 
 
@@ -103,6 +103,9 @@ def get_ngram_snippets(tweet_text, web_document, url):
 
 def get_web_doc(url):
     if url is None: return None
+    url_re = re.compile('/((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)/')
+    if not url_re.match(url): print("Invalid URL: {}".format(url));return None
+
     try:
         # html_document = urllib.request.urlopen(url)
         if 'http' not in url[:5]: url = 'http://' + url
