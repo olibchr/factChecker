@@ -6,7 +6,7 @@ import re, os
 import hashlib
 import requests
 
-TEST_RUN = False
+TEST_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -35,7 +35,7 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
 
 OVERLAP_THRESHOLD = 0.4
 
-conf = SparkConf().setAppName("tweet_web_crawl")
+conf = SparkConf().setAppName("tweet_web_crawl").set("spark.sql.broadcastTimeout",  36000).set("spark.sql.files.maxPartitionBytes", 536870912).set("autoBroadcastJoinThreshold", 134217728)
 sc = SparkContext(conf=conf)
 sqlContext = SQLContext(sc)
 
@@ -170,7 +170,7 @@ df = sqlContext.read.load(search_engine_files,
                           header='true',
                           delimiter=',',
                           quote='"',
-                          inferSchema='true')
+                          inferSchema='true').cache()
 
 df_users = sqlContext.read.json(user_files)
 
