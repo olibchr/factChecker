@@ -8,7 +8,7 @@ import multiprocessing
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = 4 #round(num_cores * 3 / 4)
-SERVER_RUN = True
+SERVER_RUN = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -48,7 +48,6 @@ out_dir = DIR + "user_snippets/"
 
 def get_data():
     search_engine_files = glob.glob(query_dir)
-    print(search_engine_files)
     preset_first_occurence = [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
     query_files = search_engine_files[preset_first_occurence:]
     print('Getting Snippets for {} users'.format(len(query_files)))
@@ -172,11 +171,11 @@ def extract_query_term(tweet):
 
 def get_tweet_search_results(df, userId):
     print("Working on {} with {} entries".format(userId, df.shape))
-    if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return df
+    if df.shape[0] < 1: return
+    if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return
     df.drop(['domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
              'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
              'no_results'], axis=1, inplace=True)
-
 
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
@@ -197,8 +196,9 @@ def get_tweet_search_results(df, userId):
 
 dfs = get_data()
 
-#Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
-[get_tweet_search_results(df[0],df[1]) for df in dfs]
+#[get_tweet_search_results(df[0],df[1]) for df in dfs]
+Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
+
 # root
 #  |-- domain: string (nullable = true)
 #  |-- effective_query: string (nullable = true)
