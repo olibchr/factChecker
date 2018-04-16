@@ -1,14 +1,10 @@
-from pyspark import SparkContext, SparkConf
-from pyspark.sql import SQLContext
-from pyspark.sql.functions import lit, col, udf, explode
-from pyspark.sql.types import *
 import re, os, glob, sys, json
 import pandas as pd
 import hashlib
 import numpy as np
 import requests
 
-TEST_RUN = True
+SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -36,23 +32,32 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
                   'now']
 
 OVERLAP_THRESHOLD = 0.4
-
+query_dir = DIR + "user_tweet_query_mod/*_search_results.csv"
 search_engine_file_preset = sys.argv[1]
 out_dir = DIR + "user_snippets/"
-if TEST_RUN: search_engine_files = DIR + "user_tweet_query_mod/14*_results.csv"
-if TEST_RUN: out_dir = DIR + 'user_snippets/'
+#if not SERVER_RUN: search_engine_files = DIR + "user_tweet_query_mod/14*_results.csv"
+#if not SERVER_RUN: out_dir = DIR + 'user_snippets/'
 
 
 def get_data():
-    search_engine_files = glob.glob(DIR + "user_tweet_query_mod/*_search_results.csv")
+    search_engine_files = glob.glob(query_dir)
     preset_first_occurence = [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
     query_files = search_engine_files[preset_first_occurence:]
     print('Getting Snippets for {} users'.format(len(query_files)))
-    if TEST_RUN: search_engine_files_subset = sorted(query_files , reverse=False)
+
+    prev_snippet_files = glob.glob(out_dir + '*.json')
+    prev_snippet_files = [int(snippet[snippet.rfind('/')+1:snippet.rfind('_snippets')]) for snippet in prev_snippet_files]
+
+    if SERVER_RUN: search_engine_files_subset = sorted(query_files , reverse=False)
     else: search_engine_files_subset = sorted(query_files , reverse=True)
 
     if len(search_engine_files_subset) < 10: print('WRONG DIR?')
     for qfile in query_files:
+        userId = int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])
+        if userId in prev_snippet_files:
+            print('Skipping user {}'.format(print(userId)))
+            continue
+        
         df = pd.DataFrame.from_csv(qfile)
         df['userId'] = int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])
         yield [df, int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])]
@@ -174,15 +179,6 @@ def get_tweet_search_results(df, userId):
     df = df.drop('content')
     with open(out_dir + str(userId) + '_snippets.json', 'w') as f:
         f.write(df.to_json(orient='records'))
-
-
-def get_hash_for_user_tweets(df_users):
-    get_hash = extract_query_term
-    df_users = df_users.select(explode('tweets').alias("tweet"), 'user_id', 'was_correct', 'features', 'credibility',
-                               'transactions', 'fact')
-    df_users.show()
-    df_users = df_users.withColumn("hash", get_hash(df_users['tweet']))
-    return df_users
 
 
 dfs = get_data()
