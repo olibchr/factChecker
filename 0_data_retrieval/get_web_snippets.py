@@ -2,8 +2,10 @@ from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext
 from pyspark.sql.functions import lit, col, udf, explode
 from pyspark.sql.types import *
-import re, os
+import re, os, glob, sys, json
+import pandas as pd
 import hashlib
+import numpy as np
 import requests
 
 TEST_RUN = True
@@ -35,16 +37,25 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
 
 OVERLAP_THRESHOLD = 0.4
 
-conf = SparkConf().setAppName("tweet_web_crawl").set("spark.sql.broadcastTimeout",  36000).set("spark.sql.files.maxPartitionBytes", 536870912).set("spark.sql.autoBroadcastJoinThreshold", 134217728)
-sc = SparkContext(conf=conf)
-sqlContext = SQLContext(sc)
-
-search_engine_files = "3_data/user_tweet_query_mod/*_search_results.csv"
-user_files = "3_data/user_tweets/user_*.json"
-out_dir = "3_data/user_snippets/"
+search_engine_file_preset = sys.argv[1]
+out_dir = DIR + "user_snippets/"
 if TEST_RUN: search_engine_files = DIR + "user_tweet_query_mod/14*_results.csv"
-if TEST_RUN: user_files = DIR + "user_tweets/user_14*.json"
 if TEST_RUN: out_dir = DIR + 'user_snippets/'
+
+
+def get_data():
+    search_engine_files = glob.glob(DIR + "user_tweet_query_mod/*_search_results.csv")
+    preset_first_occurence = [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
+    query_files = search_engine_files[preset_first_occurence:]
+    print('Getting Snippets for {} users'.format(len(query_files)))
+    if TEST_RUN: search_engine_files_subset = sorted(query_files , reverse=False)
+    else: search_engine_files_subset = sorted(query_files , reverse=True)
+
+    if len(search_engine_files_subset) < 10: print('WRONG DIR?')
+    for qfile in query_files:
+        df = pd.DataFrame.from_csv(qfile)
+        df['userId'] = int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])
+        yield [df, int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])]
 
 
 def get_ngram_snippets(tweet_text, web_document, url):
@@ -103,8 +114,9 @@ def get_ngram_snippets(tweet_text, web_document, url):
 
 def get_web_doc(url):
     if url is None: return None
-    url_re = re.compile('/((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)/')
-    if not url_re.match(url): print("Invalid URL: {}".format(url));return None
+    if len(re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)) < 1:
+        print("Bad URL: {}".format(url))
+        return None
 
     try:
         # html_document = urllib.request.urlopen(url)
@@ -142,25 +154,30 @@ def extract_query_term(tweet):
     return hashlib.md5(tweet_text.encode()).hexdigest()
 
 
-def get_tweet_search_results(df):
-    df.show()
+def get_tweet_search_results(df, userId):
+    print("Working on {} with {} entries".format(userId, df.shape))
     if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return df
-    get_web_doc_udf = udf(get_web_doc, StringType())
-    get_ngram_snippets_udf = udf(get_ngram_snippets, MapType(StringType(), ArrayType(ArrayType(StringType()))))
-    get_hash = udf(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest(), StringType())
+    df = df.drop(['domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
+             'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
+             'no_results'])
 
-    df.where(col('query').isNotNull())
-    df = df.withColumn("content", get_web_doc_udf(df['link']))
-    df.where(col('content').isNotNull())
-    df = df.withColumn("snippets", get_ngram_snippets_udf(df['query'], df['content'], df['link']))
-    df = df.withColumn("hash", get_hash(df['query']))
+    df['query'].replace('', np.nan, inplace=True)
+    df.dropna(subset=['query'], inplace=True)
+
+    df['content'] = df['link'].map(lambda x: get_web_doc(x))
+    
+    df['content'].replace('', np.nan, inplace=True)
+    df.dropna(subset=['content'], inplace=True)
+
+    df['snippets'] = df.apply(lambda x: get_ngram_snippets(x['query'], x['content'], x['link']))
+    df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
     df = df.drop('content')
-    #df.show()
-    return df
+    with open(out_dir + str(userId) + '_snippets.json', 'w') as f:
+        f.write(df.to_json(orient='records'))
 
 
 def get_hash_for_user_tweets(df_users):
-    get_hash = udf(extract_query_term, StringType())
+    get_hash = extract_query_term
     df_users = df_users.select(explode('tweets').alias("tweet"), 'user_id', 'was_correct', 'features', 'credibility',
                                'transactions', 'fact')
     df_users.show()
@@ -168,27 +185,10 @@ def get_hash_for_user_tweets(df_users):
     return df_users
 
 
-df = sqlContext.read.load(search_engine_files,
-                          format='com.databricks.spark.csv',
-                          header='true',
-                          delimiter=',',
-                          quote='"',
-                          inferSchema='true').cache()
+dfs = get_data()
 
-df_users = sqlContext.read.json(user_files)
+[get_tweet_search_results(df[0], df[1]) for df in dfs]
 
-df = df.drop('domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
-             'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
-             'no_results', )
-df = get_tweet_search_results(df)
-df_users = get_hash_for_user_tweets(df_users)
-
-df1 = df.alias('df1')
-df2 = df_users.alias('df2')
-df = df1.join(df2, df1.hash == df2.hash).select('df1.*', 'df2.tweet', 'df2.user_id', 'df2.was_correct', 'df2.features',
-                                                'df2.credibility', 'df2.transactions', 'df2.fact')
-#df.show()
-df.write.mode('overwrite').partitionBy("hash").format('json').save(out_dir)
 # root
 #  |-- domain: string (nullable = true)
 #  |-- effective_query: string (nullable = true)
