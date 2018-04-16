@@ -3,7 +3,11 @@ import pandas as pd
 import hashlib
 import numpy as np
 import requests
+from joblib import Parallel, delayed
+import multiprocessing
 
+num_cores = multiprocessing.cpu_count()
+num_jobs = 4 #round(num_cores * 3 / 4)
 SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -18,6 +22,7 @@ def lemmatize(x):
 def get_soup(html_document):
     from bs4 import BeautifulSoup
     return BeautifulSoup(html_document.text, 'lxml')
+
 
 NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
                   'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
@@ -35,32 +40,38 @@ OVERLAP_THRESHOLD = 0.4
 query_dir = DIR + "user_tweet_query_mod/*_search_results.csv"
 search_engine_file_preset = sys.argv[1]
 out_dir = DIR + "user_snippets/"
-#if not SERVER_RUN: search_engine_files = DIR + "user_tweet_query_mod/14*_results.csv"
-#if not SERVER_RUN: out_dir = DIR + 'user_snippets/'
+
+
+# if not SERVER_RUN: search_engine_files = DIR + "user_tweet_query_mod/14*_results.csv"
+# if not SERVER_RUN: out_dir = DIR + 'user_snippets/'
 
 
 def get_data():
     search_engine_files = glob.glob(query_dir)
+    print(search_engine_files)
     preset_first_occurence = [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
     query_files = search_engine_files[preset_first_occurence:]
     print('Getting Snippets for {} users'.format(len(query_files)))
 
     prev_snippet_files = glob.glob(out_dir + '*.json')
-    prev_snippet_files = [int(snippet[snippet.rfind('/')+1:snippet.rfind('_snippets')]) for snippet in prev_snippet_files]
+    prev_snippet_files = [int(snippet[snippet.rfind('/') + 1:snippet.rfind('_snippets')]) for snippet in
+                          prev_snippet_files]
 
-    if SERVER_RUN: search_engine_files_subset = sorted(query_files , reverse=False)
-    else: search_engine_files_subset = sorted(query_files , reverse=True)
+    if SERVER_RUN:
+        search_engine_files_subset = sorted(query_files, reverse=False)
+    else:
+        search_engine_files_subset = sorted(query_files, reverse=True)
 
     if len(search_engine_files_subset) < 10: print('WRONG DIR?')
     for qfile in query_files:
-        userId = int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])
+        userId = int(qfile[qfile.rfind('/') + 1:qfile.rfind('_search')])
         if userId in prev_snippet_files:
             print('Skipping user {}'.format(print(userId)))
             continue
-        
-        df = pd.DataFrame.from_csv(qfile)
-        df['userId'] = int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])
-        yield [df, int(qfile[qfile.rfind('/')+1:qfile.rfind('_search')])]
+
+        df = pd.read_csv(qfile, index_col=False)
+        df['userId'] = int(qfile[qfile.rfind('/') + 1:qfile.rfind('_search')])
+        yield [df, int(qfile[qfile.rfind('/') + 1:qfile.rfind('_search')])]
 
 
 def get_ngram_snippets(tweet_text, web_document, url):
@@ -107,9 +118,9 @@ def get_ngram_snippets(tweet_text, web_document, url):
         if overlap_score_b >= OVERLAP_THRESHOLD:
             bigram_snippets.append([snip, overlap_score_b])
 
-    # Unigrams<Snippets<text, score>>, Bigrams<Snippets<text, score>>
-    #if len(unigram_snippets) > 0:
-        #print('Unigrams: {}; bigrams: {}; UrL: {}'.format(len(unigram_snippets), len(bigram_snippets), url))
+            # Unigrams<Snippets<text, score>>, Bigrams<Snippets<text, score>>
+            # if len(unigram_snippets) > 0:
+            # print('Unigrams: {}; bigrams: {}; UrL: {}'.format(len(unigram_snippets), len(bigram_snippets), url))
 
     return {'unigrams': unigram_snippets,
             'bigrams': bigram_snippets,
@@ -155,36 +166,39 @@ def extract_query_term(tweet):
     if 'quoted_status' in tweet and tweet['quoted_status']:
         tweet_text = tweet_text + ' ' + tweet['quoted_status']
     if tweet_text[:2].lower() == 'rt': tweet_text = tweet_text[2:]
-    tweet_text = tweet_text.replace('\0','').replace('\n', ' ')
+    tweet_text = tweet_text.replace('\0', '').replace('\n', ' ')
     return hashlib.md5(tweet_text.encode()).hexdigest()
 
 
 def get_tweet_search_results(df, userId):
     print("Working on {} with {} entries".format(userId, df.shape))
     if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return df
-    df = df.drop(['domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
+    df.drop(['domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
              'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
-             'no_results'])
+             'no_results'], axis=1, inplace=True)
+
 
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
 
     df['content'] = df['link'].map(lambda x: get_web_doc(x))
-    
+
     df['content'].replace('', np.nan, inplace=True)
     df.dropna(subset=['content'], inplace=True)
 
-    df['snippets'] = df.apply(lambda x: get_ngram_snippets(x['query'], x['content'], x['link']))
+    df['snippets'] = df.apply(lambda x: get_ngram_snippets(x['query'], x['content'], x['link']), axis=1)
+
     df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
-    df = df.drop('content')
+
+    df.drop('content', axis=1, inplace=True)
     with open(out_dir + str(userId) + '_snippets.json', 'w') as f:
         f.write(df.to_json(orient='records'))
 
 
 dfs = get_data()
 
-[get_tweet_search_results(df[0], df[1]) for df in dfs]
-
+#Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
+[get_tweet_search_results(df[0],df[1]) for df in dfs]
 # root
 #  |-- domain: string (nullable = true)
 #  |-- effective_query: string (nullable = true)
