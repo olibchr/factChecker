@@ -5,9 +5,16 @@ import numpy as np
 import requests
 from joblib import Parallel, delayed
 import multiprocessing
+from urllib.parse import urlparse
+from threading import Thread
+import http.client, sys
+from queue import Queue
+from collections import Counter
+
+concurrent = 100
 
 num_cores = multiprocessing.cpu_count()
-num_jobs = 2 #round(num_cores * 3 / 4)
+num_jobs = 2  # round(num_cores * 3 / 4)
 SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -48,7 +55,8 @@ out_dir = DIR + "user_snippets/"
 
 def get_data():
     search_engine_files = glob.glob(query_dir)
-    preset_first_occurence = [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
+    preset_first_occurence = \
+    [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
     query_files = search_engine_files[preset_first_occurence:]
     print('Getting Snippets for {} users'.format(len(query_files)))
 
@@ -127,16 +135,50 @@ def get_ngram_snippets(tweet_text, web_document, url):
             }
 
 
-def get_web_doc(url):
+def parallel_retrieval(urls):
+    def doWork():
+        while True:
+            url = q.get()
+            status, url = getStatus(url)
+            responses[url] = status
+            q.task_done()
+
+    def getStatus(ourl):
+        try:
+            conn = requests.get(ourl, timeout=5)
+            return conn, ourl
+        except:
+            return "error", ourl
+
+    responses = {}
+    q = Queue(concurrent * 2)
+    for i in range(concurrent):
+        t = Thread(target=doWork)
+        t.daemon = True
+        t.start()
+    try:
+        for url in urls:
+            q.put(url.strip())
+        q.join()
+    except KeyboardInterrupt:
+        sys.exit(1)
+    print(Counter([r.status_code for r in responses.values()]))
+    return responses
+
+
+def format_url(url):
     if url is None: return None
     if len(re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)) < 1:
         print("Bad URL: {}".format(url))
         return None
+    if 'http' not in url[:5]: url = 'http://' + url
+    return url
 
+
+def get_web_doc(url, urlcontent):
     try:
         # html_document = urllib.request.urlopen(url)
-        if 'http' not in url[:5]: url = 'http://' + url
-        html_document = requests.get(url, timeout=1.5)
+        html_document = urlcontent
         soup = get_soup(html_document)
 
         for script in soup(["script", "style"]):
@@ -180,7 +222,11 @@ def get_tweet_search_results(df, userId):
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
 
-    df['content'] = df['link'].map(lambda x: get_web_doc(x))
+    df['link'] = df['link'].map(lambda x: format_url(x))
+    urls = df['link'].tolist()
+    url_contents = parallel_retrieval(urls)
+
+    df['content'] = df['link'].map(lambda x: get_web_doc(x, url_contents[x]) if x in url_contents else '')
 
     df['content'].replace('', np.nan, inplace=True)
     df.dropna(subset=['content'], inplace=True)
@@ -196,8 +242,8 @@ def get_tweet_search_results(df, userId):
 
 dfs = get_data()
 
-#[get_tweet_search_results(df[0],df[1]) for df in dfs]
-Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
+[get_tweet_search_results(df[0],df[1]) for df in dfs]
+#Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
 
 # root
 #  |-- domain: string (nullable = true)
