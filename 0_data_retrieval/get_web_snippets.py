@@ -8,7 +8,7 @@ import multiprocessing
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = 2 #round(num_cores * 3 / 4)
-SERVER_RUN = False
+SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -136,7 +136,7 @@ def get_web_doc(url):
     try:
         # html_document = urllib.request.urlopen(url)
         if 'http' not in url[:5]: url = 'http://' + url
-        html_document = requests.get(url, timeout=0.1)
+        html_document = requests.get(url, timeout=1.5)
         soup = get_soup(html_document)
 
         for script in soup(["script", "style"]):
