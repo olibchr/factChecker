@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 import multiprocessing
 
 num_cores = multiprocessing.cpu_count()
-num_jobs = 4 #round(num_cores * 3 / 4)
+num_jobs = 2 #round(num_cores * 3 / 4)
 SERVER_RUN = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -65,7 +65,7 @@ def get_data():
     for qfile in query_files:
         userId = int(qfile[qfile.rfind('/') + 1:qfile.rfind('_search')])
         if userId in prev_snippet_files:
-            print('Skipping user {}'.format(print(userId)))
+            print('Skipping user {}'.format(userId))
             continue
 
         df = pd.read_csv(qfile, index_col=False)
@@ -136,7 +136,7 @@ def get_web_doc(url):
     try:
         # html_document = urllib.request.urlopen(url)
         if 'http' not in url[:5]: url = 'http://' + url
-        html_document = requests.get(url)
+        html_document = requests.get(url, timeout=0.1)
         soup = get_soup(html_document)
 
         for script in soup(["script", "style"]):
