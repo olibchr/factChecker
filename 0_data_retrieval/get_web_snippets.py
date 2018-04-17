@@ -162,7 +162,7 @@ def parallel_retrieval(urls):
         q.join()
     except KeyboardInterrupt:
         sys.exit(1)
-    print(Counter([r.status_code for r in responses.values()]))
+    #print(Counter([r.status_code for r in responses.values()]))
     return responses
 
 
