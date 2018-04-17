@@ -70,7 +70,7 @@ def get_data():
     query_files = query_files[preset_first_occurence:]
 
     print('Getting Snippets for {} users'.format(len(query_files)))
-    if len(search_engine_files_subset) < 10: print('WRONG DIR?')
+    if len(query_files) < 10: print('WRONG DIR?')
     for qfile in query_files:
         userId = int(qfile[qfile.rfind('/') + 1:qfile.rfind('_search')])
         if userId in prev_snippet_files:
