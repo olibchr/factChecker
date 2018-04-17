@@ -61,13 +61,14 @@ def get_data():
                           prev_snippet_files]
 
     if SERVER_RUN:
-        search_engine_files_subset = sorted(query_files, reverse=False, key= lambda x: int(x[x.rfind('/')+1:x.rfind('_search')]))
+        query_files = sorted(query_files, reverse=False, key=lambda x: int(x[x.rfind('/') + 1:x.rfind('_search')]))
     else:
-        search_engine_files_subset = sorted(query_files, reverse=True, key= lambda x: int(x[x.rfind('/')+1:x.rfind('_search')]))
+        query_files = sorted(query_files, reverse=True, key=lambda x: int(x[x.rfind('/') + 1:x.rfind('_search')]))
 
-    preset_first_occurence = \
-    [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
+    preset_first_occurence = [idx for idx, uf in enumerate(query_files) if search_engine_file_preset + '_search' in uf][
+        0]
     query_files = query_files[preset_first_occurence:]
+
     print('Getting Snippets for {} users'.format(len(query_files)))
     if len(search_engine_files_subset) < 10: print('WRONG DIR?')
     for qfile in query_files:
@@ -94,9 +95,9 @@ def get_ngram_snippets(tweet_text, web_document, url):
     bi_tweet_tokens = [' '.join(uni_tweet_tokens[i:i + 2]) for i in range(len(uni_tweet_tokens) - 1)]
     if len(uni_tweet_tokens) == 0:
         return url, {'unigrams': [],
-                'bigrams': [],
-                'url': url
-                }
+                     'bigrams': [],
+                     'url': url
+                     }
     if len(bi_tweet_tokens) == 0: bi_tweet_tokens = uni_tweet_tokens
 
     # Split doc into senctences, lemmatize, remove stopwords and to lowercase
@@ -130,9 +131,9 @@ def get_ngram_snippets(tweet_text, web_document, url):
             # print('Unigrams: {}; bigrams: {}; UrL: {}'.format(len(unigram_snippets), len(bigram_snippets), url))
 
     return url, {'unigrams': unigram_snippets,
-            'bigrams': bigram_snippets,
-            'url': url
-            }
+                 'bigrams': bigram_snippets,
+                 'url': url
+                 }
 
 
 def parallel_retrieval(urls):
@@ -162,7 +163,7 @@ def parallel_retrieval(urls):
         q.join()
     except KeyboardInterrupt:
         sys.exit(1)
-    #print(Counter([r.status_code for r in responses.values()]))
+    # print(Counter([r.status_code for r in responses.values()]))
     return responses
 
 
@@ -191,10 +192,10 @@ def get_web_doc(url, urlcontent):
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         # drop blank lines
         text = '\n'.join(chunk for chunk in chunks if chunk).lower()
-        #print("Sucess: {}".format(url))
+        # print("Sucess: {}".format(url))
         return url, text
     except Exception as e:
-        #print('Parsing error: {}, for url: {}'.format(e, url))
+        # print('Parsing error: {}, for url: {}'.format(e, url))
         return None
 
 
@@ -254,8 +255,8 @@ def get_tweet_search_results(df, userId):
 
 dfs = get_data()
 
-[get_tweet_search_results(df[0],df[1]) for df in dfs]
-#Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
+[get_tweet_search_results(df[0], df[1]) for df in dfs]
+# Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
 
 # root
 #  |-- domain: string (nullable = true)
