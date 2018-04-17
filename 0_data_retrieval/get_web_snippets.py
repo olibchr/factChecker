@@ -232,7 +232,7 @@ def get_tweet_search_results(df, userId):
 
     print("Parsing contents")
     url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
-    url_text = {unit[0]: unit[1] for unit in url_text if not None}
+    url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
     df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
 
     df['content'].replace('', np.nan, inplace=True)
@@ -241,7 +241,7 @@ def get_tweet_search_results(df, userId):
     print("Extracting snippets")
     ngram_params = zip(df['query'].tolist(), df['content'].tolist(), df['link'].tolist())
     url_snippets = Parallel(n_jobs=num_jobs)(delayed(get_ngram_snippets)(e[0], e[1], e[2]) for e in ngram_params)
-    url_snippets = {unit[0]: unit[1] for unit in url_snippets if not None}
+    url_snippets = {unit[0]: unit[1] for unit in url_snippets if unit is not None}
 
     df['snippets'] = df['link'].map(lambda x: url_snippets[x] if x in url_snippets else '')
     df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
