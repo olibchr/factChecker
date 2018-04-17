@@ -45,7 +45,6 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
 
 OVERLAP_THRESHOLD = 0.4
 query_dir = DIR + "user_tweet_query_mod/*_search_results.csv"
-search_engine_file_preset = sys.argv[1]
 out_dir = DIR + "user_snippets/"
 
 
@@ -54,21 +53,22 @@ out_dir = DIR + "user_snippets/"
 
 
 def get_data():
-    search_engine_files = glob.glob(query_dir)
-    preset_first_occurence = \
-    [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
-    query_files = search_engine_files[preset_first_occurence:]
-    print('Getting Snippets for {} users'.format(len(query_files)))
+    query_files = glob.glob(query_dir)
+    search_engine_file_preset = sys.argv[1]
 
     prev_snippet_files = glob.glob(out_dir + '*.json')
     prev_snippet_files = [int(snippet[snippet.rfind('/') + 1:snippet.rfind('_snippets')]) for snippet in
                           prev_snippet_files]
 
     if SERVER_RUN:
-        search_engine_files_subset = sorted(query_files, reverse=False)
+        search_engine_files_subset = sorted(query_files, reverse=False, key= lambda x: int(x[x.rfind('/')+1:x.rfind('_search')]))
     else:
-        search_engine_files_subset = sorted(query_files, reverse=True)
+        search_engine_files_subset = sorted(query_files, reverse=True, key= lambda x: int(x[x.rfind('/')+1:x.rfind('_search')]))
 
+    preset_first_occurence = \
+    [idx for idx, uf in enumerate(search_engine_files) if search_engine_file_preset + '_search' in uf][0]
+    query_files = query_files[preset_first_occurence:]
+    print('Getting Snippets for {} users'.format(len(query_files)))
     if len(search_engine_files_subset) < 10: print('WRONG DIR?')
     for qfile in query_files:
         userId = int(qfile[qfile.rfind('/') + 1:qfile.rfind('_search')])
@@ -93,7 +93,7 @@ def get_ngram_snippets(tweet_text, web_document, url):
     uni_tweet_tokens = [WNL.lemmatize(i) for i in word_tokenize(tweet_text) if i not in NLTK_STOPWORDS]
     bi_tweet_tokens = [' '.join(uni_tweet_tokens[i:i + 2]) for i in range(len(uni_tweet_tokens) - 1)]
     if len(uni_tweet_tokens) == 0:
-        return {'unigrams': [],
+        return url, {'unigrams': [],
                 'bigrams': [],
                 'url': url
                 }
@@ -129,7 +129,7 @@ def get_ngram_snippets(tweet_text, web_document, url):
             # if len(unigram_snippets) > 0:
             # print('Unigrams: {}; bigrams: {}; UrL: {}'.format(len(unigram_snippets), len(bigram_snippets), url))
 
-    return {'unigrams': unigram_snippets,
+    return url, {'unigrams': unigram_snippets,
             'bigrams': bigram_snippets,
             'url': url
             }
@@ -191,9 +191,10 @@ def get_web_doc(url, urlcontent):
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         # drop blank lines
         text = '\n'.join(chunk for chunk in chunks if chunk).lower()
-        return text
+        #print("Sucess: {}".format(url))
+        return url, text
     except Exception as e:
-        print('Parsing error: {}, for url: {}'.format(e, url))
+        #print('Parsing error: {}, for url: {}'.format(e, url))
         return None
 
 
@@ -223,19 +224,30 @@ def get_tweet_search_results(df, userId):
     df.dropna(subset=['query'], inplace=True)
 
     df['link'] = df['link'].map(lambda x: format_url(x))
+
+    print("Grabbing url content")
     urls = df['link'].tolist()
     url_contents = parallel_retrieval(urls)
 
-    df['content'] = df['link'].map(lambda x: get_web_doc(x, url_contents[x]) if x in url_contents else '')
+    print("Parsing contents")
+    url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
+    url_text = {unit[0]: unit[1] for unit in url_text if not None}
+    df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
 
     df['content'].replace('', np.nan, inplace=True)
     df.dropna(subset=['content'], inplace=True)
 
-    df['snippets'] = df.apply(lambda x: get_ngram_snippets(x['query'], x['content'], x['link']), axis=1)
+    print("Extracting snippets")
+    ngram_params = zip(df['query'].tolist(), df['content'].tolist(), df['link'].tolist())
+    url_snippets = Parallel(n_jobs=num_jobs)(delayed(get_ngram_snippets)(e[0], e[1], e[2]) for e in ngram_params)
+    url_snippets = {unit[0]: unit[1] for unit in url_snippets if not None}
 
+    df['snippets'] = df['link'].map(lambda x: url_snippets[x] if x in url_snippets else '')
     df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
 
     df.drop('content', axis=1, inplace=True)
+
+    print("Finished {} with {} entries".format(userId, df.shape))
     with open(out_dir + str(userId) + '_snippets.json', 'w') as f:
         f.write(df.to_json(orient='records'))
 
