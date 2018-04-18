@@ -15,7 +15,7 @@ concurrent = 100
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = 2  # round(num_cores * 3 / 4)
-SERVER_RUN = True
+SERVER_RUN = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -102,7 +102,7 @@ def get_ngram_snippets(tweet_text, web_document, url):
 
     # Split doc into senctences, lemmatize, remove stopwords and to lowercase
     doc_sents = sent_tokenize(web_document)
-    doc_sents = [" ".join([WNL.lemmatize(i) for i in sent.split() if i not in NLTK_STOPWORDS])
+    doc_sents = [" ".join([WNL.lemmatize(i) for i in word_tokenize(sent) if i not in NLTK_STOPWORDS])
                      .replace('\n', ' ')
                  for sent in doc_sents]
 
@@ -251,11 +251,13 @@ def get_tweet_search_results(df, userId):
     print("Finished {} with {} entries".format(userId, df.shape))
     with open(out_dir + str(userId) + '_snippets.json', 'w') as f:
         f.write(df.to_json(orient='records'))
+    del(df)
 
 
 dfs = get_data()
 
-[get_tweet_search_results(df[0], df[1]) for df in dfs]
+for df in dfs:
+    get_tweet_search_results(df[0], df[1])
 # Parallel(n_jobs=num_jobs)(delayed(get_tweet_search_results)(df[0], df[1]) for df in dfs)
 
 # root
