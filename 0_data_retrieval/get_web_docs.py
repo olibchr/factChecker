@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from threading import Thread
 import http.client, sys
 from queue import Queue
+import queue
 from collections import Counter
 
 concurrent = 20
@@ -109,10 +110,10 @@ def parallel_retrieval(urls):
         sys.exit(1)
     # print(Counter([r.status_code for r in responses.values()]))
     while not q.empty():
-    try:
-        q.get(False)
-    except Empty:
-        continue
+        try:
+            q.get(False)
+        except Empty:
+            continue
     q.task_done()
     del (q)
 
