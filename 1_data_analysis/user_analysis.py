@@ -30,7 +30,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = False
+BUILD_NEW_SPARSE = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -95,8 +95,7 @@ def build_bow_corpus(users):
             continue
         for tweet in user.tweets:
             # Tweets <text, created_at, *quoted_status
-            tokens = [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(tweet['text']) if
-                      i.lower() not in NLTK_STOPWORDS]
+            tokens = tokenize_tweet(tweet['text'])
             for token in tokens:
                 if token in bow_corpus_cnt:
                     bow_corpus_cnt[token] += 1
@@ -105,8 +104,20 @@ def build_bow_corpus(users):
     return bow_corpus_cnt
 
 
-def build_sparse_matrix(users, word_to_idx):
+def tokenize_tweet(text, only_retweets=False):
     tokenizer = RegexpTokenizer(r'\w+')
+    if only_retweets:
+        text = text.lower()
+        if 'rt' not in text: return []
+        text = text[text.find('rt'):]
+        text = text[text.find('@'):text.find(':')]
+        return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
+                          i.lower() not in NLTK_STOPWORDS]
+    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
+                          i.lower() not in NLTK_STOPWORDS]
+
+
+def build_sparse_matrix(users, word_to_idx):
     y = []
     positions = []
     data = []
@@ -123,9 +134,10 @@ def build_sparse_matrix(users, word_to_idx):
             user_data = {}
             if not user.tweets: continue
             for tweet in user.tweets:
-                y.append(int(user.was_correct))
-                tokens = [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(tweet['text']) if
-                          i.lower() not in NLTK_STOPWORDS]
+                #
+                tokens = tokenize_tweet(tweet['text'], only_retweets=True)
+                if len(tokens) > 0:
+                    y.append(int(user.was_correct))
                 for token in tokens:
                     if token not in word_to_idx: continue
                     if token in user_data:
@@ -178,6 +190,7 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
 def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
     print("KMeans Clustering")
     X, y = build_sparse_matrix(users, word_to_idx)
+    print(X.shape, y.shape)
     y_r = y == 1
     y_r = y_r.nonzero()[0]
     X_r = X.toarray()[y_r, :]
@@ -339,9 +352,9 @@ def main():
 
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
-    # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
+    cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
     # truth_prediction_for_users(get_users(), word_to_idx)
-    lda_analysis(get_users())
+    # lda_analysis(get_users())
 
 
 if __name__ == "__main__":

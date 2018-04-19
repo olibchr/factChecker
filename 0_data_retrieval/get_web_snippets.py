@@ -87,11 +87,12 @@ def get_ngram_snippets(tweet_text, web_document, url):
     from nltk import word_tokenize, sent_tokenize
     if web_document is None or tweet_text is None: return None
     WNL = WordNetLemmatizer()
+    tokenizer = RegexpTokenizer(r'\w+')
     # Remove odd characters from tweet, to lowercast and remove stopword. Parse into uni and bigrams
     tweet_text = re.sub(r'[^a-z0-9]', ' ', tweet_text.lower())
 
     # Lemamtization of tweet, remove stopwords, put into uni and bigrams
-    uni_tweet_tokens = [WNL.lemmatize(i) for i in word_tokenize(tweet_text) if i not in NLTK_STOPWORDS]
+    uni_tweet_tokens = [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(tweet_text) if i.lower() not in NLTK_STOPWORDS]
     bi_tweet_tokens = [' '.join(uni_tweet_tokens[i:i + 2]) for i in range(len(uni_tweet_tokens) - 1)]
     if len(uni_tweet_tokens) == 0:
         return url, {'unigrams': [],
@@ -102,7 +103,7 @@ def get_ngram_snippets(tweet_text, web_document, url):
 
     # Split doc into senctences, lemmatize, remove stopwords and to lowercase
     doc_sents = sent_tokenize(web_document)
-    doc_sents = [" ".join([WNL.lemmatize(i) for i in word_tokenize(sent) if i not in NLTK_STOPWORDS])
+    doc_sents = [" ".join([WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(sent) if i.lower() not in NLTK_STOPWORDS])
                      .replace('\n', ' ')
                  for sent in doc_sents]
 
