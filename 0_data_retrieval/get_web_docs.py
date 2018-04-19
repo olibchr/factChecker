@@ -162,7 +162,10 @@ def get_tweet_search_results(df, userId):
     url_contents = parallel_retrieval(urls)
 
     print("Parsing contents")
-    url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
+    try:
+        url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
+    except Exception as e:
+        url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
     url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
     df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
 
