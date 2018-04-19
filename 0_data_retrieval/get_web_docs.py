@@ -114,9 +114,7 @@ def parallel_retrieval(urls):
             q.get(False)
         except Empty:
             continue
-    q.task_done()
     del (q)
-
     return responses
 
 
