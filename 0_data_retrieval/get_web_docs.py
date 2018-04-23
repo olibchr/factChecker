@@ -13,10 +13,10 @@ import queue
 from collections import Counter
 from bs4 import BeautifulSoup
 
-concurrent = 20
+concurrent = 30
 
 num_cores = multiprocessing.cpu_count()
-num_jobs = 2  # round(num_cores * 3 / 4)
+num_jobs = round(num_cores * 3 / 4)
 SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
