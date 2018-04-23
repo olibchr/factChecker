@@ -175,5 +175,5 @@ def get_tweet_search_results(df, userId):
 dfs = get_data()
 for idx, df in enumerate(dfs):
     get_tweet_search_results(df[0], df[1])
-    if idx%2 == 0:
+    if SERVER_RUN and (idx+1)%2 == 0:
         os.execl('restart_script.sh', sys.argv[1])
