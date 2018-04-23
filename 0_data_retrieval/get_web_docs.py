@@ -161,7 +161,6 @@ def get_tweet_search_results(df, userId):
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
 
-    print("Query with entries: {}".format(query_df[1].shape))
 
     df['link'] = df['link'].map(lambda x: format_url(x))
 
@@ -170,6 +169,7 @@ def get_tweet_search_results(df, userId):
     url_contents = parallel_retrieval(urls)
 
     for query_df in df.groupby('query'):
+        print("Query with entries: {}".format(query_df[1].shape))
         #print("Parsing contents")
         try:
             url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
