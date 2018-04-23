@@ -177,5 +177,5 @@ for idx, df in enumerate(dfs):
     get_tweet_search_results(df[0], df[1])
     if SERVER_RUN and (idx+1)%2 == 0:
         print(str(os.getpid()), PRESET)
-        os.execl('restart_script.sh', str(os.getpid()), PRESET)
-        exit()
+        os.execl('restart_script.sh', PRESET)
+        sys.exit()
