@@ -20,6 +20,7 @@ concurrent = 30
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 SERVER_RUN = True
+PRESET = sys.argv[1]
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -30,9 +31,8 @@ out_dir = DIR + "user_docs/"
 
 def get_data():
     query_files = glob.glob(query_dir + '*_search_results.csv')
-    if sys.argv[1]:
-        file_preset = sys.argv[1]
-        query_files = glob.glob(query_dir + file_preset + '*_search_results.csv')
+    if PRESET:
+        query_files = glob.glob(query_dir + PRESET + '*_search_results.csv')
     prev_snippet_files = glob.glob(out_dir + '*.json')
     prev_snippet_files = [int(snippet[snippet.rfind('/') + 1:snippet.rfind('_snippets')]) for snippet in
                           prev_snippet_files]
@@ -176,4 +176,5 @@ dfs = get_data()
 for idx, df in enumerate(dfs):
     get_tweet_search_results(df[0], df[1])
     if SERVER_RUN and (idx+1)%2 == 0:
-        os.execl('restart_script.sh', sys.argv[1])
+        os.execl('restart_script.sh', os.getpid(), PRESET)
+        exit()
