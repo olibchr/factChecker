@@ -64,8 +64,9 @@ def parallel_retrieval(urls):
     def getStatus(ourl):
         try:
             with requests.Session() as s:
+                s.keep_alive = False
                 conn = s.get(ourl, timeout=5)
-                responses[url] = conn.text
+                responses[ourl] = conn.text
             return
         except:
             return "error", ourl
@@ -164,10 +165,10 @@ def get_tweet_search_results(df, userId):
             print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
             continue
         print("Finished with {} entries".format(df_r.shape))
-        if df_r.shape[1] < 1: continue
+        if df_r.shape[0] < 1: continue
         with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
             f.write(df_r.to_json(orient='records'))
-        del(df_r)
+        del df_r, url_contents, url_text
 
 
 dfs = get_data()
