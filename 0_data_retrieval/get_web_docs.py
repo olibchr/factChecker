@@ -170,15 +170,10 @@ def get_tweet_search_results(df, userId):
         with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
             f.write(df_r.to_json(orient='records'))
         del df_r, url_contents, url_text
-    try:
-        p = psutil.Process(os.getpid())
-        for handler in p.get_open_files() + p.connections():
-            os.close(handler.fd)
-    except Exception as e:
-        print(e)
-
 
 
 dfs = get_data()
-for df in dfs:
+for idx, df in enumerate(dfs):
     get_tweet_search_results(df[0], df[1])
+    if idx%2 == 0:
+        os.execl('restart_script.sh', sys.argv[1])
