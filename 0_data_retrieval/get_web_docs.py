@@ -151,7 +151,7 @@ def get_web_doc(url, urlcontent):
 
 
 def get_tweet_search_results(df, userId):
-    print("Working on {} with {} entries".format(userId, df.shape))
+    print("Working on USER {} with {} entries".format(userId, df.shape))
     if df.shape[0] < 1: return
     if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return
     df.drop(['domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
@@ -166,11 +166,11 @@ def get_tweet_search_results(df, userId):
 
         query_df[1]['link'] = query_df[1]['link'].map(lambda x: format_url(x))
 
-        print("Grabbing url content")
+        #print("Grabbing url content")
         urls = query_df[1]['link'].tolist()
         url_contents = parallel_retrieval(urls)
 
-        print("Parsing contents")
+        #print("Parsing contents")
         try:
             url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
         except Exception as e:
@@ -184,15 +184,13 @@ def get_tweet_search_results(df, userId):
         query_df[1]['content'] = query_df[1]['content'].str.replace("\n", ". ")
 
         query_df[1]['hash'] = query_df[1]['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
-        print(query_df[1])
         if 'content' not in query_df[1]:
             print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
             continue
-        print("Finished {} with {} entries".format(userId, query_df[1].shape))
+        #print("Finished {} with {} entries".format(userId, query_df[1].shape))
         with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
             f.write(query_df[1].to_json(orient='records'))
         del(query_df)
-        exit()
 
 
 dfs = get_data()
