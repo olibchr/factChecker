@@ -13,6 +13,7 @@ import queue
 from collections import Counter
 from bs4 import BeautifulSoup
 import math
+import psutil
 
 concurrent = 30
 
@@ -169,6 +170,13 @@ def get_tweet_search_results(df, userId):
         with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
             f.write(df_r.to_json(orient='records'))
         del df_r, url_contents, url_text
+    try:
+        p = psutil.Process(os.getpid())
+        for handler in p.get_open_files() + p.connections():
+            os.close(handler.fd)
+    except Exception as e:
+        print(e)
+
 
 
 dfs = get_data()
