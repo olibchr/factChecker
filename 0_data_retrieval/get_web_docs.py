@@ -58,14 +58,15 @@ def parallel_retrieval(urls):
     def doWork():
         while True:
             url = q.get()
-            status, url = getStatus(url)
-            responses[url] = status
+            getStatus(url)
             q.task_done()
 
     def getStatus(ourl):
         try:
-            conn = requests.get(ourl, timeout=5)
-            return conn, ourl
+            with requests.Session() as s:
+                conn = s.get(ourl, timeout=5)
+                responses[url] = conn.text
+            return
         except:
             return "error", ourl
 
@@ -107,7 +108,7 @@ def get_web_doc(url, urlcontent):
     try:
         # html_document = urllib.request.urlopen(url)
         html_document = urlcontent
-        soup = BeautifulSoup(html_document.text, 'lxml')
+        soup = BeautifulSoup(html_document, 'lxml')
 
         for script in soup(["script", "style"]):
             script.decompose()
@@ -142,9 +143,9 @@ def get_tweet_search_results(df, userId):
 
     df_range = np.array_split(df, math.ceil((1.0*df.shape[0])/1000))
     print("Splitted into {} subsets".format(len(df_range)))
-    for df in df_range:
+    for df_r in df_range:
         print("Querying web docs")
-        urls = df['link'].tolist()
+        urls = df_r['link'].tolist()
         url_contents = parallel_retrieval(urls)
 
         print("Parsing contents")
@@ -153,18 +154,20 @@ def get_tweet_search_results(df, userId):
         except Exception as e:
             url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
         url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
-        df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
+        df_r['content'] = df_r['link'].map(lambda x: url_text[x] if x in url_text else '')
 
-        df['content'].replace('', np.nan, inplace=True)
-        df.dropna(subset=['content'], inplace=True)
+        df_r['content'].replace('', np.nan, inplace=True)
+        df_r.dropna(subset=['content'], inplace=True)
 
-        df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
-        if 'content' not in df:
+        df_r['hash'] = df_r['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
+        if 'content' not in df_r:
             print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
-        print("Finished {} with {} entries".format(userId, df.shape))
+            continue
+        print("Finished with {} entries".format(df_r.shape))
+        if df_r.shape[1] < 1: continue
         with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
-            f.write(df.to_json(orient='records'))
-        del(df)
+            f.write(df_r.to_json(orient='records'))
+        del(df_r)
 
 
 dfs = get_data()
