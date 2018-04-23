@@ -20,12 +20,17 @@ concurrent = 30
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 SERVER_RUN = True
-PRESET = 1 #sys.argv[1]
-
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
+if len(sys.argv) > 1:
+    PRESET = sys.argv[1]
+else:
+    PRESET = str(1) #
+    DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
-OVERLAP_THRESHOLD = 0.4
+
+
+
 query_dir = DIR + "user_tweet_query_mod/"
 out_dir = DIR + "user_docs/"
 
