@@ -12,6 +12,7 @@ from queue import Queue
 import queue
 from collections import Counter
 from bs4 import BeautifulSoup
+import math
 
 concurrent = 30
 
@@ -139,31 +140,33 @@ def get_tweet_search_results(df, userId):
 
     df['link'] = df['link'].map(lambda x: format_url(x))
 
-    print("Querying web docs")
-    urls = df['link'].tolist()
-    url_contents = parallel_retrieval(urls)
+    df_range = np.array_split(df, math.ceil((1.0*df.shape[0])/1000))
+    print("Splitted into {} subsets".format(len(df_range)))
+    for df in df_range:
+        print("Querying web docs")
+        urls = df['link'].tolist()
+        url_contents = parallel_retrieval(urls)
 
-    print("Parsing contents")
-    try:
-        url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
-    except Exception as e:
-        url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
-    url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
-    df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
+        print("Parsing contents")
+        try:
+            url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
+        except Exception as e:
+            url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
+        url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
+        df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
 
-    df['content'].replace('', np.nan, inplace=True)
-    df.dropna(subset=['content'], inplace=True)
+        df['content'].replace('', np.nan, inplace=True)
+        df.dropna(subset=['content'], inplace=True)
 
-    df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
-    if 'content' not in df:
-        print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
-    print("Finished {} with {} entries".format(userId, df.shape))
-    with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
-        f.write(df.to_json(orient='records'))
-    del(df)
+        df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
+        if 'content' not in df:
+            print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
+        print("Finished {} with {} entries".format(userId, df.shape))
+        with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
+            f.write(df.to_json(orient='records'))
+        del(df)
 
 
 dfs = get_data()
-
 for df in dfs:
     get_tweet_search_results(df[0], df[1])
