@@ -45,25 +45,22 @@ NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', '
                   'now']
 
 OVERLAP_THRESHOLD = 0.4
-query_dir = DIR + "user_tweet_query_mod/*_search_results.csv"
+query_dir = DIR + "user_tweet_query_mod/"
 out_dir = DIR + "user_docs/"
 
 def get_data():
-    query_files = glob.glob(query_dir)
-    search_engine_file_preset = sys.argv[1]
-
+    query_files = glob.glob(query_dir + '*_search_results.csv')
+    if sys.argv[1]:
+        file_preset = sys.argv[1]
+        query_files = glob.glob(query_dir + file_preset + '*_search_results.csv')
     prev_snippet_files = glob.glob(out_dir + '*.json')
     prev_snippet_files = [int(snippet[snippet.rfind('/') + 1:snippet.rfind('_snippets')]) for snippet in
                           prev_snippet_files]
 
     if SERVER_RUN:
-        query_files = sorted(query_files, reverse=False, key=lambda x: int(x[x.rfind('/') + 1:x.rfind('_search')]))
+        query_files = sorted(query_files, reverse=False, key=lambda x: str(x[x.rfind('/') + 1:x.rfind('_search')]))
     else:
-        query_files = sorted(query_files, reverse=True, key=lambda x: int(x[x.rfind('/') + 1:x.rfind('_search')]))
-
-    preset_first_occurence = [idx for idx, uf in enumerate(query_files) if search_engine_file_preset + '_search' in uf][
-        0]
-    query_files = query_files[preset_first_occurence:]
+        query_files = sorted(query_files, reverse=True, key=lambda x: str(x[x.rfind('/') + 1:x.rfind('_search')]))
 
     print('Getting Snippets for {} users'.format(len(query_files)))
     if len(query_files) < 10: print('WRONG DIR?')
@@ -142,7 +139,7 @@ def get_web_doc(url, urlcontent):
         # break multi-headlines into a line each
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         # drop blank lines
-        text = '\n'.join(chunk for chunk in chunks if chunk).lower()
+        text = '. '.join(chunk for chunk in chunks if chunk).lower()
         # print("Sucess: {}".format(url))
         return url, text
     except Exception as e:
