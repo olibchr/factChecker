@@ -161,15 +161,15 @@ def get_tweet_search_results(df, userId):
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
 
-    for query_df in df.groupby('query'):
-        print("Query with entries: {}".format(query_df[1].shape))
+    print("Query with entries: {}".format(query_df[1].shape))
 
-        query_df[1]['link'] = query_df[1]['link'].map(lambda x: format_url(x))
+    df['link'] = df['link'].map(lambda x: format_url(x))
 
         #print("Grabbing url content")
-        urls = query_df[1]['link'].tolist()
-        url_contents = parallel_retrieval(urls)
+    urls = df['link'].tolist()
+    url_contents = parallel_retrieval(urls)
 
+    for query_df in df.groupby('query'):
         #print("Parsing contents")
         try:
             url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
@@ -180,7 +180,7 @@ def get_tweet_search_results(df, userId):
 
         query_df[1]['content'].replace('', np.nan, inplace=True)
         query_df[1].dropna(subset=['content'], inplace=True)
-        query_df[1]['content'] = query_df[1]['content'].str.replace('"', "'")
+        query_df[1]['content'] = query_df[1]['content'].astype(str).str.replace('"', "'")
         query_df[1]['content'] = query_df[1]['content'].str.replace("\n", ". ")
 
         query_df[1]['hash'] = query_df[1]['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
