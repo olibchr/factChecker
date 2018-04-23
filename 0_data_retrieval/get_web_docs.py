@@ -16,7 +16,7 @@ concurrent = 20
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = 2  # round(num_cores * 3 / 4)
-SERVER_RUN = False
+SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -161,29 +161,38 @@ def get_tweet_search_results(df, userId):
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
 
-    df['link'] = df['link'].map(lambda x: format_url(x))
+    for query_df in df.groupby('query'):
+        print("Query with entries: {}".format(query_df[1].shape))
 
-    print("Grabbing url content")
-    urls = df['link'].tolist()
-    url_contents = parallel_retrieval(urls)
+        query_df[1]['link'] = query_df[1]['link'].map(lambda x: format_url(x))
 
-    print("Parsing contents")
-    #try:
-    #    url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
-    #except Exception as e:
-    url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
-    url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
-    df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
+        print("Grabbing url content")
+        urls = query_df[1]['link'].tolist()
+        url_contents = parallel_retrieval(urls)
 
-    df['content'].replace('', np.nan, inplace=True)
-    df.dropna(subset=['content'], inplace=True)
+        print("Parsing contents")
+        try:
+            url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
+        except Exception as e:
+            url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
+        url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
+        query_df[1]['content'] = query_df[1]['link'].map(lambda x: url_text[x] if x in url_text else '')
 
-    df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
+        query_df[1]['content'].replace('', np.nan, inplace=True)
+        query_df[1].dropna(subset=['content'], inplace=True)
+        query_df[1]['content'] = query_df[1]['content'].str.replace('"', "'")
+        query_df[1]['content'] = query_df[1]['content'].str.replace("\n", ". ")
 
-    print("Finished {} with {} entries".format(userId, df.shape))
-    with open(out_dir + str(userId) + '_snippets.json', 'w') as f:
-        f.write(df.to_json(orient='records'))
-    del (df)
+        query_df[1]['hash'] = query_df[1]['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
+        print(query_df[1])
+        if 'content' not in query_df[1]:
+            print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
+            continue
+        print("Finished {} with {} entries".format(userId, query_df[1].shape))
+        with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
+            f.write(query_df[1].to_json(orient='records'))
+        del(query_df)
+        exit()
 
 
 dfs = get_data()
