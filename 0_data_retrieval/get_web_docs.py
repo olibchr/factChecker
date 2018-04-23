@@ -157,7 +157,7 @@ def get_tweet_search_results(df, userId):
     df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
     if 'content' not in df:
         print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
-    print("Finished {} with {} entries".format(userId, query_df[1].shape))
+    print("Finished {} with {} entries".format(userId, df.shape))
     with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
         f.write(df.to_json(orient='records'))
     del(df)
