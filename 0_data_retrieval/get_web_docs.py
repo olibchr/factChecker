@@ -20,7 +20,7 @@ concurrent = 30
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 SERVER_RUN = True
-PRESET = sys.argv[1]
+PRESET = 1 #sys.argv[1]
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -175,7 +175,7 @@ def get_tweet_search_results(df, userId):
 dfs = get_data()
 for idx, df in enumerate(dfs):
     get_tweet_search_results(df[0], df[1])
-    if SERVER_RUN and (idx+1)%2 == 0:
+    if SERVER_RUN and (idx+1)%6 == 0:
         print(str(os.getpid()), PRESET)
         os.execl('restart_script.sh', PRESET)
         sys.exit()
