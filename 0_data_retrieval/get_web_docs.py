@@ -15,17 +15,18 @@ from bs4 import BeautifulSoup
 import math
 import psutil
 
-concurrent = 30
+concurrent = 20
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
-SERVER_RUN = True if int(sys.argv[1]) == 1 else False
+SERVER_RUN = False if int(sys.argv[1]) == 0 else True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 if len(sys.argv) > 2:
     PRESET = sys.argv[2]
 else:
     PRESET = str(1) #
+if SERVER_RUN:
     DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
 query_dir = DIR + "user_tweet_query_mod/"
