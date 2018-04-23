@@ -11,6 +11,7 @@ import http.client, sys
 from queue import Queue
 import queue
 from collections import Counter
+from bs4 import BeautifulSoup
 
 concurrent = 20
 
@@ -20,29 +21,6 @@ SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
-
-def lemmatize(x):
-    from nltk.stem import WordNetLemmatizer
-    WNL = WordNetLemmatizer()
-    return WNL.lemmatize(x)
-
-
-def get_soup(html_document):
-    from bs4 import BeautifulSoup
-    return BeautifulSoup(html_document.text, 'lxml')
-
-
-NLTK_STOPWORDS = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
-                  'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
-                  'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that',
-                  'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
-                  'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as',
-                  'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through',
-                  'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off',
-                  'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how',
-                  'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
-                  'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should',
-                  'now']
 
 OVERLAP_THRESHOLD = 0.4
 query_dir = DIR + "user_tweet_query_mod/"
@@ -128,7 +106,7 @@ def get_web_doc(url, urlcontent):
     try:
         # html_document = urllib.request.urlopen(url)
         html_document = urlcontent
-        soup = get_soup(html_document)
+        soup = BeautifulSoup(html_document.text, 'lxml')
 
         for script in soup(["script", "style"]):
             script.decompose()
@@ -141,6 +119,7 @@ def get_web_doc(url, urlcontent):
         # drop blank lines
         text = '. '.join(chunk for chunk in chunks if chunk).lower()
         # print("Sucess: {}".format(url))
+        text = text.replace('"', "'").replace('\n', '. ')
         return url, text
     except Exception as e:
         # print('Parsing error: {}, for url: {}'.format(e, url))
@@ -158,37 +137,31 @@ def get_tweet_search_results(df, userId):
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
 
-
     df['link'] = df['link'].map(lambda x: format_url(x))
 
-        #print("Grabbing url content")
+    print("Querying web docs")
     urls = df['link'].tolist()
     url_contents = parallel_retrieval(urls)
 
-    for query_df in df.groupby('query'):
-        print("Query with entries: {}".format(query_df[1].shape))
-        #print("Parsing contents")
-        #try:
-        #    url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
-        #except Exception as e:
+    #print("Parsing contents")
+    #try:
+    #    url_text = Parallel(n_jobs=num_jobs)(delayed(get_web_doc)(x, url_contents[x]) for x in url_contents)
+    #except Exception as e:
+    print("Parsing contents")
+    url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
+    url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
+    df['content'] = df['link'].map(lambda x: url_text[x] if x in url_text else '')
 
-        url_text = [get_web_doc(x, url_contents[x]) for x in url_contents]
-        url_text = {unit[0]: unit[1] for unit in url_text if unit is not None}
-        query_df[1]['content'] = query_df[1]['link'].map(lambda x: url_text[x] if x in url_text else '')
+    df['content'].replace('', np.nan, inplace=True)
+    df.dropna(subset=['content'], inplace=True)
 
-        query_df[1]['content'].replace('', np.nan, inplace=True)
-        query_df[1].dropna(subset=['content'], inplace=True)
-        query_df[1]['content'] = query_df[1]['content'].astype(str).str.replace('"', "'")
-        query_df[1]['content'] = query_df[1]['content'].str.replace("\n", ". ")
-
-        query_df[1]['hash'] = query_df[1]['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
-        if 'content' not in query_df[1]:
-            print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
-            continue
-        #print("Finished {} with {} entries".format(userId, query_df[1].shape))
-        with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
-            f.write(query_df[1].to_json(orient='records'))
-        del(query_df)
+    df['hash'] = df['query'].map(lambda query: "" if query is None else hashlib.md5(query.encode()).hexdigest())
+    if 'content' not in df:
+        print("%%%%%%%%%%%%%%%\nCONTENT NOT IN DF\n%%%%%%%%%%%%%%%%")
+    print("Finished {} with {} entries".format(userId, query_df[1].shape))
+    with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
+        f.write(df.to_json(orient='records'))
+    del(df)
 
 
 dfs = get_data()
