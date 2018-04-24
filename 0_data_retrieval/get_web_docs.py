@@ -15,15 +15,17 @@ from bs4 import BeautifulSoup
 import math
 import psutil
 
+print("ARGS: $1 SERVER_RUN, $2 ORDERING, $3 PRESET")
 concurrent = 20
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 SERVER_RUN = False if int(sys.argv[1]) == 0 else True
+ORDER = False if int(sys.argv[2]) == 0 else True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
-if len(sys.argv) > 2:
-    PRESET = sys.argv[2]
+if len(sys.argv) > 3:
+    PRESET = sys.argv[3]
 else:
     PRESET = str(1) #
 if SERVER_RUN:
@@ -40,7 +42,7 @@ def get_data():
     prev_snippet_files = [int(snippet[snippet.rfind('/') + 1:snippet.rfind('_snippets')]) for snippet in
                           prev_snippet_files]
 
-    if SERVER_RUN:
+    if ORDER:
         query_files = sorted(query_files, reverse=False, key=lambda x: str(x[x.rfind('/') + 1:x.rfind('_search')]))
     else:
         query_files = sorted(query_files, reverse=True, key=lambda x: str(x[x.rfind('/') + 1:x.rfind('_search')]))
