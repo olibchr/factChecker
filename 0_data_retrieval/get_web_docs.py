@@ -174,7 +174,9 @@ def get_tweet_search_results(df, userId):
         if df_r.shape[0] < 1: continue
         with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
             f.write(df_r.to_json(orient='records'))
-        del df_r, url_contents, url_text
+
+        del df_range, url_contents, url_text
+        return
 
 
 dfs = get_data()
