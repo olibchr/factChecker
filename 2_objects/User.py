@@ -3,12 +3,13 @@ class User():
                  features=None, was_correct=None, snippets=None):
         # <user_id, tweets, fact, transactions, credibility, controversy, features, was_correct, snippets>
         self.user_id = user_id
-        # Tweets <text, created_at, *quoted_status>
+        # Tweets <text, created_at, reply_to, retweets, favorites, *quoted_status<created_at, text>>
         self.tweets = tweets
         self.fact = fact
         self.transactions = transactions
         self.credibility = credibility
         self.controversy = controversy
+        # features {name, location, followers, friends, description, created_at, verified, statuses_count, lang}
         self.features = features
         self.was_correct = was_correct
         self.snippets = snippets

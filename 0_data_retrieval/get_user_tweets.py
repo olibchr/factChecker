@@ -50,7 +50,7 @@ def get_data():
         transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
     else:
         transactions = sorted(transactions, reverse=False, key=lambda t: t.user_id)
-    user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets_extended/' + 'user_*.json') if
+    user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets/' + 'user_*.json') if
                   'user_' in user_file]
     user_files = [user_file[user_file.rfind('_') + 1:user_file.rfind('.')] for user_file in user_files]
     return facts, transactions, user_files
@@ -120,11 +120,16 @@ def get_users():
 def user_decoder(obj):
     if 'user_id' not in obj.keys(): return obj
     # <user_id, tweets, fact, transactions, credibility, controversy>
-    return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
+    if not 'features' in obj:
+        print(obj['user_id'])
+        return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
                 obj['controversy'])
+    return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
+                obj['controversy'], obj['features'])
 
 
 def was_user_correct(user, facts, transactions):
+    #print(user.user_id)
     for tr in transactions:
         if str(tr.user_id) == str(user.user_id):
             transaction = tr
