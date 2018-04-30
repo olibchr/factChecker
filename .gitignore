@@ -1,4 +1,5 @@
 .DS_STORE
+*.tsv
 ./*.DS_STORE
 ./.idea/
 ./venv*/
@@ -6,3 +7,5 @@ __pycache*
 *.pyc
 venv*
 .idea*
+*.txt
+*.json

@@ -18,6 +18,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import RidgeClassifier
 from matplotlib import pyplot as plt
+from sklearn.model_selection import cross_val_score
 
 
 SERVER_RUN = True
@@ -64,6 +65,7 @@ def get_users():
         user = json.loads(open(user_file).readline(), object_hook=decoder)
         yield user
 
+
 def time_til_retweet(users, df_transactions, facts):
     print("Calculating avg time between original tweet and retweet per user")
     avg_min_to_retweet_per_user = {}
@@ -73,19 +75,21 @@ def time_til_retweet(users, df_transactions, facts):
     for user in users:
         time_btw_rt = []
         if not user.tweets or len(user.tweets) < 1: continue
-        for tweet in user.tweets:
-            if not 'quoted_status' in tweet: continue
-            if not 'created_at' in tweet['quoted_status']: continue
-            date_original = parser.parse(tweet['quoted_status']['created_at'])
-            date_retweet = parser.parse(tweet['created_at'])
-            time_btw_rt.append(date_original-date_retweet)
-        if len(time_btw_rt) == 0: continue
-        average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
+        if user.avg_time_to_retweet is None:
+            for tweet in user.tweets:
+                if not 'quoted_status' in tweet: continue
+                if not 'created_at' in tweet['quoted_status']: continue
+                date_original = parser.parse(tweet['quoted_status']['created_at'])
+                date_retweet = parser.parse(tweet['created_at'])
+                time_btw_rt.append(date_original-date_retweet)
+            if len(time_btw_rt) == 0: continue
+            average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
+            user.avg_time_to_retweet = average_timedelta
 
-        avg_min_to_retweet_per_user[user.user_id] = average_timedelta
+        avg_min_to_retweet_per_user[user.user_id] = user.avg_time_to_retweet
         if user.was_correct:
-            retweet_mins_pos[user.user_id] = average_timedelta
-        else: retweet_mins_neg[user.user_id] = average_timedelta
+            retweet_mins_pos[user.user_id] = user.avg_time_to_retweet
+        else: retweet_mins_neg[user.user_id] = user.avg_time_to_retweet
         users_correct[user.user_id] = user.was_correct
 
     hist_all, bins = np.histogram(list(avg_min_to_retweet_per_user.values()))
@@ -122,9 +126,8 @@ def time_til_retweet(users, df_transactions, facts):
             y.append(1)
         else:
             y.append(-1)
+
     evaluation(X,y)
-
-
 
 
 def evaluation(X,y):
@@ -135,9 +138,11 @@ def evaluation(X,y):
         clf.fit(X_train, y_train)
 
         pred = clf.predict(X_test)
+        scores = cross_val_score(clf, X_test, y_test, cv=5)
 
         score = metrics.accuracy_score(y_test, pred)
         print("accuracy:   %0.3f" % score)
+        print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     results = []
     for clf, name in (
@@ -165,7 +170,7 @@ def evaluation(X,y):
         # Train SGD model
         results.append(benchmark(SGDClassifier(alpha=.0001, n_iter=50,
                                                penalty=penalty)))
-
+    
 
 def main():
     facts, df_transactions = get_data()
