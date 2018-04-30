@@ -9,7 +9,7 @@ query_files = glob.glob(DIR + 'user_tweet_query/*.csv')
 
 for q_file in query_files:
     print(q_file)
-    if sum(1 for line in open(q_file)) <= 1: continue
+    if sum(1 for line in open(q_file)) <= 1: print("No content in {}".format(q_file));continue
     with open(q_file, 'r') as f:
         reader = csv.reader((line.replace('\0','') for line in f), delimiter=',', quotechar='"')
         file_headers = next(reader)
