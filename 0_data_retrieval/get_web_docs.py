@@ -26,8 +26,7 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 if len(sys.argv) > 3:
     PRESET = sys.argv[3]
-else:
-    PRESET = str(1) #
+
 if SERVER_RUN:
     DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 
@@ -137,7 +136,7 @@ def get_web_doc(url, urlcontent):
 
 def get_tweet_search_results(df, userId):
     print("Working on USER {} with {} entries".format(userId, df.shape))
-    if df.shape[0] < 1: return
+    if df.shape[0] < 1: return 0
     if 'link' not in df.columns or 'query' not in df.columns: print('DF EMPTY!!!'); return
     df.drop(['domain', 'effective_query', 'visible_link', 'num_results_for_query', 'num_results', 'link_type',
              'page_number', 'scrape_method', 'status', 'snippet', 'title', 'requested_by', 'search_engine_name',
@@ -145,7 +144,7 @@ def get_tweet_search_results(df, userId):
 
     df['query'].replace('', np.nan, inplace=True)
     df.dropna(subset=['query'], inplace=True)
-
+    if df.shape[0] < 1: return 0
     df['link'] = df['link'].map(lambda x: format_url(x))
 
     df_range = np.array_split(df, math.ceil((1.0*df.shape[0])/1000))
@@ -176,7 +175,7 @@ def get_tweet_search_results(df, userId):
             f.write(df_r.to_json(orient='records'))
 
         del df_range, url_contents, url_text
-        return
+        return 1
 
 
 dfs = get_data()
