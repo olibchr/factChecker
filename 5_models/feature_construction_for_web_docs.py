@@ -67,6 +67,22 @@ def get_users():
         user = json.loads(open(user_file).readline(), object_hook=decoder)
         yield user
 
+def dirty_json_parse(f):
+    _decoder = json.JSONDecoder()
+    def loads(s):
+        """A generator reading a sequence of JSON values from a string."""
+        while s:
+            s = s.strip()
+            obj, pos = _decoder.raw_decode(s)
+            if not pos:
+                raise ValueError('no JSON object found at %i' % pos)
+            yield obj
+            s = s[pos:]
+    wrapped = list(loads(f))
+    result = []
+    for l in wrapped:
+        for obj in l:
+            result.append(obj)
 
 def get_web_doc(user):
     doc_dir = DIR + 'user_docs_test/' + '*.json'
@@ -77,8 +93,10 @@ def get_web_doc(user):
         data = f.read()
     ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
     ansi_escape.sub('', data)
-    data = json.loads(data)
+    data = dirty_json_parse(data)
     web_docs_df = pd.DataFrame(data)
+    web_docs_df.drop_duplicates(subset=['link'], inplace=True)
+    print(web_docs_df.shape)
     return web_docs_df
 
 
