@@ -4,28 +4,12 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 import re, nltk
-from dateutil import parser
-from nltk import word_tokenize, sent_tokenize
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 from Fact import Fact
 from User import User
 from Transaction import Transaction
-from sklearn.model_selection import train_test_split
-from sklearn.svm import LinearSVC
-from sklearn.linear_model import SGDClassifier
-from sklearn import metrics
-from sklearn.linear_model import Perceptron
-from sklearn.linear_model import PassiveAggressiveClassifier
-from sklearn.naive_bayes import BernoulliNB, MultinomialNB
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import RidgeClassifier
-from matplotlib import pyplot as plt
-from sklearn.model_selection import cross_val_score
-from scipy.stats import norm
 import warnings
-from collections import Counter
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -71,14 +55,6 @@ def datetime_converter(o):
         return o.__str__()
 
 
-def get_data():
-    fact_file = glob.glob(DIR + 'facts.json')[0]
-    transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
-    facts = json.load(open(fact_file), object_hook=decoder)
-    transactions = json.load(open(transactions_file), object_hook=decoder)
-    return facts, transactions
-
-
 def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('Found {} users'.format(len(user_files)))
@@ -92,44 +68,42 @@ def get_users():
         yield user
 
 
-def feature_user_tweet_sentiment(users):
+def get_web_doc(user):
+    doc_dir = DIR + 'user_docs_test/' + '*.json'
+    doc_file = [f for f in glob.glob(doc_dir) if str(user.user_id) in f]
+    if len(doc_file) == 0: return None
+    doc_file = doc_file[0]
+    with open(doc_file, 'r') as f:
+        data = f.read()
+    ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
+    ansi_escape.sub('', data)
+    data = json.loads(data)
+    web_docs_df = pd.DataFrame(data)
+    return web_docs_df
+
+
+def feature_user_web_doc_sentiment(users):
     sid = SentimentIntensityAnalyzer()
-    bins = np.arange(-1, 1.1, 0.2)
-
-    i =0
+    err_list = []
     for user in users:
-        if not user.tweets: continue
-        tweet_sents = []
-        for tweet in user.tweets:
-            ss = sid.polarity_scores(tweet['text'])
-            tweet_sents.append(ss['compound'])
-        density, _ = np.histogram(tweet_sents, bins=bins, density=True)
-        user.sent_tweets_density = density / density.sum()
-        user.sent_tweets_avg = np.average(tweet_sents)
-        write_user(user)
-        i += 1
-        if i %100 == 0: print(i)
+        try:
+            web_docs_df = get_web_doc(user)
+        except Exception as e:
+            print('%%%%: {}'.format(user.user_id))
+            err_list.append(user.user_id)
 
+        #if web_docs_df is None: print(user.user_id); continue
+        #web_docs_df['sentiment'] = web_docs_df['content'].map(lambda x: sid.polarity_scores(x)['compound'])
+        #web_docs_df.drop('content')
+    print(err_list)
 
-def write_user(user):
-    print("Writing user: {}".format(user.user_id))
-    with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
-        out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
-
-
-def match_transaction_data(users, transactions):
-    for user in users:
-        tr = [tr for tr in transactions if tr.user_id == user.user_id][0]
-        user.stance = tr.stance
-        user.certainty = tr.certainty
 
 
 # <user_id, tweets, fact, transactions, credibility, controversy, features, was_correct, snippets, avg_time_to_retweet>
 # tweets <text, created_at, reply_to, retweets, favorites, *quoted_status<created_at, text>>
 def main():
-    #facts, df_transactions = get_data()
-    #feature_user_tweet_sentiment(get_users())
-    pass
+    feature_user_web_doc_sentiment(get_users())
+
 
 if __name__ == "__main__":
     main()
