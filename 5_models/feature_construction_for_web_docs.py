@@ -104,11 +104,11 @@ def feature_user_web_doc_sentiment(users):
     sid = SentimentIntensityAnalyzer()
     err_list = []
     for user in users:
-        try:
-            web_docs_df = get_web_doc(user)
-        except Exception as e:
-            print('%%%%: {}'.format(user.user_id))
-            err_list.append(user.user_id)
+        web_docs_df = get_web_doc(user)
+        #except Exception as e:
+        #    print(e)
+        #    print('%%%%: {}'.format(user.user_id))
+        #    err_list.append(user.user_id)
 
         #if web_docs_df is None: print(user.user_id); continue
         #web_docs_df['sentiment'] = web_docs_df['content'].map(lambda x: sid.polarity_scores(x)['compound'])
