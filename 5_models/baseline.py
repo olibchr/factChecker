@@ -98,12 +98,10 @@ def write_user(user):
 def time_til_retweet(users, df_transactions, facts):
     print("Calculating avg time between original tweet and retweet per user")
     avg_min_to_retweet_per_user = {}
-    f_count = 0
     for user in users:
-        time_btw_rt = []
         if not user.tweets or len(user.tweets) < 1: continue
+        time_btw_rt = []
         if user.avg_time_to_retweet is None:
-            f_count += 1
             for tweet in user.tweets:
                 if not 'quoted_status' in tweet: continue
                 if not 'created_at' in tweet['quoted_status']: continue
@@ -114,7 +112,7 @@ def time_til_retweet(users, df_transactions, facts):
 
             average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
             user.avg_time_to_retweet = average_timedelta
-            write_user(user)
+        write_user(user)
         avg_min_to_retweet_per_user[user.user_id] = user.avg_time_to_retweet
 
     hist_all, bins = np.histogram(list(avg_min_to_retweet_per_user.values()))
@@ -193,7 +191,9 @@ def time_til_retweet(users, df_transactions, facts):
     axes[1, 1].set_title('Incorrect classified where fact was false')
     axes[1, 2].bar(bins[:-1], misclass_unk_avg, width=np.diff(bins), ec="r", align="edge")
     axes[1, 2].set_title('Incorrect classified where fact was unknown')
-    plt.show()
+    #plt.show()
+
+    return df_transactions
 
 
 def evaluation(X, y):
@@ -239,7 +239,10 @@ def evaluation(X, y):
 def main():
     facts, df_transactions = get_data()
     users = get_users()
-    time_til_retweet(users, df_transactions, facts)
+    # feature: histogram of avg time of retweet per user. Each user is one count in the histogram. Each rumor has one histogram.
+    # Prediction with this feature: ~.6 acc, high variance
+    df_transactions = time_til_retweet(users, df_transactions, facts)
+
 
 
 if __name__ == "__main__":
