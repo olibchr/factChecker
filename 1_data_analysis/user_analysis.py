@@ -4,6 +4,7 @@ import sys, os
 import numpy as np
 from dateutil import parser
 import pickle
+import pandas as pd
 from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
@@ -28,6 +29,8 @@ from scipy.sparse import lil_matrix
 from sklearn.cluster import KMeans, DBSCAN
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
+from string import digits
+
 
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = True
@@ -46,7 +49,10 @@ def datetime_converter(o):
 def fact_decoder(obj):
     # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
     return Fact(obj['rumor_type'], obj['topic'], obj['text'], obj['true'], obj['proven_false'],
-                obj['is_turnaround'], obj['source_tweet'], hash=obj['hash'])
+                obj['is_turnaround'], obj['source_tweet'], hash=obj['hash'],
+                enitites= obj['entities'] if 'entities' in obj.keys else None,
+                wp_links= obj['wp_links'] if 'wp_links' in obj.keys else None
+                )
 
 
 def transaction_decoder(obj):
@@ -88,14 +94,13 @@ def get_corpus():
 def build_bow_corpus(users):
     print("Building a new Bow corpus")
     bow_corpus_cnt = {}
-    tokenizer = RegexpTokenizer(r'\w+')
     for user in users:
         if user.tweets is None:
             print(user.user_id)
             continue
         for tweet in user.tweets:
             # Tweets <text, created_at, *quoted_status
-            tokens = tokenize_tweet(tweet['text'])
+            tokens = tokenize_text(tweet['text'])
             for token in tokens:
                 if token in bow_corpus_cnt:
                     bow_corpus_cnt[token] += 1
@@ -104,7 +109,7 @@ def build_bow_corpus(users):
     return bow_corpus_cnt
 
 
-def tokenize_tweet(text, only_retweets=False):
+def tokenize_text(text, only_retweets=False):
     tokenizer = RegexpTokenizer(r'\w+')
     if only_retweets:
         text = text.lower()
@@ -134,8 +139,7 @@ def build_sparse_matrix(users, word_to_idx):
             user_data = {}
             if not user.tweets: continue
             for tweet in user.tweets:
-                #
-                tokens = tokenize_tweet(tweet['text'], only_retweets=True)
+                tokens = tokenize_text(tweet['text'], only_retweets=False)
                 if len(tokens) > 0:
                     y.append(int(user.was_correct))
                 for token in tokens:
@@ -157,13 +161,39 @@ def build_sparse_matrix(users, word_to_idx):
             pickle.dump(data, tmpfile)
         with open('user.txt', 'wb') as tmpfile:
             pickle.dump(y, tmpfile)
-    print(len(data), len(word_to_idx))
+    print(len(data), len(word_to_idx), len(y))
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
     X.data = data
     X.tocsr()
     return X, np.array(y)
 
+
+def build_fact_topics():
+    def build_feature_vector(terms):
+        vec = [0] * len(facts_bow)
+        for t in terms:
+            vec[facts_bow[t]] += 1
+        return vec
+
+    #hash_to_fact = {f.hash: f for f in facts}
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    facts_df = pd.read_json(fact_file)
+    remove_digits = str.maketrans('', '', digits)
+    facts_df['text_parsed'] = facts_df['text'].map(lambda t: tokenize_text(t.translate(remove_digits)))
+    facts_df['entities_parsed'] = facts_df['entities'].map(lambda ents:
+                                                           [item for sublist in [e['surfaceForm'].lower().split() for e in ents if e['similarityScore'] >= 0.6]
+                                                            for item in sublist])
+    facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
+    facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
+    facts_bow = {}
+    for terms in facts_df['fact_terms']:
+        for k in terms:
+            if k in facts_bow: facts_bow[k] += 1
+            else: facts_bow[k] = 1
+    print(len(facts_bow))
+    facts_df['feature_vector'] = facts_df['fact_terms'].map(lambda terms: build_feature_vector(terms))
+    return facts_df
 
 def get_user_documents(users):
     X = []
@@ -234,7 +264,6 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 def truth_prediction_for_users(users, word_to_idx):
     X, y = build_sparse_matrix(users, word_to_idx)
-
     transformer = TfidfTransformer(smooth_idf=False)
     X_weighted = transformer.fit_transform(X)
 
@@ -242,6 +271,7 @@ def truth_prediction_for_users(users, word_to_idx):
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
     X_pca = lsa.fit_transform(X_weighted)
+    print(X_pca.shape)
     X_train, X_test, y_train, y_test = train_test_split(X_pca, y, test_size=0.2)
 
     results = []
@@ -338,6 +368,8 @@ def save_corpus(bow_corpus):
 
 
 def main():
+    build_fact_topics()
+    exit()
     global bow_corpus
     wn.ensure_loaded()
     if NEW_CORPUS:
@@ -346,14 +378,14 @@ def main():
     else:
         bow_corpus = get_corpus()
 
-    bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 50]
+    bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
-    cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    # truth_prediction_for_users(get_users(), word_to_idx)
+    # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
+    truth_prediction_for_users(get_users(), word_to_idx)
     # lda_analysis(get_users())
 
 
