@@ -20,7 +20,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import RidgeClassifier
 from matplotlib import pyplot as plt
 from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import Imputer
 import warnings
+import scipy.stats
 from collections import Counter
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -33,15 +35,13 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 def decoder(o):
     def user_decoder(obj):
         if 'user_id' not in obj.keys(): return obj
-        if 'avg_time_to_retweet' in obj.keys():
-            return User(obj['user_id'], tweets=obj['tweets'], fact=obj['fact'], transactions=obj['transactions'],
-                        credibility=obj['credibility'],
-                        controversy=obj['controversy'], features=obj['features'], was_correct=obj['was_correct'],
-                        avg_time_to_retweet=obj['avg_time_to_retweet'])
-        # <user_id, tweets, fact, transactions, credibility, controversy>
         return User(obj['user_id'], tweets=obj['tweets'], fact=obj['fact'], transactions=obj['transactions'],
                     credibility=obj['credibility'],
-                    controversy=obj['controversy'], features=obj['features'], was_correct=obj['was_correct'])
+                    controversy=obj['controversy'], features=obj['features'], was_correct=obj['was_correct'],
+                    avg_time_to_retweet=obj['avg_time_to_retweet'] if 'avg_time_to_retweet' in obj.keys() else None,
+                    sent_tweets_density=obj['sent_tweets_density'] if 'sent_tweets_density' in obj.keys() else None,
+                    sent_tweets_avg=obj['sent_tweets_avg'] if 'sent_tweets_avg' in obj.keys() else None
+                    )
 
     def fact_decoder(obj):
         # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
@@ -96,25 +96,11 @@ def write_user(user):
 
 
 def time_til_retweet(users, df_transactions, facts):
-    print("Calculating avg time between original tweet and retweet per user")
-    avg_min_to_retweet_per_user = {}
-    for user in users:
-        if not user.tweets or len(user.tweets) < 1: continue
-        time_btw_rt = []
-        if user.avg_time_to_retweet is None:
-            for tweet in user.tweets:
-                if not 'quoted_status' in tweet: continue
-                if not 'created_at' in tweet['quoted_status']: continue
-                date_original = parser.parse(tweet['quoted_status']['created_at'])
-                date_retweet = parser.parse(tweet['created_at'])
-                time_btw_rt.append(date_original - date_retweet)
-            if len(time_btw_rt) == 0: continue
 
-            average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
-            user.avg_time_to_retweet = average_timedelta
-        write_user(user)
-        avg_min_to_retweet_per_user[user.user_id] = user.avg_time_to_retweet
+    avg_min_to_retweet_per_user = {user.user_id: user.avg_time_to_retweet for user in users if user.avg_time_to_retweet is not None}
+    avg_sent_per_user = {user.sent_tweets_avg: user.sent_tweets_avg for user in users if user.sent_tweets_avg is not None}
 
+    print(avg_sent_per_user)
     hist_all, bins = np.histogram(list(avg_min_to_retweet_per_user.values()))
     print(hist_all, bins)
     # plt.figure()
@@ -127,31 +113,40 @@ def time_til_retweet(users, df_transactions, facts):
     # plt.hist(list(retweet_mins_neg.values()), bins=bins)
     # # plt.show()
 
-    fact_to_hist = {}
     X = []
     y = []
     df_transactions['time_til_retweet'] = df_transactions['user_id'].map(
         lambda uid: avg_min_to_retweet_per_user[uid] if uid in avg_min_to_retweet_per_user else np.nan)
+    df_transactions['user_sent'] = df_transactions['user_id'].map(
+        lambda uid: avg_sent_per_user[uid] if uid in avg_sent_per_user else np.nan)
+
     df_transactions.dropna(subset=['time_til_retweet'], inplace=True)
+    #df_transactions.dropna(subset=['user_sent'], inplace=True)
+
     df_grouped_transactions = df_transactions.groupby(['fact'])
     for tr_group in df_grouped_transactions:
         df_tr_g = tr_group[1]
-        hist = np.histogram(df_tr_g['time_til_retweet'], bins=bins)
-        fact_to_hist[tr_group[0]] = hist[0]
+        #hist = np.histogram(df_tr_g['time_til_retweet'], bins=bins)
+        #print(df_tr_g['time_til_retweet'])
 
-        # plt.figure()
-        # plt.hist(list(df_tr_g['time_til_retweet']), bins=bins)
-        # plt.show()
+        indices = ~np.isnan(df_tr_g['time_til_retweet'])
+        # print(indices)
+        #if len(indices) == 0 or df_tr_g['time_til_retweet'][indices].shape[0] == 0: continue
+        time_til_retweet_avg = np.average(df_tr_g['time_til_retweet'][indices])
+        time_til_retweet_var = np.var(df_tr_g['time_til_retweet'][indices])
+        time_til_retweet_mode = np.asarray(scipy.stats.mode(df_tr_g['time_til_retweet'][indices]))[0][0]
+
         fact = [fact for fact in facts if fact.hash == tr_group[0]][0]
-        X.append(list(map(int, hist[0])))
         if fact.true == '0' or fact.true == 0:
             y.append(0)
         elif fact.true == '1' or fact.true == 1:
             y.append(1)
         else:
+            continue
             y.append(-1)
+        X.append(np.asarray([time_til_retweet_avg, time_til_retweet_var, time_til_retweet_mode]))
 
-    #classifier = evaluation(X, y)
+    classifier = evaluation(X, y)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     clf = Perceptron(n_iter=50)
@@ -161,6 +156,7 @@ def time_til_retweet(users, df_transactions, facts):
 
     score = metrics.accuracy_score(y_test, pred)
     print(score)
+    print(len(X), len(X_train), len(X_test))
 
     corclassified_group_pos = np.asarray([hist for hist, m, y in zip(X_test, match, y_test) if m == 1 and y == 1])
     corclassified_group_neg = np.asarray([hist for hist, m, y in zip(X_test, match, y_test) if m == 1 and y == 0])
@@ -176,6 +172,12 @@ def time_til_retweet(users, df_transactions, facts):
     misclass_pos_avg = misclassified_group_pos.mean(0)
     misclass_neg_avg = misclassified_group_neg.mean(0)
     misclass_unk_avg = misclassified_group_unk.mean(0)
+    print(corclassified_group_pos)
+    print(corclassified_group_neg)
+    print(corclassified_group_unk)
+    print(misclassified_group_pos)
+    print(misclassified_group_neg)
+    print(misclassified_group_unk)
 
     fig, axes = plt.subplots(2, 3)
     axes[0, 0].bar(bins[:-1], corclass_pos_avg, width=np.diff(bins), ec="k", align="edge")
@@ -201,10 +203,10 @@ def evaluation(X, y):
         # print('_' * 80)
         # print("Training: ")
         # print(clf)
-        clf.fit(X_train, y_train)
+        clf.fit(X_train_imp, y_train)
 
-        pred = clf.predict(X_test)
-        scores = cross_val_score(clf, X_test, y_test, cv=5)
+        pred = clf.predict(X_test_imp)
+        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
 
         score = metrics.accuracy_score(y_test, pred)
         # print("accuracy:   %0.3f" % score)
@@ -212,6 +214,12 @@ def evaluation(X, y):
         return scores.mean()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train)
+    X_train_imp = imp.transform(X_train)
+    X_test_imp = imp.transform(X_test)
+
     results = []
     for clf, name in (
             (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),

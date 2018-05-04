@@ -93,10 +93,10 @@ def get_users():
 
 
 def feature_user_tweet_sentiment(users):
+    print("Calculating tweet sentiment for each user")
     sid = SentimentIntensityAnalyzer()
     bins = np.arange(-1, 1.1, 0.2)
-
-    i =0
+    i = 0
     for user in users:
         if not user.tweets: continue
         tweet_sents = []
@@ -109,6 +109,25 @@ def feature_user_tweet_sentiment(users):
         write_user(user)
         i += 1
         if i %100 == 0: print(i)
+
+
+def time_til_retweet(users):
+    print("Calculating avg time between original tweet and retweet per user")
+    for user in users:
+        if not user.tweets or len(user.tweets) < 1: continue
+        time_btw_rt = []
+        if user.avg_time_to_retweet is None:
+            for tweet in user.tweets:
+                if not 'quoted_status' in tweet: continue
+                if not 'created_at' in tweet['quoted_status']: continue
+                date_original = parser.parse(tweet['quoted_status']['created_at'])
+                date_retweet = parser.parse(tweet['created_at'])
+                time_btw_rt.append(date_original - date_retweet)
+            if len(time_btw_rt) == 0: continue
+
+            average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
+            user.avg_time_to_retweet = average_timedelta
+        write_user(user)
 
 
 def write_user(user):

@@ -67,6 +67,7 @@ def get_users():
         user = json.loads(open(user_file).readline(), object_hook=decoder)
         yield user
 
+
 def dirty_json_parse(f):
     _decoder = json.JSONDecoder()
     def loads(s):
@@ -83,6 +84,7 @@ def dirty_json_parse(f):
     for l in wrapped:
         for obj in l:
             result.append(obj)
+
 
 def get_web_doc(user):
     doc_dir = DIR + 'user_docs_test/' + '*.json'
@@ -104,19 +106,24 @@ def feature_user_web_doc_sentiment(users):
     sid = SentimentIntensityAnalyzer()
     err_list = []
     for user in users:
-        web_docs_df = get_web_doc(user)
-        #except Exception as e:
-        #    print(e)
-        #    print('%%%%: {}'.format(user.user_id))
-        #    err_list.append(user.user_id)
+        try:
+            web_docs_df = get_web_doc(user)
+        except Exception as e:
+            print(e)
+            print('%%%%: {}'.format(user.user_id))
+            err_list.append(user.user_id)
 
-        #if web_docs_df is None: print(user.user_id); continue
-        #web_docs_df['sentiment'] = web_docs_df['content'].map(lambda x: sid.polarity_scores(x)['compound'])
-        #web_docs_df.drop('content')
+        if web_docs_df is None: print(user.user_id); continue
+        web_docs_df['sentiment'] = web_docs_df['content'].map(lambda x: sid.polarity_scores(x)['compound'])
+        web_docs_df.drop('content')
+
     print(err_list)
 
 
-
+def store_web_docs_meta(web_docs_df, userId):
+    out_dir = DIR + "user_docs_annot/"
+    with open(out_dir + str(userId) + '_snippets.json', 'a') as f:
+        f.write(web_docs_df.to_json(orient='records'))
 # <user_id, tweets, fact, transactions, credibility, controversy, features, was_correct, snippets, avg_time_to_retweet>
 # tweets <text, created_at, reply_to, retweets, favorites, *quoted_status<created_at, text>>
 def main():
