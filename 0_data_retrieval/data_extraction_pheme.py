@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 
-DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/3_Data/RAW/'
+DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/4_RawData/RAW/'
 # DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
 LANG = 'both'
 THREADS = 'threads/' + LANG + '/'
@@ -128,10 +128,10 @@ def data_extraction():
             # Transaction
             # <ID, USER ID, FACT ID, TIMESTAMP, {support, reject}, weight>
             source_annot = get_annot_by_tweet_id(source_tweet['id'])
-            initiator = [source_tweet['id'], source_tweet['id'], source_tweet['user']['id'], fact.hash, parser.parse(source_tweet['created_at']), source_annot['support'], source_annot['certainty']]
+            initiator = [source_tweet['id'], source_tweet['id'], source_tweet['user']['id'], fact.hash, parser.parse(source_tweet['created_at']), source_annot['support'], source_annot['certainty'], source_tweet['text']]
             # dump first transaction on topic
             TRANSACTIONS_DUMP.append(initiator)
-            TRANSACTIONS.append(Transaction(initiator[0], initiator[1], initiator[2], initiator[3], initiator[4], initiator[5], initiator[6]))
+            TRANSACTIONS.append(Transaction(initiator[0], initiator[1], initiator[2], initiator[3], initiator[4], initiator[5], initiator[6], initiator[7]))
             # parse and dump all other transactions
             for reaction in reactions:
                 annot = get_annot_by_tweet_id(reaction['id'])
@@ -167,9 +167,9 @@ def data_extraction():
                 #
                 certainty = annot['certainty'] if 'certainty' in annot else 'underspecified'
                 #
-                comment = [source_tweet['id'], reaction['id'], reaction['user']['id'], fact.hash, parser.parse(reaction['created_at']), stance, certainty]
+                comment = [source_tweet['id'], reaction['id'], reaction['user']['id'], fact.hash, parser.parse(reaction['created_at']), stance, certainty, reaction['text']]
                 TRANSACTIONS_DUMP.append(comment)
-                TRANSACTIONS.append(Transaction(comment[0], comment[1], comment[2], comment[3], comment[4], comment[5], comment[6]))
+                TRANSACTIONS.append(Transaction(comment[0], comment[1], comment[2], comment[3], comment[4], comment[5], comment[6], comment[7]))
 
 def store_result():
     with open(DIR + '../factTransaction.json', 'w') as out_file:

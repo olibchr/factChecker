@@ -6,7 +6,9 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from Fact import Fact
 from User import User
 from Transaction import Transaction
+from decoder import decoder
 import tweepy
+from collections import Counter
 
 ALT_ACCOUNT = True
 
@@ -29,23 +31,11 @@ def datetime_converter(o):
         return o.__str__()
 
 
-def fact_decoder(obj):
-    # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
-    return Fact(obj['rumor_type'], obj['topic'], obj['text'], obj['true'], obj['proven_false'],
-                obj['is_turnaround'], obj['source_tweet'], hash=obj['hash'])
-
-
-def transaction_decoder(obj):
-    # <sourceId, id, user_id, fact, timestamp, stance, weight>
-    return Transaction(obj['sourceId'], obj['id'], obj['user_id'], obj['fact'], obj['timestamp'], obj['stance'],
-                       obj['weight'])
-
-
 def get_data():
     fact_file = glob.glob(DIR + 'facts.json')[0]
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
-    facts = json.load(open(fact_file), object_hook=fact_decoder)
-    transactions = json.load(open(transactions_file), object_hook=transaction_decoder)
+    facts = json.load(open(fact_file), object_hook=decoder)
+    transactions = json.load(open(transactions_file), object_hook=decoder)
     if ALT_ACCOUNT:
         transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
     else:
@@ -113,23 +103,11 @@ def get_users():
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
     for user_file in user_files:
-        user = json.loads(open(user_file).readline(), object_hook=user_decoder)
+        user = json.loads(open(user_file).readline(), object_hook=decoder)
         yield user
 
 
-def user_decoder(obj):
-    if 'user_id' not in obj.keys(): return obj
-    # <user_id, tweets, fact, transactions, credibility, controversy>
-    if not 'features' in obj:
-        print(obj['user_id'])
-        return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
-                obj['controversy'])
-    return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
-                obj['controversy'], obj['features'])
-
-
 def was_user_correct(user, facts, transactions):
-    #print(user.user_id)
     for tr in transactions:
         if str(tr.user_id) == str(user.user_id):
             transaction = tr
@@ -138,11 +116,16 @@ def was_user_correct(user, facts, transactions):
             break
     for fact in facts:
         if fact.hash == transaction.fact:
-            if (fact.true == '1' and transaction.stance == 'supporting') or (
-                            fact.true == '0' and transaction.stance == 'denying'):
+            user.text = transaction.text
+            if (str(fact.true) == '1' and transaction.stance == 'supporting') or (
+                            str(fact.true) == '0' and transaction.stance == 'denying'):
                 user.was_correct = 1
-            else:
+            elif(str(fact.true) == '1' and transaction.stance == 'denying') or \
+                    (str(fact.true) == '0' and transaction.stance == 'supporting'):
                 user.was_correct = 0
+            else:
+                user.was_correct = -1
+            print(fact.true, transaction.stance, user.was_correct)
     return user
 
 
@@ -166,6 +149,7 @@ def main():
     #users = get_user_tweets(api, transactions, user_files)
     users = get_users()
     users = [was_user_correct(user, facts, transactions) for user in users]
+    print(Counter([u.was_correct for u in users]))
     for user in users:
         store_result(user)
 
