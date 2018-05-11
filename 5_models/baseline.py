@@ -8,6 +8,8 @@ from dateutil import parser
 from Fact import Fact
 from User import User
 from Transaction import Transaction
+from decoder import decoder
+
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import SGDClassifier
@@ -30,37 +32,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 SERVER_RUN = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
-
-
-def decoder(o):
-    def user_decoder(obj):
-        if 'user_id' not in obj.keys(): return obj
-        return User(obj['user_id'], tweets=obj['tweets'], fact=obj['fact'], transactions=obj['transactions'],
-                    credibility=obj['credibility'],
-                    controversy=obj['controversy'], features=obj['features'], was_correct=obj['was_correct'],
-                    avg_time_to_retweet=obj['avg_time_to_retweet'] if 'avg_time_to_retweet' in obj.keys() else None,
-                    sent_tweets_density=obj['sent_tweets_density'] if 'sent_tweets_density' in obj.keys() else None,
-                    sent_tweets_avg=obj['sent_tweets_avg'] if 'sent_tweets_avg' in obj.keys() else None
-                    )
-
-    def fact_decoder(obj):
-        # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
-        return Fact(obj['rumor_type'], obj['topic'], obj['text'], obj['true'], obj['proven_false'],
-                    obj['is_turnaround'], obj['source_tweet'], hash=obj['hash'])
-
-    def transaction_decoder(obj):
-        # <sourceId, id, user_id, fact, timestamp, stance, weight>
-        return Transaction(obj['sourceId'], obj['id'], obj['user_id'], obj['fact'], obj['timestamp'], obj['stance'],
-                           obj['weight'])
-
-    if 'tweets' in o.keys():
-        return user_decoder(o)
-    elif 'hash' in o.keys():
-        return fact_decoder(o)
-    elif 'sourceId' in o.keys():
-        return transaction_decoder(o)
-    else:
-        return o
 
 
 def datetime_converter(o):

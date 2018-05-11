@@ -1,39 +1,48 @@
 import datetime
-import json, glob, time, random
-import sys, os
-import numpy as np
-from dateutil import parser
+import glob
+import json
+import os
 import pickle
+import sys
+import warnings
+import numpy as np
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
-from sklearn.decomposition import TruncatedSVD
-from sklearn.preprocessing import Normalizer
-from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.svm import LinearSVC
-from sklearn.linear_model import SGDClassifier
+from dateutil import parser
 from sklearn import metrics
-from sklearn.decomposition import NMF, LatentDirichletAllocation
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.decomposition import TruncatedSVD
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
+from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.linear_model import PassiveAggressiveClassifier
+from sklearn.linear_model import Perceptron
+from sklearn.linear_model import RidgeClassifier
+from sklearn.linear_model import SGDClassifier
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Normalizer
+from sklearn.svm import LinearSVC
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
-import re, nltk
 from nltk.corpus import wordnet as wn
-from User import User
-from Transaction import Transaction
-from Fact import Fact
+from decoder import decoder
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
 from scipy.sparse import lil_matrix
-from sklearn.cluster import KMeans, DBSCAN
-import matplotlib.mlab as mlab
+from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from string import digits
+from collections import Counter
 
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = True
+BUILD_NEW_SPARSE = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -46,33 +55,24 @@ def datetime_converter(o):
         return o.__str__()
 
 
-def fact_decoder(obj):
-    # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
-    return Fact(obj['rumor_type'], obj['topic'], obj['text'], obj['true'], obj['proven_false'],
-                obj['is_turnaround'], obj['source_tweet'], hash=obj['hash'],
-                enitites= obj['entities'] if 'entities' in obj.keys else None,
-                wp_links= obj['wp_links'] if 'wp_links' in obj.keys else None
-                )
-
-
-def transaction_decoder(obj):
-    # <sourceId, id, user_id, fact, timestamp, stance, weight>
-    return Transaction(obj['sourceId'], obj['id'], obj['user_id'], obj['fact'], obj['timestamp'], obj['stance'],
-                       obj['weight'])
-
-
-def user_decoder(obj):
-    if 'user_id' not in obj.keys(): return obj
-    # <user_id, tweets, fact, transactions, credibility, controversy>
-    return User(obj['user_id'], obj['tweets'], obj['fact'], obj['transactions'], obj['credibility'],
-                obj['controversy'], obj['features'], obj['was_correct'])
+def tokenize_text(text, only_retweets=False):
+    tokenizer = RegexpTokenizer(r'\w+')
+    if only_retweets:
+        text = text.lower()
+        if 'rt' not in text: return []
+        text = text[text.find('rt'):]
+        text = text[text.find('@'):text.find(':')]
+        return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
+                          i.lower() not in NLTK_STOPWORDS]
+    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
+                          i.lower() not in NLTK_STOPWORDS]
 
 
 def get_data():
     fact_file = glob.glob(DIR + 'facts.json')[0]
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
-    facts = json.load(open(fact_file), object_hook=fact_decoder)
-    transactions = json.load(open(transactions_file), object_hook=transaction_decoder)
+    facts = json.load(open(fact_file), object_hook=decoder)
+    transactions = json.load(open(transactions_file), object_hook=decoder)
     return facts, transactions
 
 
@@ -81,7 +81,7 @@ def get_users():
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
     for user_file in user_files:
-        user = json.loads(open(user_file).readline(), object_hook=user_decoder)
+        user = json.loads(open(user_file).readline(), object_hook=decoder)
         yield user
 
 
@@ -89,6 +89,30 @@ def get_corpus():
     corpus_file = glob.glob('bow_corpus.json')[0]
     bow_corpus = json.loads(open(corpus_file).readline())
     return bow_corpus
+
+
+def get_user_documents(users):
+    X = []
+    y = []
+    for user in users:
+        if not user.tweets: continue
+        X.append(' '.join([tweet['text'] for tweet in user.tweets]))
+        y.append(int(user.was_correct))
+    return np.array(X), np.array(y)
+
+
+def save_corpus(bow_corpus):
+    with open('bow_corpus.json', 'w') as out_file:
+        out_file.write(json.dumps(bow_corpus, default=datetime_converter) + '\n')
+
+
+def print_top_words(model, feature_names, n_top_words):
+    for topic_idx, topic in enumerate(model.components_):
+        message = "Topic #%d: " % topic_idx
+        message += " ".join([feature_names[i]
+                             for i in topic.argsort()[:-n_top_words - 1:-1]])
+        print(message)
+    print()
 
 
 def build_bow_corpus(users):
@@ -109,39 +133,18 @@ def build_bow_corpus(users):
     return bow_corpus_cnt
 
 
-def tokenize_text(text, only_retweets=False):
-    tokenizer = RegexpTokenizer(r'\w+')
-    if only_retweets:
-        text = text.lower()
-        if 'rt' not in text: return []
-        text = text[text.find('rt'):]
-        text = text[text.find('@'):text.find(':')]
-        return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
-                          i.lower() not in NLTK_STOPWORDS]
-    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
-                          i.lower() not in NLTK_STOPWORDS]
-
-
 def build_sparse_matrix(users, word_to_idx):
-    y = []
-    positions = []
-    data = []
-    if not BUILD_NEW_SPARSE:
-        with open('positions.txt', 'rb') as f:
-            positions = pickle.load(f)
-        with open('data.txt', 'rb') as f:
-            data = pickle.load(f)
-        with open('user.txt', 'rb') as f:
-            y = pickle.load(f)
-    else:
+    def rebuild_sparse():
         print("Building sparse vectors")
+        i = 0
         for user in users:
             user_data = {}
-            if not user.tweets: continue
+            if not user.tweets: print(user.user_id); continue
+            if int(user.was_correct) != -1: y_only_0_1.append(i)
+            i += 1
+            # If X doesnt need to be rebuild, comment out
             for tweet in user.tweets:
                 tokens = tokenize_text(tweet['text'], only_retweets=False)
-                if len(tokens) > 0:
-                    y.append(int(user.was_correct))
                 for token in tokens:
                     if token not in word_to_idx: continue
                     if token in user_data:
@@ -153,23 +156,52 @@ def build_sparse_matrix(users, word_to_idx):
             for tuple in user_data.items():
                 this_position.append(tuple[0])
                 this_data.append(tuple[1])
+
             positions.append(this_position)
             data.append(this_data)
+            user_order.append(user.user_id)
+            y.append(int(user.was_correct))
         with open('positions.txt', 'wb') as tmpfile:
             pickle.dump(positions, tmpfile)
         with open('data.txt', 'wb') as tmpfile:
             pickle.dump(data, tmpfile)
         with open('user.txt', 'wb') as tmpfile:
             pickle.dump(y, tmpfile)
+        with open('order.txt', 'wb') as tmpfile:
+            pickle.dump(user_order, tmpfile)
+    y = []
+    positions = []
+    data = []
+    user_order = []
+    y_only_0_1 = []
+    if not BUILD_NEW_SPARSE:
+        with open('positions.txt', 'rb') as f:
+            positions = pickle.load(f)
+        with open('data.txt', 'rb') as f:
+            data = pickle.load(f)
+        with open('user.txt', 'rb') as f:
+            y = pickle.load(f)
+        with open('order.txt', 'rb') as f:
+            user_order = pickle.load(f)
+        y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
+    else:
+        rebuild_sparse()
     print(len(data), len(word_to_idx), len(y))
+    # Only considering supports and denials, not comments etc
+    positions = np.asarray(positions)[y_only_0_1]
+    data = np.asarray(data)[y_only_0_1]
+    y = np.asarray(y)[y_only_0_1]
+    user_order = np.asarray(user_order)[y_only_0_1]
+
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
     X.data = data
     X.tocsr()
-    return X, np.array(y)
+    return X, np.array(y), np.array(user_order)
 
 
 def build_fact_topics():
+    #print("Build fact topics")
     def build_feature_vector(terms):
         vec = [0] * len(facts_bow)
         for t in terms:
@@ -187,22 +219,17 @@ def build_fact_topics():
     facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
     facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
     facts_bow = {}
+    idx_to_factword = {}
+    i = 0
     for terms in facts_df['fact_terms']:
         for k in terms:
             if k in facts_bow: facts_bow[k] += 1
-            else: facts_bow[k] = 1
-    print(len(facts_bow))
+            else:
+                facts_bow[k] = 1
+                idx_to_factword[i] = k
+                i += 1
     facts_df['feature_vector'] = facts_df['fact_terms'].map(lambda terms: build_feature_vector(terms))
-    return facts_df
-
-def get_user_documents(users):
-    X = []
-    y = []
-    for user in users:
-        if not user.tweets: continue
-        X.append(' '.join([tweet['text'] for tweet in user.tweets]))
-        y.append(int(user.was_correct))
-    return np.array(X), np.array(y)
+    return facts_df, idx_to_factword
 
 
 def benchmark(clf, X_train, y_train, X_test, y_test):
@@ -215,6 +242,49 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
 
     score = metrics.accuracy_score(y_test, pred)
     print("accuracy:   %0.3f" % score)
+
+
+def evaluation(X, y):
+    def benchmark(clf):
+        clf.fit(X_train_imp, y_train)
+        pred = clf.predict(X_test_imp)
+        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
+        #neg_log_loss = model_selection.cross_val_score(clf, X, y, cv=5, scoring='roc_auc')
+
+        score = metrics.accuracy_score(y_test, pred)
+        # print("accuracy:   %0.3f" % score)
+        #print("Logloss: {}, {}").format(neg_log_loss.mean(), neg_log_loss.std())
+        print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+        return scores.mean()
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train)
+    X_train_imp = imp.transform(X_train)
+    X_test_imp = imp.transform(X_test)
+
+    results = []
+    for clf, name in (
+            (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
+            (Perceptron(n_iter=50), "Perceptron"),
+            (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
+            (KNeighborsClassifier(n_neighbors=10), "kNN"),
+            (RandomForestClassifier(n_estimators=100), "Random forest"),
+            (BernoulliNB(alpha=.01), "Bernoulli NB")):
+        print('=' * 80)
+        print(name)
+        results.append([benchmark(clf), clf])
+    # Train sparse Naive Bayes classifiers
+
+    for penalty in ["l2", "l1"]:
+        print("%s penalty" % penalty.upper())
+        for clf, name in (
+                (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
+                (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
+            print('=' * 80)
+            results.append([benchmark(clf), clf])
+    return results[np.argmax(np.asarray(results)[:, 0])]
 
 
 def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
@@ -262,38 +332,56 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
-def truth_prediction_for_users(users, word_to_idx):
-    X, y = build_sparse_matrix(users, word_to_idx)
+def truth_prediction_for_users(word_to_idx, idx_to_word):
+    print('Credibility (Was user correct) Prediction using BOWs')
+    X_user, y, user_order = build_sparse_matrix(get_users(), word_to_idx)
+
     transformer = TfidfTransformer(smooth_idf=False)
-    X_weighted = transformer.fit_transform(X)
+    X_user = transformer.fit_transform(X_user)
+
+    ch2 = SelectKBest(chi2, k=10000)
+    X_user = ch2.fit_transform(X_user, y)
 
     svd = TruncatedSVD(20)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
-    X_pca = lsa.fit_transform(X_weighted)
-    print(X_pca.shape)
-    X_train, X_test, y_train, y_test = train_test_split(X_pca, y, test_size=0.2)
-
-    results = []
-    for penalty in ["l2", "l1"]:
-        print('=' * 80)
-        print("%s penalty" % penalty.upper())
-        # Train Liblinear model
-        results.append(benchmark(LinearSVC(penalty=penalty, dual=False,
-                                           tol=1e-3), X_train, y_train, X_test, y_test))
-
-        # Train SGD model
-        results.append(benchmark(SGDClassifier(alpha=.0001, n_iter=50,
-                                               penalty=penalty), X_train, y_train, X_test, y_test))
+    X_user_pca = np.asarray(lsa.fit_transform(X_user, y))
 
 
-def print_top_words(model, feature_names, n_top_words):
-    for topic_idx, topic in enumerate(model.components_):
-        message = "Topic #%d: " % topic_idx
-        message += " ".join([feature_names[i]
-                             for i in topic.argsort()[:-n_top_words - 1:-1]])
-        print(message)
-    print()
+    fact_topics, idx_to_factword = build_fact_topics()
+    _, transactions = get_data()
+    user_fact_hash = []
+    for u in user_order:
+        for t in transactions:
+            if u == t.user_id:
+                user_fact_hash.append(t.fact)
+                transactions.pop(transactions.index(t))
+                break
+
+    X_topic = np.array([fact_topics[fact_topics.hash == hsh]['feature_vector'].as_matrix()[0] for hsh in user_fact_hash])
+
+    #ch, pv= chi2(X_topic, y)
+    #print(sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50])
+
+    transformer2 = TfidfTransformer(smooth_idf=False)
+    X_topic = transformer2.fit_transform(X_topic)
+
+    # ch2 = SelectKBest(chi2, k=100)
+    # X_topic = ch2.fit_transform(X_topic, y)
+
+    svd = TruncatedSVD(5)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd, normalizer)
+    X_topic_pca = np.asarray(lsa.fit_transform(X_topic))
+
+    print(X_user_pca.shape)
+    print(X_topic_pca.shape)
+    X = np.asarray(np.concatenate((X_user_pca, X_topic_pca), axis=1))
+    print(X.shape)
+
+    print(Counter(y))
+
+    evaluation(X,y)
 
 
 def lda_analysis(users):
@@ -362,14 +450,7 @@ def corpus_analysis(bow_corpus, word_to_idx, idx_to_word):
     print("Amount of tweets ")
 
 
-def save_corpus(bow_corpus):
-    with open('bow_corpus.json', 'w') as out_file:
-        out_file.write(json.dumps(bow_corpus, default=datetime_converter) + '\n')
-
-
 def main():
-    build_fact_topics()
-    exit()
     global bow_corpus
     wn.ensure_loaded()
     if NEW_CORPUS:
@@ -385,7 +466,7 @@ def main():
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    truth_prediction_for_users(get_users(), word_to_idx)
+    truth_prediction_for_users(word_to_idx, idx_to_word)
     # lda_analysis(get_users())
 
 
