@@ -46,7 +46,7 @@ from gensim.models import KeyedVectors
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = False
+BUILD_NEW_SPARSE = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -191,7 +191,89 @@ def build_sparse_matrix(users, word_to_idx):
     else:
         rebuild_sparse()
     print(len(data), len(word_to_idx), len(y))
-    # Only considering supports and denials, not comments etc
+    # Only considering supports and denials [0,1], not comments etc. [-1]
+    positions = np.asarray(positions)[y_only_0_1]
+    data = np.asarray(data)[y_only_0_1]
+    y = np.asarray(y)[y_only_0_1]
+    user_order = np.asarray(user_order)[y_only_0_1]
+
+    X = lil_matrix((len(data), len(word_to_idx)))
+    X.rows = positions
+    X.data = data
+    X.tocsr()
+    return X, np.array(y), np.array(user_order)
+
+
+def build_sparse_matrix_word2vec(users, word_to_idx):
+    def rebuild_sparse():
+        print("Building sparse vectors")
+        word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+        _, transactions = get_data()
+        fact_topics, idx_to_factword = build_fact_topics()
+
+        i = 0
+        for user in users:
+            user_data = {}
+            if not user.tweets: print(user.user_id); continue
+            if int(user.was_correct) != -1: y_only_0_1.append(i)
+            i += 1
+            for t in transactions:
+                if user.user_id == t.user_id:
+                    user.fact = t.fact
+                    transactions.pop(transactions.index(t))
+                    break
+            user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
+            user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
+            # If X doesnt need to be rebuild, comment out
+            for tweet in user.tweets:
+                tokens = tokenize_text(tweet['text'], only_retweets=False)
+                for token in tokens:
+                    if token not in word_to_idx: continue
+                    if token not in word_vectors.vocab: continue
+                    if len(user_fact_words) == 0: user_fact_words = [token]
+                    increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+                    if token in user_data:
+                        user_data[word_to_idx[token]] += increment
+                    else:
+                        user_data[word_to_idx[token]] = increment
+            this_position = []
+            this_data = []
+            for tuple in user_data.items():
+                this_position.append(tuple[0])
+                this_data.append(tuple[1])
+
+            positions.append(this_position)
+            data.append(this_data)
+            user_order.append(user.user_id)
+            y.append(int(user.was_correct))
+        with open('model_data/positions_w2v.txt', 'wb') as tmpfile:
+            pickle.dump(positions, tmpfile)
+        with open('model_data/data_w2v.txt', 'wb') as tmpfile:
+            pickle.dump(data, tmpfile)
+        with open('model_data/user_w2v.txt', 'wb') as tmpfile:
+            pickle.dump(y, tmpfile)
+        with open('model_data/order_w2v.txt', 'wb') as tmpfile:
+            pickle.dump(user_order, tmpfile)
+    y = []
+    positions = []
+    data = []
+    user_order = []
+    y_only_0_1 = []
+
+    if not BUILD_NEW_SPARSE:
+        with open('model_data/positions_w2v.txt', 'rb') as f:
+            positions = pickle.load(f)
+        with open('model_data/data_w2v.txt', 'rb') as f:
+            data = pickle.load(f)
+        with open('model_data/user_w2v.txt', 'rb') as f:
+            y = pickle.load(f)
+        with open('model_data/order_w2v.txt', 'rb') as f:
+            user_order = pickle.load(f)
+        y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
+    else:
+        rebuild_sparse()
+    print(len(data), len(word_to_idx), len(y))
+    # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
     data = np.asarray(data)[y_only_0_1]
     y = np.asarray(y)[y_only_0_1]
@@ -338,19 +420,17 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 def truth_prediction_for_users(word_to_idx, idx_to_word):
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y, user_order = build_sparse_matrix(get_users(), word_to_idx)
+    X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
 
     transformer = TfidfTransformer(smooth_idf=False)
     X_user = transformer.fit_transform(X_user)
 
-    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-    print(len(word_vectors.vocab))
+    #word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
     ch, pv= chi2(X_user, y)
     # inspect how many words appear in word2vec
-    top10k = sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:10000]
-    words_in_vocab = [t for t in top10k if t[0] in word_vectors.vocab]
-    print(len(words_in_vocab))
-    print(words_in_vocab[:100])
+    print(sorted([[idx,p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
+    #words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
+    print(X_user.shape)
 
     ch2 = SelectKBest(chi2, k=10000)
     X_user = ch2.fit_transform(X_user, y)
@@ -360,6 +440,8 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     lsa = make_pipeline(svd, normalizer)
     X_user_pca = np.asarray(lsa.fit_transform(X_user, y))
 
+    evaluation(X_user_pca, y)
+    exit()
 
     fact_topics, idx_to_factword = build_fact_topics()
     _, transactions = get_data()
@@ -379,9 +461,6 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     ch, pv= chi2(X_topic, y)
     # print(sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50])
     top50 = sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50]
-    facts_in_vocab = [t for t in top50 if t[0] in word_vectors.vocab]
-    print(len(facts_in_vocab))
-    print(facts_in_vocab)
 
     #ch2_k = 50; print("Chi2 with k= {}".format(ch2_k))
     #ch2 = SelectKBest(chi2, k=ch2_k)
