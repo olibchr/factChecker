@@ -261,13 +261,13 @@ def build_sparse_word2_vec(users, word_to_idx):
         data.append(this_data)
         user_order.append(user.user_id)
         y.append(int(user.was_correct))
-    with open('model_data/positions_w2v.txt', 'wb') as tmpfile:
+    with open('model_data/positions_w2v', 'wb') as tmpfile:
         pickle.dump(positions, tmpfile)
-    with open('model_data/data_w2v.txt', 'wb') as tmpfile:
+    with open('model_data/data_w2v', 'wb') as tmpfile:
         pickle.dump(data, tmpfile)
-    with open('model_data/user_w2v.txt', 'wb') as tmpfile:
+    with open('model_data/user_w2v', 'wb') as tmpfile:
         pickle.dump(y, tmpfile)
-    with open('model_data/order_w2v.txt', 'wb') as tmpfile:
+    with open('model_data/order_w2v', 'wb') as tmpfile:
         pickle.dump(user_order, tmpfile)
     return positions, data, y, user_order, y_only_0_1
 
@@ -276,13 +276,13 @@ def get_sparse_matrix_word2vec(users, word_to_idx):
 
     if not BUILD_NEW_SPARSE:
         print("Using pre-computed sparse")
-        with open('model_data/positions_w2v.txt', 'rb') as f:
+        with open('model_data/positions_w2v', 'rb') as f:
             positions = pickle.load(f)
-        with open('model_data/data_w2v.txt', 'rb') as f:
+        with open('model_data/data_w2v', 'rb') as f:
             data = pickle.load(f)
-        with open('model_data/user_w2v.txt', 'rb') as f:
+        with open('model_data/user_w2v', 'rb') as f:
             y = pickle.load(f)
-        with open('model_data/order_w2v.txt', 'rb') as f:
+        with open('model_data/order_w2v', 'rb') as f:
             user_order = pickle.load(f)
         y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
     else:
