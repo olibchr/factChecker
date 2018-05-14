@@ -213,6 +213,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
 
         i = 0
         for user in users:
+            if i%50==0: print(i)
             user_data = {}
             if not user.tweets: print(user.user_id); continue
             if int(user.was_correct) != -1: y_only_0_1.append(i)
