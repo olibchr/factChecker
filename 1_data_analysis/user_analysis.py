@@ -5,10 +5,20 @@ import os
 import pickle
 import sys
 import warnings
+from collections import Counter
+from string import digits
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from dateutil import parser
+from nltk.corpus import stopwords
+from nltk.corpus import wordnet as wn
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import RegexpTokenizer
+from scipy.sparse import lil_matrix
 from sklearn import metrics
+from sklearn.cluster import KMeans
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.decomposition import TruncatedSVD
 from sklearn.ensemble import RandomForestClassifier
@@ -28,16 +38,10 @@ from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
-from nltk.corpus import wordnet as wn
 from decoder import decoder
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
-from nltk.tokenize import RegexpTokenizer
-from scipy.sparse import lil_matrix
-from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
-from string import digits
-from collections import Counter
+
+import gensim
+from gensim.models import KeyedVectors
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -86,7 +90,7 @@ def get_users():
 
 
 def get_corpus():
-    corpus_file = glob.glob('bow_corpus.json')[0]
+    corpus_file = glob.glob('model_data/bow_corpus.json')[0]
     bow_corpus = json.loads(open(corpus_file).readline())
     return bow_corpus
 
@@ -102,7 +106,7 @@ def get_user_documents(users):
 
 
 def save_corpus(bow_corpus):
-    with open('bow_corpus.json', 'w') as out_file:
+    with open('model_data/bow_corpus.json', 'w') as out_file:
         out_file.write(json.dumps(bow_corpus, default=datetime_converter) + '\n')
 
 
@@ -161,13 +165,13 @@ def build_sparse_matrix(users, word_to_idx):
             data.append(this_data)
             user_order.append(user.user_id)
             y.append(int(user.was_correct))
-        with open('positions.txt', 'wb') as tmpfile:
+        with open('model_data/positions.txt', 'wb') as tmpfile:
             pickle.dump(positions, tmpfile)
-        with open('data.txt', 'wb') as tmpfile:
+        with open('model_data/data.txt', 'wb') as tmpfile:
             pickle.dump(data, tmpfile)
-        with open('user.txt', 'wb') as tmpfile:
+        with open('model_data/user.txt', 'wb') as tmpfile:
             pickle.dump(y, tmpfile)
-        with open('order.txt', 'wb') as tmpfile:
+        with open('model_data/order.txt', 'wb') as tmpfile:
             pickle.dump(user_order, tmpfile)
     y = []
     positions = []
@@ -175,13 +179,13 @@ def build_sparse_matrix(users, word_to_idx):
     user_order = []
     y_only_0_1 = []
     if not BUILD_NEW_SPARSE:
-        with open('positions.txt', 'rb') as f:
+        with open('model_data/positions.txt', 'rb') as f:
             positions = pickle.load(f)
-        with open('data.txt', 'rb') as f:
+        with open('model_data/data.txt', 'rb') as f:
             data = pickle.load(f)
-        with open('user.txt', 'rb') as f:
+        with open('model_data/user.txt', 'rb') as f:
             y = pickle.load(f)
-        with open('order.txt', 'rb') as f:
+        with open('model_data/order.txt', 'rb') as f:
             user_order = pickle.load(f)
         y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
     else:
@@ -201,14 +205,14 @@ def build_sparse_matrix(users, word_to_idx):
 
 
 def build_fact_topics():
-    #print("Build fact topics")
+    print("Build fact topics")
     def build_feature_vector(terms):
-        vec = [0] * len(facts_bow)
+        vec = [0] * len(factword_to_idx)
         for t in terms:
-            vec[facts_bow[t]] += 1
+            if t not in factword_to_idx: continue
+            vec[factword_to_idx[t]] += 1
         return vec
 
-    #hash_to_fact = {f.hash: f for f in facts}
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     remove_digits = str.maketrans('', '', digits)
@@ -219,15 +223,15 @@ def build_fact_topics():
     facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
     facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
     facts_bow = {}
-    idx_to_factword = {}
-    i = 0
     for terms in facts_df['fact_terms']:
         for k in terms:
             if k in facts_bow: facts_bow[k] += 1
             else:
                 facts_bow[k] = 1
-                idx_to_factword[i] = k
-                i += 1
+    bow_corpus_tmp = [w[0] for w in facts_bow.items() if w[1] > 2]
+    factword_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
+    idx_to_factword = {idx: k for k, idx in factword_to_idx.items()}
+
     facts_df['feature_vector'] = facts_df['fact_terms'].map(lambda terms: build_feature_vector(terms))
     return facts_df, idx_to_factword
 
@@ -289,7 +293,7 @@ def evaluation(X, y):
 
 def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
     print("KMeans Clustering")
-    X, y = build_sparse_matrix(users, word_to_idx)
+    X, y, _ = build_sparse_matrix(users, word_to_idx)
     print(X.shape, y.shape)
     y_r = y == 1
     y_r = y_r.nonzero()[0]
@@ -339,6 +343,15 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     transformer = TfidfTransformer(smooth_idf=False)
     X_user = transformer.fit_transform(X_user)
 
+    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+    print(len(word_vectors.vocab))
+    ch, pv= chi2(X_user, y)
+    # inspect how many words appear in word2vec
+    top10k = sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:10000]
+    words_in_vocab = [t for t in top10k if t[0] in word_vectors.vocab]
+    print(len(words_in_vocab))
+    print(words_in_vocab[:100])
+
     ch2 = SelectKBest(chi2, k=10000)
     X_user = ch2.fit_transform(X_user, y)
 
@@ -360,24 +373,26 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
 
     X_topic = np.array([fact_topics[fact_topics.hash == hsh]['feature_vector'].as_matrix()[0] for hsh in user_fact_hash])
 
-    #ch, pv= chi2(X_topic, y)
-    #print(sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50])
-
     transformer2 = TfidfTransformer(smooth_idf=False)
     X_topic = transformer2.fit_transform(X_topic)
 
-    # ch2 = SelectKBest(chi2, k=100)
-    # X_topic = ch2.fit_transform(X_topic, y)
+    ch, pv= chi2(X_topic, y)
+    # print(sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50])
+    top50 = sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50]
+    facts_in_vocab = [t for t in top50 if t[0] in word_vectors.vocab]
+    print(len(facts_in_vocab))
+    print(facts_in_vocab)
 
-    svd = TruncatedSVD(5)
+    #ch2_k = 50; print("Chi2 with k= {}".format(ch2_k))
+    #ch2 = SelectKBest(chi2, k=ch2_k)
+    #X_topic = ch2.fit_transform(X_topic, y)
+
+    svd = TruncatedSVD(10)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
     X_topic_pca = np.asarray(lsa.fit_transform(X_topic))
 
-    print(X_user_pca.shape)
-    print(X_topic_pca.shape)
     X = np.asarray(np.concatenate((X_user_pca, X_topic_pca), axis=1))
-    print(X.shape)
 
     print(Counter(y))
 
