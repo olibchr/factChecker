@@ -213,7 +213,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
 
         i = 0
         for user in users:
-            if i%50==0: print(i)
+            if i%50 == 0: print(i)
             user_data = {}
             if not user.tweets: print(user.user_id); continue
             if int(user.was_correct) != -1: y_only_0_1.append(i)
@@ -262,6 +262,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
     y_only_0_1 = []
 
     if not BUILD_NEW_SPARSE:
+        print("Using pre-computed sparse")
         with open('model_data/positions_w2v.txt', 'rb') as f:
             positions = pickle.load(f)
         with open('model_data/data_w2v.txt', 'rb') as f:
@@ -429,7 +430,7 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     #word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
     ch, pv= chi2(X_user, y)
     # inspect how many words appear in word2vec
-    print(sorted([[idx,p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
+    print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
     #words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
     print(X_user.shape)
 
@@ -439,44 +440,9 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     svd = TruncatedSVD(20)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
-    X_user_pca = np.asarray(lsa.fit_transform(X_user, y))
+    X = np.asarray(lsa.fit_transform(X_user, y))
 
-    evaluation(X_user_pca, y)
-    exit()
-
-    fact_topics, idx_to_factword = build_fact_topics()
-    _, transactions = get_data()
-    user_fact_hash = []
-    for u in user_order:
-        for t in transactions:
-            if u == t.user_id:
-                user_fact_hash.append(t.fact)
-                transactions.pop(transactions.index(t))
-                break
-
-    X_topic = np.array([fact_topics[fact_topics.hash == hsh]['feature_vector'].as_matrix()[0] for hsh in user_fact_hash])
-
-    transformer2 = TfidfTransformer(smooth_idf=False)
-    X_topic = transformer2.fit_transform(X_topic)
-
-    ch, pv= chi2(X_topic, y)
-    # print(sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50])
-    top50 = sorted([[idx_to_factword[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:50]
-
-    #ch2_k = 50; print("Chi2 with k= {}".format(ch2_k))
-    #ch2 = SelectKBest(chi2, k=ch2_k)
-    #X_topic = ch2.fit_transform(X_topic, y)
-
-    svd = TruncatedSVD(10)
-    normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd, normalizer)
-    X_topic_pca = np.asarray(lsa.fit_transform(X_topic))
-
-    X = np.asarray(np.concatenate((X_user_pca, X_topic_pca), axis=1))
-
-    print(Counter(y))
-
-    evaluation(X,y)
+    evaluation(X, y)
 
 
 def lda_analysis(users):
