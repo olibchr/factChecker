@@ -7,6 +7,8 @@ import sys
 import warnings
 from collections import Counter
 from string import digits
+from joblib import Parallel, delayed
+import multiprocessing
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -46,12 +48,15 @@ from gensim.models import KeyedVectors
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = False
+BUILD_NEW_SPARSE = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
+
+num_cores = multiprocessing.cpu_count()
+num_jobs = round(num_cores * 3 / 4)
 
 
 def datetime_converter(o):
@@ -204,65 +209,70 @@ def build_sparse_matrix(users, word_to_idx):
     return X, np.array(y), np.array(user_order)
 
 
-def build_sparse_matrix_word2vec(users, word_to_idx):
-    def rebuild_sparse():
-        print("Building sparse vectors")
-        word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-        _, transactions = get_data()
-        fact_topics, idx_to_factword = build_fact_topics()
+def build_sparse_word2_vec(users, word_to_idx):
+    def parse_tweets_add_to_index(tweet, user_fact_words):
+        tokens = tokenize_text(tweet['text'], only_retweets=False)
+        for token in tokens:
+            if token not in word_to_idx: continue
+            if token not in word_vectors.vocab: continue
+            if len(user_fact_words) == 0: user_fact_words = [token]
+            increment = 1 - np.average(word_vectors.distances(token, other_words=user_fact_words))
+            if increment > 1: increment = 1
+            if increment < 0: increment = 0
+            if token in user_data:
+                user_data[word_to_idx[token]] += increment
+            else:
+                user_data[word_to_idx[token]] = increment
 
-        i = 0
-        for user in users:
-            if i%50 == 0: print(i)
-            user_data = {}
-            if not user.tweets: print(user.user_id); continue
-            if int(user.was_correct) != -1: y_only_0_1.append(i)
-            i += 1
-            for t in transactions:
-                if user.user_id == t.user_id:
-                    user.fact = t.fact
-                    transactions.pop(transactions.index(t))
-                    break
-            user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
-            user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
-            # If X doesnt need to be rebuild, comment out
-            for tweet in user.tweets:
-                tokens = tokenize_text(tweet['text'], only_retweets=False)
-                for token in tokens:
-                    if token not in word_to_idx: continue
-                    if token not in word_vectors.vocab: continue
-                    if len(user_fact_words) == 0: user_fact_words = [token]
-                    increment = 1 - np.average(word_vectors.distances(token, other_words=user_fact_words))
-                    if increment > 1: increment = 1
-                    if increment < 0: increment = 0
-
-                    if token in user_data:
-                        user_data[word_to_idx[token]] += increment
-                    else:
-                        user_data[word_to_idx[token]] = increment
-            this_position = []
-            this_data = []
-            for tuple in user_data.items():
-                this_position.append(tuple[0])
-                this_data.append(tuple[1])
-
-            positions.append(this_position)
-            data.append(this_data)
-            user_order.append(user.user_id)
-            y.append(int(user.was_correct))
-        with open('model_data/positions_w2v.txt', 'wb') as tmpfile:
-            pickle.dump(positions, tmpfile)
-        with open('model_data/data_w2v.txt', 'wb') as tmpfile:
-            pickle.dump(data, tmpfile)
-        with open('model_data/user_w2v.txt', 'wb') as tmpfile:
-            pickle.dump(y, tmpfile)
-        with open('model_data/order_w2v.txt', 'wb') as tmpfile:
-            pickle.dump(user_order, tmpfile)
+    print("Building sparse vectors")
     y = []
     positions = []
     data = []
     user_order = []
     y_only_0_1 = []
+    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+    _, transactions = get_data()
+    fact_topics, idx_to_factword = build_fact_topics()
+    i = 0
+    for user in users:
+        if i%50 == 0: print(i)
+        user_data = {}
+        if not user.tweets: print(user.user_id); continue
+        if int(user.was_correct) != -1: y_only_0_1.append(i)
+        i += 1
+        for t in transactions:
+            if user.user_id == t.user_id:
+                user.fact = t.fact
+                transactions.pop(transactions.index(t))
+                break
+        user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
+        user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
+
+        # If X doesnt need to be rebuild, comment out
+        Parallel(n_jobs=num_jobs)(delayed(parse_tweets_add_to_index)(tweet, user_fact_words) for tweet in user.tweets)
+
+        this_position = []
+        this_data = []
+        for tuple in user_data.items():
+            this_position.append(tuple[0])
+            this_data.append(tuple[1])
+
+        positions.append(this_position)
+        data.append(this_data)
+        user_order.append(user.user_id)
+        y.append(int(user.was_correct))
+    with open('model_data/positions_w2v.txt', 'wb') as tmpfile:
+        pickle.dump(positions, tmpfile)
+    with open('model_data/data_w2v.txt', 'wb') as tmpfile:
+        pickle.dump(data, tmpfile)
+    with open('model_data/user_w2v.txt', 'wb') as tmpfile:
+        pickle.dump(y, tmpfile)
+    with open('model_data/order_w2v.txt', 'wb') as tmpfile:
+        pickle.dump(user_order, tmpfile)
+    return positions, data, y, user_order, y_only_0_1
+
+
+def get_sparse_matrix_word2vec(users, word_to_idx):
 
     if not BUILD_NEW_SPARSE:
         print("Using pre-computed sparse")
@@ -276,7 +286,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             user_order = pickle.load(f)
         y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
     else:
-        rebuild_sparse()
+        positions, data, y, user_order, y_only_0_1 = build_sparse_word2_vec()
     print(len(data), len(word_to_idx), len(y))
     # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
@@ -425,7 +435,7 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 def truth_prediction_for_users(word_to_idx, idx_to_word):
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
+    X_user, y, user_order = get_sparse_matrix_word2vec(get_users(), word_to_idx)
 
     transformer = TfidfTransformer(smooth_idf=False)
     X_user = transformer.fit_transform(X_user)
