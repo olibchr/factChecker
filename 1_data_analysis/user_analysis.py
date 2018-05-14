@@ -210,7 +210,7 @@ def build_sparse_matrix(users, word_to_idx):
 
 
 def build_sparse_word2_vec(users, word_to_idx):
-    def parse_tweets_add_to_index(tweet, user_fact_words):
+    def parse_tweets_add_to_index(tweet):
         tokens = tokenize_text(tweet['text'], only_retweets=False)
         for token in tokens:
             if token not in word_to_idx: continue
@@ -286,7 +286,7 @@ def get_sparse_matrix_word2vec(users, word_to_idx):
             user_order = pickle.load(f)
         y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
     else:
-        positions, data, y, user_order, y_only_0_1 = build_sparse_word2_vec()
+        positions, data, y, user_order, y_only_0_1 = build_sparse_word2_vec(users, word_to_idx)
     print(len(data), len(word_to_idx), len(y))
     # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
