@@ -46,7 +46,7 @@ from gensim.models import KeyedVectors
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = True
+BUILD_NEW_SPARSE = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -232,7 +232,10 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     if token not in word_to_idx: continue
                     if token not in word_vectors.vocab: continue
                     if len(user_fact_words) == 0: user_fact_words = [token]
-                    increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+                    increment = 1 - np.average(word_vectors.distances(token, other_words=user_fact_words))
+                    if increment > 1: increment = 1
+                    if increment < 0: increment = 0
+
                     if token in user_data:
                         user_data[word_to_idx[token]] += increment
                     else:
