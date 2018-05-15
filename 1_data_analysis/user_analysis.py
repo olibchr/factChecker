@@ -245,6 +245,11 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
         _, transactions = get_data()
         fact_topics, idx_to_factword = build_fact_topics()
 
+        if NEW_WEIGHT_MAP:
+                word_to_weights = build_weight_map(word_to_idx, fact_topics)
+            else:
+                with open('model_data/weights_w2v', 'rb') as f:
+                    word_to_weights = pickle.load(f)
         i = 0
         for user in users:
             if i%50 == 0: print(i)
@@ -259,12 +264,6 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     break
             #user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
             #user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
-
-            if NEW_WEIGHT_MAP:
-                word_to_weights = build_weight_map(word_to_idx, fact_topics)
-            else:
-                with open('model_data/weights_w2v', 'rb') as f:
-                    word_to_weights = pickle.load(f)
 
             # If X doesnt need to be rebuild, comment out
             for tweet in user.tweets:
@@ -356,7 +355,7 @@ def build_fact_topics():
 def get_train_test_split_on_facts(X, y, user_order):
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
-    facts_hsh = facts_df['hash'].as_matrix()[0]
+    facts_hsh = list(facts_df['hash'].as_matrix())
 
     users = get_users()
     user_to_fact = []
@@ -373,13 +372,13 @@ def get_train_test_split_on_facts(X, y, user_order):
                 break
 
     f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.15)
-    f_train_user = np.asarray([True if f in f_train else False for f in user_to_fact])
-    f_test_user = np.asarray([True if f in f_test else False for f in user_to_fact])
+    f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
+    print(len(f_train), len(f_test))
 
-    X_train = X[f_train_user]
-    X_test = X[f_test_user]
-    y_train = y[f_train_user]
-    y_test = y[f_test_user]
+    X_train = X[f_train_mask == True]
+    X_test = X[f_train_mask == False]
+    y_train = y[f_train_mask == True]
+    y_test = y[f_train_mask == False]
     return X_train, X_test, y_train, y_test
 
 
@@ -399,16 +398,16 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
-        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
-        #neg_log_loss = model_selection.cross_val_score(clf, X, y, cv=5, scoring='roc_auc')
 
+        print(X_test_imp.shape, y_test.shape, pred.shape)
         score = metrics.accuracy_score(y_test, pred)
         print("accuracy:   %0.3f" % score)
-        #print("Logloss: {}, {}").format(neg_log_loss.mean(), neg_log_loss.std())
+
+        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
         print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
         return scores.mean()
 
-    if not X_train:
+    if X_train is None:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
@@ -506,7 +505,7 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
     X_train = np.asarray(lsa.fit_transform(X_train, y_train))
-    X_test = np.asarray(lsa.transform(X_test, y_test))
+    X_test = np.asarray(lsa.transform(X_test))
 
     X = np.concatenate((X_train, X_test))
     y = np.concatenate((y_train, y_test))
