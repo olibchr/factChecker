@@ -70,9 +70,9 @@ def tokenize_text(text, only_retweets=False):
         text = text[text.find('rt'):]
         text = text[text.find('@'):text.find(':')]
         return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
-                          i.lower() not in NLTK_STOPWORDS]
+                i.lower() not in NLTK_STOPWORDS]
     return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
-                          i.lower() not in NLTK_STOPWORDS]
+            i.lower() not in NLTK_STOPWORDS]
 
 
 def get_data():
@@ -176,6 +176,7 @@ def build_sparse_matrix(users, word_to_idx):
             pickle.dump(y, tmpfile)
         with open('model_data/order.txt', 'wb') as tmpfile:
             pickle.dump(user_order, tmpfile)
+
     y = []
     positions = []
     data = []
@@ -234,12 +235,13 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             for token in tokens:
                 if token not in word_to_weights: continue
                 # Todo: Check if we get a problem here. There could be fact which dont have any words that are in w2v.vocab
-                #if len(user_fact_words) == 0: user_fact_words = [token]
+                # if len(user_fact_words) == 0: user_fact_words = [token]
                 increment = word_to_weights[token][fact]
                 if token in user_data:
                     user_data[word_to_idx[token]] += increment
                 else:
                     user_data[word_to_idx[token]] = increment
+
         print("Building sparse vectors")
         word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
         _, transactions = get_data()
@@ -252,7 +254,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                 word_to_weights = pickle.load(f)
         i = 0
         for user in users:
-            if i%50 == 0: print(i)
+            if i % 50 == 0: print(i)
             user_data = {}
             if not user.tweets: print(user.user_id); continue
             i += 1
@@ -285,6 +287,8 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             pickle.dump(y, tmpfile)
         with open('model_data/order_w2v', 'wb') as tmpfile:
             pickle.dump(user_order, tmpfile)
+        with open('model_data/y_only_0_1_w2v', 'wb') as tmpfile:
+            pickle.dump(y_only_0_1, tmpfile)
 
     positions = []
     data = []
@@ -322,6 +326,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
 
 def build_fact_topics():
     print("Build fact topics")
+
     def build_feature_vector(terms):
         vec = [0] * len(factword_to_idx)
         for t in terms:
@@ -334,14 +339,17 @@ def build_fact_topics():
     remove_digits = str.maketrans('', '', digits)
     facts_df['text_parsed'] = facts_df['text'].map(lambda t: tokenize_text(t.translate(remove_digits)))
     facts_df['entities_parsed'] = facts_df['entities'].map(lambda ents:
-                                                           [item for sublist in [e['surfaceForm'].lower().split() for e in ents if e['similarityScore'] >= 0.6]
+                                                           [item for sublist in
+                                                            [e['surfaceForm'].lower().split() for e in ents if
+                                                             e['similarityScore'] >= 0.6]
                                                             for item in sublist])
     facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
     facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
     facts_bow = {}
     for terms in facts_df['fact_terms']:
         for k in terms:
-            if k in facts_bow: facts_bow[k] += 1
+            if k in facts_bow:
+                facts_bow[k] += 1
             else:
                 facts_bow[k] = 1
     bow_corpus_tmp = [w[0] for w in facts_bow.items() if w[1] > 2]
@@ -356,10 +364,10 @@ def get_train_test_split_on_facts(X, y, user_order):
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     facts_hsh = list(facts_df['hash'].as_matrix())
-
     users = get_users()
     user_to_fact = []
     _, transactions = get_data()
+
     for user in users:
         for t in transactions:
             if user.user_id == t.user_id:
@@ -373,13 +381,12 @@ def get_train_test_split_on_facts(X, y, user_order):
 
     f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.15)
     f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
-
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
     y_train = y[f_train_mask == True]
     y_test = y[f_train_mask == False]
     print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-    return X_train, X_test, y_train, y_test
+    return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
 def benchmark(clf, X_train, y_train, X_test, y_test):
@@ -398,8 +405,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
-
         print(X_test_imp.shape, y_test.shape, pred.shape)
+
         score = metrics.accuracy_score(y_test, pred)
         print("accuracy:   %0.3f" % score)
 
@@ -414,8 +421,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     imp = imp.fit(X_train)
     X_train_imp = imp.transform(X_train)
     X_test_imp = imp.transform(X_test)
-
     results = []
+
     for clf, name in (
             (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
             (Perceptron(n_iter=50), "Perceptron"),
@@ -426,8 +433,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         print('=' * 80)
         print(name)
         results.append([benchmark(clf), clf])
-    # Train sparse Naive Bayes classifiers
 
+    # Train sparse SVM likes
     for penalty in ["l2", "l1"]:
         print("%s penalty" % penalty.upper())
         for clf, name in (
@@ -489,19 +496,14 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
 
     print(X_user.shape)
     X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y, user_order)
-    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-    imp = imp.fit(X_train)
-    X_train = imp.transform(X_train)
-    X_test = imp.transform(X_test)
-    X_test = np.nan_to_num(X_test)
 
-    transformer = TfidfTransformer(smooth_idf=False)
-    X_train = transformer.fit_transform(X_train)
+    transformer = TfidfTransformer()
+    X_train = transformer.fit_transform(X_train, y)
     X_test = transformer.transform(X_test)
 
-    ch, pv= chi2(X_train, y_train)
+    ch, pv = chi2(X_train, y_train)
     # inspect how many words appear in word2vec
-    print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
+    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
 
     ch2 = SelectKBest(chi2, k=10000)
     X_train = ch2.fit_transform(X_train, y_train)
@@ -516,7 +518,6 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     X = np.concatenate((X_train, X_test))
     y = np.concatenate((y_train, y_test))
 
-    #evaluation(X, y)
     evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
