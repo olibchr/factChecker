@@ -211,28 +211,40 @@ def build_sparse_matrix(users, word_to_idx):
 
 def build_sparse_matrix_word2vec(users, word_to_idx):
     def build_sparse_word2_vec(users):
-        def parse_tweets_add_to_index(tweet, user_fact_words):
+        def build_weight_map(word_to_idx, fact_topics):
+            print("Constructing weight map")
+            word_to_weights = {}
+            for token in word_to_idx.keys():
+                fact_to_weight = {}
+                for f in fact_topics:
+                    fact_words = np.array(f['fact_terms'].as_matrix()[0])
+                    fact_words = [w for w in fact_words if w in word_vectors.vocab]
+                    weight = 1 - np.average(word_vectors.distances(token, other_words=fact_words))
+                    if weight > 1: weight = 1
+                    if weight < 0: weight  = 0
+                    fact_to_weight[f['hash']] = weight
+                word_to_weights[token] = fact_to_weight
+                with open('model_data/weights_w2v', 'wb') as tmpfile:
+                    pickle.dump(positions, tmpfile)
+            return word_to_weights
+
+        def parse_tweets_add_to_index(tweet, fact):
             tokens = tokenize_text(tweet['text'], only_retweets=False)
             for token in tokens:
                 if token not in word_to_idx: continue
                 if token not in word_vectors.vocab: continue
-                if len(user_fact_words) == 0: user_fact_words = [token]
-                increment = 1 - np.average(word_vectors.distances(token, other_words=user_fact_words))
-                if increment > 1: increment = 1
-                if increment < 0: increment = 0
+                # Todo: Check if we get a problem here
+                #if len(user_fact_words) == 0: user_fact_words = [token]
+                increment = word_to_weights[token][fact]
                 if token in user_data:
                     user_data[word_to_idx[token]] += increment
                 else:
                     user_data[word_to_idx[token]] = increment
         print("Building sparse vectors")
-        y = []
-        positions = []
-        data = []
-        user_order = []
-        y_only_0_1 = []
         word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
         _, transactions = get_data()
         fact_topics, idx_to_factword = build_fact_topics()
+
         i = 0
         for user in users:
             if i%50 == 0: print(i)
@@ -245,12 +257,18 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     user.fact = t.fact
                     transactions.pop(transactions.index(t))
                     break
-            user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
-            user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
+            #user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
+            #user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
+            NEW_WEIGHT_MAP = True
+            if NEW_WEIGHT_MAP:
+                word_to_weights = build_weight_map(word_to_idx, fact_topics)
+            else:
+                with open('model_data/weights_w2v', 'rb') as f:
+                    word_to_weights = pickle.load(f)
 
             # If X doesnt need to be rebuild, comment out
             for tweet in user.tweets:
-                parse_tweets_add_to_index(tweet, user_fact_words)
+                parse_tweets_add_to_index(tweet, user.fact)
 
             this_position = []
             this_data = []
@@ -270,8 +288,12 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             pickle.dump(y, tmpfile)
         with open('model_data/order_w2v', 'wb') as tmpfile:
             pickle.dump(user_order, tmpfile)
-        return positions, data, y, user_order, y_only_0_1
 
+    positions = []
+    data = []
+    y = []
+    user_order = []
+    y_only_0_1 = []
     if not BUILD_NEW_SPARSE:
         print("Using pre-computed sparse")
         with open('model_data/positions_w2v', 'rb') as f:
@@ -284,7 +306,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             user_order = pickle.load(f)
         y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
     else:
-        positions, data, y, user_order, y_only_0_1 = build_sparse_word2_vec(users)
+        build_sparse_word2_vec(users)
     print(len(data), len(word_to_idx), len(y))
     # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
