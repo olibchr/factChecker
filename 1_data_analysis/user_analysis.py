@@ -215,15 +215,15 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             for token in word_to_idx.keys():
                 if token not in word_vectors.vocab: continue
                 fact_to_weight = {}
-                for f in fact_topics:
-                    fact_words = np.array(f[1]['fact_terms'])
+                for idx, f in fact_topics.iterrows():
+                    fact_words = np.array(f['fact_terms'])
                     fact_words = [w for w in fact_words if w in word_vectors.vocab]
                     # Todo: last resort safe guard. See following todo.
                     if len(fact_words) == 0: fact_words = [token]
                     weight = 1 - np.average(word_vectors.distances(token, other_words=fact_words))
                     if weight > 1: weight = 1
                     if weight < 0: weight = 0
-                    fact_to_weight[f[1]['hash']] = weight
+                    fact_to_weight[f['hash']] = weight
                 word_to_weights[token] = fact_to_weight
                 with open('model_data/weights_w2v', 'wb') as tmpfile:
                     pickle.dump(positions, tmpfile)
@@ -246,10 +246,10 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
         fact_topics, idx_to_factword = build_fact_topics()
 
         if NEW_WEIGHT_MAP:
-                word_to_weights = build_weight_map(word_to_idx, fact_topics)
-            else:
-                with open('model_data/weights_w2v', 'rb') as f:
-                    word_to_weights = pickle.load(f)
+            word_to_weights = build_weight_map(word_to_idx, fact_topics)
+        else:
+            with open('model_data/weights_w2v', 'rb') as f:
+                word_to_weights = pickle.load(f)
         i = 0
         for user in users:
             if i%50 == 0: print(i)
@@ -373,12 +373,12 @@ def get_train_test_split_on_facts(X, y, user_order):
 
     f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.15)
     f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
-    print(len(f_train), len(f_test))
 
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
     y_train = y[f_train_mask == True]
     y_test = y[f_train_mask == False]
+    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     return X_train, X_test, y_train, y_test
 
 
@@ -488,10 +488,14 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
 
     X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y, user_order)
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train)
+    X_train = imp.transform(X_train)
+    X_test = imp.transform(X_test)
 
     transformer = TfidfTransformer(smooth_idf=False)
     X_train = transformer.fit_transform(X_train)
-    X_test = transformer.transform(X_train)
+    X_test = transformer.transform(X_test)
 
     ch, pv= chi2(X_train, y_train)
     # inspect how many words appear in word2vec
