@@ -1,14 +1,12 @@
 import datetime
 import glob
 import json
+import multiprocessing
 import os
 import pickle
 import sys
 import warnings
-from collections import Counter
 from string import digits
-from joblib import Parallel, delayed
-import multiprocessing
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,13 +40,13 @@ from sklearn.svm import LinearSVC
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
 
-import gensim
 from gensim.models import KeyedVectors
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = True
+BUILD_NEW_SPARSE = False
+NEW_WEIGHT_MAP = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -215,14 +213,17 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             print("Constructing weight map")
             word_to_weights = {}
             for token in word_to_idx.keys():
+                if token not in word_vectors.vocab: continue
                 fact_to_weight = {}
                 for f in fact_topics:
-                    fact_words = np.array(f['fact_terms'].as_matrix()[0])
+                    fact_words = np.array(f[1]['fact_terms'])
                     fact_words = [w for w in fact_words if w in word_vectors.vocab]
+                    # Todo: last resort safe guard. See following todo.
+                    if len(fact_words) == 0: fact_words = [token]
                     weight = 1 - np.average(word_vectors.distances(token, other_words=fact_words))
                     if weight > 1: weight = 1
-                    if weight < 0: weight  = 0
-                    fact_to_weight[f['hash']] = weight
+                    if weight < 0: weight = 0
+                    fact_to_weight[f[1]['hash']] = weight
                 word_to_weights[token] = fact_to_weight
                 with open('model_data/weights_w2v', 'wb') as tmpfile:
                     pickle.dump(positions, tmpfile)
@@ -231,9 +232,8 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
         def parse_tweets_add_to_index(tweet, fact):
             tokens = tokenize_text(tweet['text'], only_retweets=False)
             for token in tokens:
-                if token not in word_to_idx: continue
-                if token not in word_vectors.vocab: continue
-                # Todo: Check if we get a problem here
+                if token not in word_to_weights: continue
+                # Todo: Check if we get a problem here. There could be fact which dont have any words that are in w2v.vocab
                 #if len(user_fact_words) == 0: user_fact_words = [token]
                 increment = word_to_weights[token][fact]
                 if token in user_data:
@@ -259,7 +259,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     break
             #user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
             #user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
-            NEW_WEIGHT_MAP = True
+
             if NEW_WEIGHT_MAP:
                 word_to_weights = build_weight_map(word_to_idx, fact_topics)
             else:
@@ -353,6 +353,36 @@ def build_fact_topics():
     return facts_df, idx_to_factword
 
 
+def get_train_test_split_on_facts(X, y, user_order):
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    facts_df = pd.read_json(fact_file)
+    facts_hsh = facts_df['hash'].as_matrix()[0]
+
+    users = get_users()
+    user_to_fact = []
+    _, transactions = get_data()
+    for user in users:
+        for t in transactions:
+            if user.user_id == t.user_id:
+                user.fact = t.fact
+                transactions.pop(transactions.index(t))
+                break
+        for u_o in user_order:
+            if u_o == user.user_id:
+                user_to_fact.append(user.fact)
+                break
+
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.15)
+    f_train_user = np.asarray([True if f in f_train else False for f in user_to_fact])
+    f_test_user = np.asarray([True if f in f_test else False for f in user_to_fact])
+
+    X_train = X[f_train_user]
+    X_test = X[f_test_user]
+    y_train = y[f_train_user]
+    y_test = y[f_test_user]
+    return X_train, X_test, y_train, y_test
+
+
 def benchmark(clf, X_train, y_train, X_test, y_test):
     print('_' * 80)
     print("Training: ")
@@ -365,7 +395,7 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
     print("accuracy:   %0.3f" % score)
 
 
-def evaluation(X, y):
+def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
@@ -373,12 +403,13 @@ def evaluation(X, y):
         #neg_log_loss = model_selection.cross_val_score(clf, X, y, cv=5, scoring='roc_auc')
 
         score = metrics.accuracy_score(y_test, pred)
-        # print("accuracy:   %0.3f" % score)
+        print("accuracy:   %0.3f" % score)
         #print("Logloss: {}, {}").format(neg_log_loss.mean(), neg_log_loss.std())
         print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
         return scores.mean()
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    if not X_train:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
     imp = imp.fit(X_train)
@@ -457,25 +488,31 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     print('Credibility (Was user correct) Prediction using BOWs')
     X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
 
-    transformer = TfidfTransformer(smooth_idf=False)
-    X_user = transformer.fit_transform(X_user)
+    X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y, user_order)
 
-    #word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-    ch, pv= chi2(X_user, y)
+    transformer = TfidfTransformer(smooth_idf=False)
+    X_train = transformer.fit_transform(X_train)
+    X_test = transformer.transform(X_train)
+
+    ch, pv= chi2(X_train, y_train)
     # inspect how many words appear in word2vec
     print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
-    #words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
-    print(X_user.shape)
 
     ch2 = SelectKBest(chi2, k=10000)
-    X_user = ch2.fit_transform(X_user, y)
+    X_train = ch2.fit_transform(X_train, y_train)
+    X_test = ch2.transform(X_test)
 
     svd = TruncatedSVD(20)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
-    X = np.asarray(lsa.fit_transform(X_user, y))
+    X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+    X_test = np.asarray(lsa.transform(X_test, y_test))
 
-    evaluation(X, y)
+    X = np.concatenate((X_train, X_test))
+    y = np.concatenate((y_train, y_test))
+
+    #evaluation(X, y)
+    evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 def lda_analysis(users):
