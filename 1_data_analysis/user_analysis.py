@@ -262,8 +262,6 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     user.fact = t.fact
                     transactions.pop(transactions.index(t))
                     break
-            #user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
-            #user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
 
             # If X doesnt need to be rebuild, comment out
             for tweet in user.tweets:
@@ -317,7 +315,8 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
     X.rows = positions
     X.data = data
     X.tocsr()
-    return X, np.array(y), np.array(user_order)
+    print(X.shape, y.shape, user_order.shape)
+    return X, y, user_order
 
 
 def build_fact_topics():
@@ -487,11 +486,13 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     print('Credibility (Was user correct) Prediction using BOWs')
     X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
 
+    print(X_user.shape)
     X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y, user_order)
     imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
     imp = imp.fit(X_train)
     X_train = imp.transform(X_train)
     X_test = imp.transform(X_test)
+    X_test = np.nan_to_num(X_test)
 
     transformer = TfidfTransformer(smooth_idf=False)
     X_train = transformer.fit_transform(X_train)
