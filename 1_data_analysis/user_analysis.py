@@ -7,6 +7,7 @@ import pickle
 import sys
 import warnings
 from string import digits
+from collections import Counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,6 +37,9 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import f1_score
+from sklearn.metrics import precision_recall_fscore_support
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
@@ -305,8 +309,13 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             y = pickle.load(f)
         with open('model_data/order_w2v', 'rb') as f:
             user_order = pickle.load(f)
-        y_only_0_1 = [int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order]
-        y_only_0_1 = [idx for idx, was_correct in enumerate(y_only_0_1) if was_correct != -1]
+        y_all = np.asarray([int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order])
+        y_only_0_1 = [idx for idx, was_correct in enumerate(y_all) if was_correct != -1]
+        y = y_all
+        print(Counter(y))
+        print(Counter(y_all))
+        print(Counter(y_all[y_only_0_1]))
+        #print(Counter(y_only_0_1))
     else:
         build_sparse_word2_vec(users)
     print(len(data), len(word_to_idx), len(y), len(y_only_0_1))
@@ -405,13 +414,32 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
-        print(X_test_imp.shape, y_test.shape, pred.shape)
+        #print(X_test_imp.shape, y_test.shape, pred.shape)
 
         score = metrics.accuracy_score(y_test, pred)
         print("accuracy:   %0.3f" % score)
 
         scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
         print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+
+        precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
+
+        print("Precision: {}, Recall: {}, F1 score: {}, Support: {}".format(precision, recall, fscore, sup))
+
+        fpr, tpr, thresholds = roc_curve(y_test, pred)
+        roc_auc = auc(fpr, tpr)
+        plt.title('Receiver Operating Characteristic')
+
+        plt.plot(fpr, tpr, 'b',
+        label='AUC = %0.2f'% roc_auc)
+        plt.legend(loc='lower right')
+        plt.plot([0,1],[0,1],'r--')
+        plt.xlim([-0.1,1.2])
+        plt.ylim([-0.1,1.2])
+        plt.ylabel('True Positive Rate')
+        plt.xlabel('False Positive Rate')
+        #plt.show()
+
         return scores.mean()
 
     if X_train is None:
@@ -440,6 +468,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         for clf, name in (
                 (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
                 (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
+            print(name)
             print('=' * 80)
             results.append([benchmark(clf), clf])
     return results[np.argmax(np.asarray(results)[:, 0])]
@@ -497,10 +526,12 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     print(X_user.shape)
     X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y, user_order)
 
+    print("Fitting TF-IDF")
     transformer = TfidfTransformer()
-    X_train = transformer.fit_transform(X_train, y)
+    X_train = transformer.fit_transform(X_train, y_train)
     X_test = transformer.transform(X_test)
 
+    print("Chi2 feature selection")
     ch, pv = chi2(X_train, y_train)
     # inspect how many words appear in word2vec
     print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
@@ -509,6 +540,7 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     X_train = ch2.fit_transform(X_train, y_train)
     X_test = ch2.transform(X_test)
 
+    print("Dimensionality reduction")
     svd = TruncatedSVD(20)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
@@ -517,8 +549,10 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
 
     X = np.concatenate((X_train, X_test))
     y = np.concatenate((y_train, y_test))
-
+    print(Counter(y))
+    print(X.shape, y.shape, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     evaluation(X, y, X_train, X_test, y_train, y_test)
+    #evaluation(X_user, y)
 
 
 def lda_analysis(users):
