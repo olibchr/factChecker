@@ -388,7 +388,7 @@ def get_train_test_split_on_facts(X, y, user_order):
                 user_to_fact.append(user.fact)
                 break
 
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.15)
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
     f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
@@ -469,8 +469,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         for clf, name in (
                 (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
                 (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
-            print(name)
             print('=' * 80)
+            print(name)
             results.append([benchmark(clf), clf])
     return results[np.argmax(np.asarray(results)[:, 0])]
 
@@ -522,10 +522,9 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 def truth_prediction_for_users(word_to_idx, idx_to_word):
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
+    X_user, y_user, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
 
-    print(X_user.shape)
-    X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y, user_order)
+    X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y_user, user_order)
 
     print("Fitting TF-IDF")
     transformer = TfidfTransformer()
@@ -552,9 +551,25 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     y = np.concatenate((y_train, y_test))
     print("Shapes before evaluation")
     print(X.shape, y.shape, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-    print(Counter(y))
+    print(Counter(y_train), Counter(y_test))
     evaluation(X, y, X_train, X_test, y_train, y_test)
-    #evaluation(X_user, y)
+
+
+    print("Evaluation with only known facts")
+    transformer = TfidfTransformer()
+    X = transformer.fit_transform(X_user, y_user)
+
+    ch2 = SelectKBest(chi2, k=10000)
+    X = ch2.fit_transform(X, y_user)
+
+    svd = TruncatedSVD(20)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd, normalizer)
+    X = np.asarray(lsa.fit_transform(X, y_user))
+    print("Shapes before evaluation")
+    print(X.shape, y.shape, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    print(Counter(y_train), Counter(y_test))
+    evaluation(X_user, y)
 
 
 def lda_analysis(users):
