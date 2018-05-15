@@ -394,6 +394,7 @@ def get_train_test_split_on_facts(X, y, user_order):
     X_test = X[f_train_mask == False]
     y_train = y[f_train_mask == True]
     y_test = y[f_train_mask == False]
+    print("Shapes after splitting")
     print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
@@ -428,17 +429,17 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
         fpr, tpr, thresholds = roc_curve(y_test, pred)
         roc_auc = auc(fpr, tpr)
-        plt.title('Receiver Operating Characteristic')
-
-        plt.plot(fpr, tpr, 'b',
-        label='AUC = %0.2f'% roc_auc)
-        plt.legend(loc='lower right')
-        plt.plot([0,1],[0,1],'r--')
-        plt.xlim([-0.1,1.2])
-        plt.ylim([-0.1,1.2])
-        plt.ylabel('True Positive Rate')
-        plt.xlabel('False Positive Rate')
-        #plt.show()
+        # plt.title('Receiver Operating Characteristic')
+        #
+        # plt.plot(fpr, tpr, 'b',
+        # label='AUC = %0.2f'% roc_auc)
+        # plt.legend(loc='lower right')
+        # plt.plot([0,1],[0,1],'r--')
+        # plt.xlim([-0.1,1.2])
+        # plt.ylim([-0.1,1.2])
+        # plt.ylabel('True Positive Rate')
+        # plt.xlabel('False Positive Rate')
+        # plt.show()
 
         return scores.mean()
 
@@ -549,8 +550,9 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
 
     X = np.concatenate((X_train, X_test))
     y = np.concatenate((y_train, y_test))
-    print(Counter(y))
+    print("Shapes before evaluation")
     print(X.shape, y.shape, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    print(Counter(y))
     evaluation(X, y, X_train, X_test, y_train, y_test)
     #evaluation(X_user, y)
 
