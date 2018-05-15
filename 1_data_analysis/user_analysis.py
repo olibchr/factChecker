@@ -226,7 +226,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     fact_to_weight[f['hash']] = weight
                 word_to_weights[token] = fact_to_weight
                 with open('model_data/weights_w2v', 'wb') as tmpfile:
-                    pickle.dump(positions, tmpfile)
+                    pickle.dump(word_to_weights, tmpfile)
             return word_to_weights
 
         def parse_tweets_add_to_index(tweet, fact):
@@ -255,7 +255,6 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             if i%50 == 0: print(i)
             user_data = {}
             if not user.tweets: print(user.user_id); continue
-            if int(user.was_correct) != -1: y_only_0_1.append(i)
             i += 1
             for t in transactions:
                 if user.user_id == t.user_id:
@@ -277,6 +276,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             data.append(this_data)
             user_order.append(user.user_id)
             y.append(int(user.was_correct))
+            if int(user.was_correct) != -1: y_only_0_1.append(i)
         with open('model_data/positions_w2v', 'wb') as tmpfile:
             pickle.dump(positions, tmpfile)
         with open('model_data/data_w2v', 'wb') as tmpfile:
@@ -301,10 +301,11 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             y = pickle.load(f)
         with open('model_data/order_w2v', 'rb') as f:
             user_order = pickle.load(f)
-        y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
+        y_only_0_1 = [int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order]
+        y_only_0_1 = [idx for idx, was_correct in enumerate(y_only_0_1) if was_correct != -1]
     else:
         build_sparse_word2_vec(users)
-    print(len(data), len(word_to_idx), len(y))
+    print(len(data), len(word_to_idx), len(y), len(y_only_0_1))
     # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
     data = np.asarray(data)[y_only_0_1]
