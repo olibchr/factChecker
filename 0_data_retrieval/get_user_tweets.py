@@ -113,6 +113,7 @@ def was_user_correct(user, facts, transactions):
             transaction = tr
             user.transactions = tr
             transactions.remove(tr)
+            user.fact = transaction.fact
             break
     for fact in facts:
         if fact.hash == transaction.fact:

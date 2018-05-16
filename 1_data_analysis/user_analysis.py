@@ -367,7 +367,7 @@ def train_test_split_on_facts(X, y, user_order, users):
         # annotate each user with their fact hash
         #for t in transactions:
         #    if user.user_id == t.user_id:
-            user_to_fact[user.user_id] = t.fact
+            user_to_fact[user.user_id] = user.fact
         #    transactions.pop(transactions.index(t))
     #        break
     # go through user order (ordered list of user ids), find hash and put it in new list
