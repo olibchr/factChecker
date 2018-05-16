@@ -337,8 +337,9 @@ def train_test_split_on_facts(X, y, user_order):
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     # into pandas
     facts_df = pd.read_json(fact_file)
-    # keep only hashes
+    # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
     # get all users
     users = get_users()
     # map users to their fact
@@ -354,12 +355,11 @@ def train_test_split_on_facts(X, y, user_order):
                 user_to_fact[user.user_id] = t.fact
                 transactions.pop(transactions.index(t))
                 break
+    # go through user order (ordered list of user ids), find hash and put it in new list
     for u_id in user_order:
         user_order_hashed_fact.append(user_to_fact[u_id])
-        # go through user order (ordered list of user ids),
 
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
-
+    print(len(f_train), len(f_test))
     f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
@@ -394,7 +394,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         score = metrics.accuracy_score(y_test, pred)
         print("accuracy:   %0.3f" % score)
 
-        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
+        scores = cross_val_score(clf, X, y, cv=5)
         print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
@@ -521,8 +521,10 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     X_train = np.asarray(lsa.fit_transform(X_train, y_train))
     X_test = np.asarray(lsa.transform(X_test))
 
+    X = np.concatenate((X_train, X_test))
+    y = np.concatenate((y_train, y_test))
     print(Counter(y), Counter(y_train), Counter(y_test))
-    evaluation([], [], X_train, X_test, y_train, y_test)
+    evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 def lda_analysis(users):
