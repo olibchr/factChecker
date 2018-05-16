@@ -287,7 +287,6 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
         print(Counter(y_all[y_only_0_1]))
     else:
         rebuild_sparse()
-    print(len(data), len(word_to_idx), len(y))
     # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
     data = np.asarray(data)[y_only_0_1]
@@ -331,6 +330,36 @@ def build_fact_topics():
 
     facts_df['feature_vector'] = facts_df['fact_terms'].map(lambda terms: build_feature_vector(terms))
     return facts_df, idx_to_factword
+
+
+def train_test_split_on_facts(X, y, user_order):
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    facts_df = pd.read_json(fact_file)
+    facts_hsh = list(facts_df['hash'].as_matrix())
+    users = get_users()
+    user_to_fact = []
+    _, transactions = get_data()
+
+    for user in users:
+        for t in transactions:
+            if user.user_id == t.user_id:
+                user.fact = t.fact
+                transactions.pop(transactions.index(t))
+                break
+        for u_o in user_order:
+            if u_o == user.user_id:
+                user_to_fact.append(user.fact)
+                break
+
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
+    f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
+    X_train = X[f_train_mask == True]
+    X_test = X[f_train_mask == False]
+    y_train = y[f_train_mask == True]
+    y_test = y[f_train_mask == False]
+    print("Shapes after splitting")
+    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
 def benchmark(clf, X_train, y_train, X_test, y_test):
@@ -458,8 +487,12 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     print('Credibility (Was user correct) Prediction using BOWs')
     X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
 
-    transformer = TfidfTransformer(smooth_idf=False)
-    X_user = transformer.fit_transform(X_user)
+    print(X_user.shape, y.shape, user_order.shape)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order)
+
+    transformer = TfidfTransformer(smooth_idf=True)
+    X_train = transformer.fit_transform(X_train)
+    X_test = transformer.transform(X_test)
 
     # word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
     # ch, pv= chi2(X_user, y)
@@ -469,15 +502,17 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     print(X_user.shape)
 
     ch2 = SelectKBest(chi2, k=10000)
-    X_user = ch2.fit_transform(X_user, y)
+    X_train = ch2.fit_transform(X_train, y_train)
+    X_test = ch2.transform(X_test)
 
     svd = TruncatedSVD(20)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
-    X = np.asarray(lsa.fit_transform(X_user, y))
+    X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+    X_test = np.asarray(lsa.transform(X_test))
 
-    print(Counter(y))
-    evaluation(X, y)
+    print(Counter(y), Counter(y_train), Counter(y_test))
+    evaluation([], [], X_train, X_test, y_train, y_test)
 
 
 def lda_analysis(users):
