@@ -89,9 +89,11 @@ def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
+    users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        yield user
+        users.append(user)
+    return users
 
 
 def get_corpus():
@@ -332,7 +334,7 @@ def build_fact_topics():
     return facts_df, idx_to_factword
 
 
-def train_test_split_on_facts(X, y, user_order):
+def train_test_split_on_facts(X, y, user_order, users):
     # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     # into pandas
@@ -340,8 +342,6 @@ def train_test_split_on_facts(X, y, user_order):
     # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
     f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
-    # get all users
-    users = get_users()
     # map users to their fact
     user_to_fact = {}
     # get all transactions
@@ -391,15 +391,21 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         pred = clf.predict(X_test_imp)
         #print(X_test_imp.shape, y_test.shape, pred.shape)
 
+        print("On Presplit:")
         score = metrics.accuracy_score(y_test, pred)
-        print("accuracy:   %0.3f" % score)
+        precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
+        print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f, Support: %0.3f".format(score, precision, recall, fscore, sup))
+
+        print("On random split")
+        clf.fit(X_train_imp2, y_train2)
+        pred2 = clf.predict(X_test_imp2)
+        score2 = metrics.accuracy_score(y_test2, pred2)
+        precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
+        print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f, Support: %0.3f".format(score2, precision2, recall2, fscore2, sup2))
 
         scores = cross_val_score(clf, X, y, cv=5)
         print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
-        precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-
-        print("Precision: {}, Recall: {}, F1 score: {}, Support: {}".format(precision, recall, fscore, sup))
 
         fpr, tpr, thresholds = roc_curve(y_test, pred)
         roc_auc = auc(fpr, tpr)
@@ -420,10 +426,17 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     if X_train is None:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
+    X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
+
     imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
     imp = imp.fit(X_train)
     X_train_imp = imp.transform(X_train)
     X_test_imp = imp.transform(X_test)
+
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train2)
+    X_train_imp2 = imp.transform(X_train2)
+    X_test_imp2 = imp.transform(X_test2)
     results = []
 
     for clf, name in (
@@ -494,22 +507,16 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
-def truth_prediction_for_users(word_to_idx, idx_to_word):
+def truth_prediction_for_users(users, word_to_idx):
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
+    X_user, y, user_order = build_sparse_matrix_word2vec(users, word_to_idx)
 
     print(X_user.shape, y.shape, user_order.shape)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users)
 
     transformer = TfidfTransformer(smooth_idf=True)
     X_train = transformer.fit_transform(X_train)
     X_test = transformer.transform(X_test)
-
-    # word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-    # ch, pv= chi2(X_user, y)
-    # inspect how many words appear in word2vec
-    # print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
-    # words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
 
     ch2 = SelectKBest(chi2, k=10000)
     X_train = ch2.fit_transform(X_train, y_train)
@@ -606,10 +613,12 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
+    users = get_users()
+
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    truth_prediction_for_users(word_to_idx, idx_to_word)
+    truth_prediction_for_users(users, word_to_idx)
     # lda_analysis(get_users())
 
 
