@@ -100,11 +100,9 @@ def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
-    users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        users.append(user)
-    return users
+        yield user
 
 
 def get_corpus():
@@ -266,12 +264,12 @@ def build_user_vector(user, fact_topics, i):
     return package
 
 
-def build_sparse_matrix_word2vec(users):
+def build_sparse_matrix_word2vec():
     def rebuild_sparse():
         print("Building sparse vectors")
         _, transactions = get_data()
         fact_topics = build_fact_topics()
-
+        users = get_users()
         for user in users:
             if not user.tweets: users.pop(users.index(user))
             for t in transactions:
@@ -325,8 +323,10 @@ def build_sparse_matrix_word2vec(users):
     # Only considering supports and denials [0,1], not comments etc. [-1]
     positions = np.asarray(positions)[y_only_0_1]
     data = np.asarray(data)[y_only_0_1]
+    print(Counter(y))
     y = np.asarray(y)[y_only_0_1]
     user_order = np.asarray(user_order)[y_only_0_1]
+    print(Counter(y))
 
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
@@ -365,11 +365,11 @@ def train_test_split_on_facts(X, y, user_order, users):
 
     for user in users:
         # annotate each user with their fact hash
-        for t in transactions:
-            if user.user_id == t.user_id:
-                user_to_fact[user.user_id] = t.fact
-                transactions.pop(transactions.index(t))
-                break
+        #for t in transactions:
+        #    if user.user_id == t.user_id:
+            user_to_fact[user.user_id] = t.fact
+        #    transactions.pop(transactions.index(t))
+    #        break
     # go through user order (ordered list of user ids), find hash and put it in new list
     for u_id in user_order:
         user_order_hashed_fact.append(user_to_fact[u_id])
@@ -522,10 +522,10 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 def truth_prediction_for_users(users):
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y, user_order = build_sparse_matrix_word2vec(users)
+    X_user, y, user_order = build_sparse_matrix_word2vec()
 
     print(X_user.shape, y.shape, user_order.shape)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, get_users())
 
     transformer = TfidfTransformer(smooth_idf=True)
     X_train = transformer.fit_transform(X_train)
