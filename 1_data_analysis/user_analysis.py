@@ -53,7 +53,7 @@ import multiprocessing
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = True
+BUILD_NEW_SPARSE = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -226,8 +226,14 @@ def build_user_vector(user, fact_topics, i):
     if i%50 == 0: print(i)
     user_data = {}
     if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
-    user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix()[0])
-    user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
+    user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix())
+    if len(user_fact_words)==0:
+        print("%%%%%%%%")
+        print(user.user_id)
+        print(user.fact)
+        print(user_fact_words)
+        return
+    user_fact_words = [w for w in user_fact_words[0] if w in word_vectors.vocab]
     # If X doesnt need to be rebuild, comment out
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
@@ -264,20 +270,21 @@ def build_sparse_matrix_word2vec(users):
     def rebuild_sparse():
         print("Building sparse vectors")
         _, transactions = get_data()
-        fact_topics, idx_to_factword = build_fact_topics()
+        fact_topics = build_fact_topics()
 
         for user in users:
-            if not user.tweets: users.pop(user.index(user))
+            if not user.tweets: users.pop(users.index(user))
             for t in transactions:
                 if user.user_id == t.user_id:
                     user.fact = t.fact
                     transactions.pop(transactions.index(t))
                     break
+            if user.fact is None: print(user.user_id)
 
         classification_data = Parallel(n_jobs=num_jobs)(delayed(build_user_vector)(user, fact_topics, i) for i, user in enumerate(users))
-
+        classification_data = [x for x in classification_data if x != None]
         classification_data = sorted(classification_data, key=lambda x: x['index'])
-        with open('model_data/classification_data_w2v.txt', 'wb') as tmpfile:
+        with open('model_data/classification_data_w2v', 'wb') as tmpfile:
             pickle.dump(classification_data, tmpfile)
         return classification_data
     y = []
@@ -288,31 +295,30 @@ def build_sparse_matrix_word2vec(users):
     classification_data = []
 
     if not BUILD_NEW_SPARSE:
-        print("Using pre-computed sparse")
-        with open('model_data/positions_w2v', 'rb') as f:
-            positions = pickle.load(f)
-        with open('model_data/data_w2v', 'rb') as f:
-            data = pickle.load(f)
-        with open('model_data/user_w2v', 'rb') as f:
-            y = pickle.load(f)
-        with open('model_data/order_w2v', 'rb') as f:
-            user_order = pickle.load(f)
-        y_all = np.asarray([int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order])
-        y_only_0_1 = [idx for idx, was_correct in enumerate(y_all) if was_correct != -1]
-        y = y_all
-        print(Counter(y))
-        print(Counter(y_all))
-        print(Counter(y_all[y_only_0_1]))
+    #     print("Using pre-computed sparse")
+    #     with open('model_data/positions_w2v', 'rb') as f:
+    #         positions = pickle.load(f)
+    #     with open('model_data/data_w2v', 'rb') as f:
+    #         data = pickle.load(f)
+    #     with open('model_data/user_w2v', 'rb') as f:
+    #         y = pickle.load(f)
+    #     with open('model_data/order_w2v', 'rb') as f:
+    #         user_order = pickle.load(f)
+    #     y_all = np.asarray([int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order])
+    #     y_only_0_1 = [idx for idx, was_correct in enumerate(y_all) if was_correct != -1]
+    #     y = y_all
+    #     print(Counter(y))
+    #     print(Counter(y_all))
+    #     print(Counter(y_all[y_only_0_1]))
 
         with open('model_data/classification_data_w2v.txt', 'rb') as f:
             classification_data = pickle.load(f)
     else:
-        #rebuild_sparse()
         classification_data = rebuild_sparse()
     for item in classification_data:
         positions.append(item['positions'])
         data.append(item['data'])
-        user_order.append(item['user_order'])
+        user_order.append(item['user_id'])
         y.append(item['y'])
         if item['was_correct_idx'] != None: y_only_0_1.append(item['was_correct_idx'])
 
@@ -331,13 +337,6 @@ def build_sparse_matrix_word2vec(users):
 
 def build_fact_topics():
     print("Build fact topics")
-    def build_feature_vector(terms):
-        vec = [0] * len(factword_to_idx)
-        for t in terms:
-            if t not in factword_to_idx: continue
-            vec[factword_to_idx[t]] += 1
-        return vec
-
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     remove_digits = str.maketrans('', '', digits)
@@ -347,18 +346,7 @@ def build_fact_topics():
                                                             for item in sublist])
     facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
     facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
-    facts_bow = {}
-    for terms in facts_df['fact_terms']:
-        for k in terms:
-            if k in facts_bow: facts_bow[k] += 1
-            else:
-                facts_bow[k] = 1
-    bow_corpus_tmp = [w[0] for w in facts_bow.items() if w[1] > 2]
-    factword_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
-    idx_to_factword = {idx: k for k, idx in factword_to_idx.items()}
-
-    facts_df['feature_vector'] = facts_df['fact_terms'].map(lambda terms: build_feature_vector(terms))
-    return facts_df, idx_to_factword
+    return facts_df
 
 
 def train_test_split_on_facts(X, y, user_order, users):
@@ -420,16 +408,16 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
         score = metrics.accuracy_score(y_test, pred)
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-        print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score, precision, recall, fscore))
+        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score, precision, recall, fscore))
 
         clf.fit(X_train_imp2, y_train2)
         pred2 = clf.predict(X_test_imp2)
         score2 = metrics.accuracy_score(y_test2, pred2)
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
-        print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score2, precision2, recall2, fscore2))
+        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score2, precision2, recall2, fscore2))
 
         scores = cross_val_score(clf, X, y, cv=5)
-        print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
 
         fpr, tpr, thresholds = roc_curve(y_test, pred)
