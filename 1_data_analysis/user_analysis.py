@@ -295,22 +295,6 @@ def build_sparse_matrix_word2vec(users):
     classification_data = []
 
     if not BUILD_NEW_SPARSE:
-    #     print("Using pre-computed sparse")
-    #     with open('model_data/positions_w2v', 'rb') as f:
-    #         positions = pickle.load(f)
-    #     with open('model_data/data_w2v', 'rb') as f:
-    #         data = pickle.load(f)
-    #     with open('model_data/user_w2v', 'rb') as f:
-    #         y = pickle.load(f)
-    #     with open('model_data/order_w2v', 'rb') as f:
-    #         user_order = pickle.load(f)
-    #     y_all = np.asarray([int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order])
-    #     y_only_0_1 = [idx for idx, was_correct in enumerate(y_all) if was_correct != -1]
-    #     y = y_all
-    #     print(Counter(y))
-    #     print(Counter(y_all))
-    #     print(Counter(y_all[y_only_0_1]))
-
         with open('model_data/classification_data_w2v.txt', 'rb') as f:
             classification_data = pickle.load(f)
     else:
@@ -324,14 +308,12 @@ def build_sparse_matrix_word2vec(users):
 
     # Only considering supports and denials [0,1], not comments etc. [-1]
     mask = [el != -1 for el in y]
-    print(mask[:100])
-    print(len(mask))
     positions = np.asarray(positions)[mask]
     data = np.asarray(data)[mask]
-    print(Counter(y))
+    #print(Counter(y))
     y = np.asarray(y)[mask]
     user_order = np.asarray(user_order)[mask]
-    print(Counter(y))
+    #print(Counter(y))
 
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
@@ -379,17 +361,17 @@ def train_test_split_on_facts(X, y, user_order, users):
     for u_id in user_order:
         user_order_hashed_fact.append(user_to_fact[u_id])
 
-    print(len(f_train), len(f_test))
+    #print(len(f_train), len(f_test))
     f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
     y_train = y[f_train_mask == True]
     y_test = y[f_train_mask == False]
-    print("Shapes after splitting")
-    print(len(user_order), len(user_order_hashed_fact))
-    print(user_order[:5])
-    print(user_order_hashed_fact[:5])
-    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    # print("Shapes after splitting")
+    # print(len(user_order), len(user_order_hashed_fact))
+    # print(user_order[:5])
+    # print(user_order_hashed_fact[:5])
+    # print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
@@ -525,22 +507,25 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
-def truth_prediction_for_users(users):
+def truth_prediction_for_users(users, chik, svdk):
+    print('%'*100)
     print('Credibility (Was user correct) Prediction using BOWs')
+    print(chik, svdk)
+
     X_user, y, user_order = build_sparse_matrix_word2vec(users)
 
-    print(X_user.shape, y.shape, user_order.shape)
+    #print(X_user.shape, y.shape, user_order.shape)
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users)
 
     transformer = TfidfTransformer(smooth_idf=True)
     X_train = transformer.fit_transform(X_train)
     X_test = transformer.transform(X_test)
 
-    ch2 = SelectKBest(chi2, k=10000)
+    ch2 = SelectKBest(chi2, k=chik)
     X_train = ch2.fit_transform(X_train, y_train)
     X_test = ch2.transform(X_test)
 
-    svd = TruncatedSVD(20)
+    svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
     X_train = np.asarray(lsa.fit_transform(X_train, y_train))
@@ -637,7 +622,13 @@ def main():
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    truth_prediction_for_users(users)
+    exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
+           (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
+           (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
+           (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
+           (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
+    for chik, svdk in exp:
+        truth_prediction_for_users(users, chik, svdk)
     # lda_analysis(get_users())
 
 
