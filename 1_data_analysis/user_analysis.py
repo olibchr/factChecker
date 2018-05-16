@@ -333,31 +333,42 @@ def build_fact_topics():
 
 
 def train_test_split_on_facts(X, y, user_order):
+    # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    # into pandas
     facts_df = pd.read_json(fact_file)
+    # keep only hashes
     facts_hsh = list(facts_df['hash'].as_matrix())
+    # get all users
     users = get_users()
-    user_to_fact = []
+    # map users to their fact
+    user_to_fact = {}
+    # get all transactions
     _, transactions = get_data()
+    user_order_hashed_fact = []
 
     for user in users:
+        # annotate each user with their fact hash
         for t in transactions:
             if user.user_id == t.user_id:
-                user.fact = t.fact
+                user_to_fact[user.user_id] = t.fact
                 transactions.pop(transactions.index(t))
                 break
-        for u_o in user_order:
-            if u_o == user.user_id:
-                user_to_fact.append(user.fact)
-                break
+    for u_id in user_order:
+        user_order_hashed_fact.append(user_to_fact[u_id])
+        # go through user order (ordered list of user ids),
 
     f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
-    f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
+
+    f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
     y_train = y[f_train_mask == True]
     y_test = y[f_train_mask == False]
     print("Shapes after splitting")
+    print(len(user_order), len(user_order_hashed_fact))
+    print(user_order[:5])
+    print(user_order_hashed_fact[:5])
     print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
@@ -499,7 +510,6 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     # inspect how many words appear in word2vec
     # print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
     # words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
-    print(X_user.shape)
 
     ch2 = SelectKBest(chi2, k=10000)
     X_train = ch2.fit_transform(X_train, y_train)
