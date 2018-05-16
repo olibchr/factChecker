@@ -100,9 +100,11 @@ def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
+    users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        yield user
+        users.append(user)
+    return users
 
 
 def get_corpus():
@@ -264,12 +266,12 @@ def build_user_vector(user, fact_topics, i):
     return package
 
 
-def build_sparse_matrix_word2vec():
+def build_sparse_matrix_word2vec(users):
     def rebuild_sparse():
         print("Building sparse vectors")
         _, transactions = get_data()
         fact_topics = build_fact_topics()
-        users = get_users()
+
         for user in users:
             if not user.tweets: users.pop(users.index(user))
             for t in transactions:
@@ -522,10 +524,10 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 def truth_prediction_for_users(users):
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y, user_order = build_sparse_matrix_word2vec()
+    X_user, y, user_order = build_sparse_matrix_word2vec(users)
 
     print(X_user.shape, y.shape, user_order.shape)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, get_users())
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users)
 
     transformer = TfidfTransformer(smooth_idf=True)
     X_train = transformer.fit_transform(X_train)
