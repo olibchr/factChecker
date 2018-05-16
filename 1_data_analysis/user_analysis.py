@@ -323,11 +323,14 @@ def build_sparse_matrix_word2vec(users):
         if item['was_correct_idx'] != None: y_only_0_1.append(item['was_correct_idx'])
 
     # Only considering supports and denials [0,1], not comments etc. [-1]
-    positions = np.asarray(positions)[y_only_0_1]
-    data = np.asarray(data)[y_only_0_1]
+    mask = [el != -1 for el in y]
+    print(mask[:100])
+    print(len(mask))
+    positions = np.asarray(positions)[mask]
+    data = np.asarray(data)[mask]
     print(Counter(y))
-    y = np.asarray(y)[y_only_0_1]
-    user_order = np.asarray(user_order)[y_only_0_1]
+    y = np.asarray(y)[mask]
+    user_order = np.asarray(user_order)[mask]
     print(Counter(y))
 
     X = lil_matrix((len(data), len(word_to_idx)))
