@@ -217,10 +217,15 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
         def build_weight_map(word_to_idx, fact_topics):
             print("Constructing weight map")
             word_to_weights = {}
+
             for token in word_to_idx.keys():
                 if token not in word_vectors.vocab: continue
+                print('------')
+                print(token)
                 fact_to_weight = {}
+
                 for idx, f in fact_topics.iterrows():
+                    print(f)
                     fact_words = np.array(f['fact_terms'])
                     fact_words = [w for w in fact_words if w in word_vectors.vocab]
                     # Todo: last resort safe guard. See following todo.
@@ -229,9 +234,11 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     if weight > 1: weight = 1
                     if weight < 0: weight = 0
                     fact_to_weight[f['hash']] = weight
+
                 word_to_weights[token] = fact_to_weight
-                with open('model_data/weights_w2v', 'wb') as tmpfile:
-                    pickle.dump(word_to_weights, tmpfile)
+
+            with open('model_data/weights_w2v', 'wb') as tmpfile:
+                pickle.dump(word_to_weights, tmpfile)
             return word_to_weights
 
         def parse_tweets_add_to_index(tweet, fact):
