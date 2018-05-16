@@ -45,12 +45,19 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
 
 from gensim.models import KeyedVectors
+from joblib import Parallel, delayed
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = False
 NEW_WEIGHT_MAP = False
+
+word_vectors = []
+word_to_weights = {}
+if NEW_WEIGHT_MAP:
+    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -212,30 +219,34 @@ def build_sparse_matrix(users, word_to_idx):
     return X, np.array(y), np.array(user_order)
 
 
+def build_token_to_facts_weights(token, fact_topics, wv_vocab):
+    global word_to_weights
+    if token not in wv_vocab: return
+    fact_to_weight = {}
+
+    for idx, f in fact_topics.iterrows():
+        print(f)
+        fact_words = np.array(f['fact_terms'])
+        fact_words = [w for w in fact_words if w in wv_vocab]
+        # Todo: last resort safe guard. See following todo.
+        if len(fact_words) == 0: fact_words = [token]
+        weight = 1 - np.average(word_vectors.distances(token, other_words=fact_words))
+        if weight > 1: weight = 1
+        if weight < 0: weight = 0
+        fact_to_weight[f['hash']] = weight
+
+    word_to_weights[token] = fact_to_weight
+
+
 def build_sparse_matrix_word2vec(users, word_to_idx):
     def build_sparse_word2_vec(users):
         def build_weight_map(word_to_idx, fact_topics):
             print("Constructing weight map")
+            global word_to_weights
             word_to_weights = {}
+            wv_vocab = word_vectors.vocab
 
-            for token in word_to_idx.keys():
-                if token not in word_vectors.vocab: continue
-                print('------')
-                print(token)
-                fact_to_weight = {}
-
-                for idx, f in fact_topics.iterrows():
-                    print(f)
-                    fact_words = np.array(f['fact_terms'])
-                    fact_words = [w for w in fact_words if w in word_vectors.vocab]
-                    # Todo: last resort safe guard. See following todo.
-                    if len(fact_words) == 0: fact_words = [token]
-                    weight = 1 - np.average(word_vectors.distances(token, other_words=fact_words))
-                    if weight > 1: weight = 1
-                    if weight < 0: weight = 0
-                    fact_to_weight[f['hash']] = weight
-
-                word_to_weights[token] = fact_to_weight
+            Parallel(n_jobs=num_jobs)(delayed(build_token_to_facts_weights)(token, fact_topics, wv_vocab ) for token in word_to_idx.keys())
 
             with open('model_data/weights_w2v', 'wb') as tmpfile:
                 pickle.dump(word_to_weights, tmpfile)
@@ -254,7 +265,7 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
                     user_data[word_to_idx[token]] = increment
 
         print("Building sparse vectors")
-        word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+
         _, transactions = get_data()
         fact_topics, idx_to_factword = build_fact_topics()
 
