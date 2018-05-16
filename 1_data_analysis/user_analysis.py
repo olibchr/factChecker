@@ -42,6 +42,11 @@ from decoder import decoder
 
 import gensim
 from gensim.models import KeyedVectors
+from collections import Counter
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import f1_score
+from sklearn.metrics import precision_recall_fscore_support
+
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -266,15 +271,20 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
 
     if not BUILD_NEW_SPARSE:
         print("Using pre-computed sparse")
-        with open('model_data/positions_w2v.txt', 'rb') as f:
+        with open('model_data/positions_w2v', 'rb') as f:
             positions = pickle.load(f)
-        with open('model_data/data_w2v.txt', 'rb') as f:
+        with open('model_data/data_w2v', 'rb') as f:
             data = pickle.load(f)
-        with open('model_data/user_w2v.txt', 'rb') as f:
+        with open('model_data/user_w2v', 'rb') as f:
             y = pickle.load(f)
-        with open('model_data/order_w2v.txt', 'rb') as f:
+        with open('model_data/order_w2v', 'rb') as f:
             user_order = pickle.load(f)
-        y_only_0_1 = [idx for idx, u in enumerate([u for u in users if u.tweets]) if int(u.was_correct) != -1]
+        y_all = np.asarray([int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order])
+        y_only_0_1 = [idx for idx, was_correct in enumerate(y_all) if was_correct != -1]
+        y = y_all
+        print(Counter(y))
+        print(Counter(y_all))
+        print(Counter(y_all[y_only_0_1]))
     else:
         rebuild_sparse()
     print(len(data), len(word_to_idx), len(y))
@@ -335,27 +345,47 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
     print("accuracy:   %0.3f" % score)
 
 
-def evaluation(X, y):
+def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
-        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
-        #neg_log_loss = model_selection.cross_val_score(clf, X, y, cv=5, scoring='roc_auc')
+        #print(X_test_imp.shape, y_test.shape, pred.shape)
 
         score = metrics.accuracy_score(y_test, pred)
-        # print("accuracy:   %0.3f" % score)
-        #print("Logloss: {}, {}").format(neg_log_loss.mean(), neg_log_loss.std())
+        print("accuracy:   %0.3f" % score)
+
+        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
         print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+
+        precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
+
+        print("Precision: {}, Recall: {}, F1 score: {}, Support: {}".format(precision, recall, fscore, sup))
+
+        fpr, tpr, thresholds = roc_curve(y_test, pred)
+        roc_auc = auc(fpr, tpr)
+        # plt.title('Receiver Operating Characteristic')
+        #
+        # plt.plot(fpr, tpr, 'b',
+        # label='AUC = %0.2f'% roc_auc)
+        # plt.legend(loc='lower right')
+        # plt.plot([0,1],[0,1],'r--')
+        # plt.xlim([-0.1,1.2])
+        # plt.ylim([-0.1,1.2])
+        # plt.ylabel('True Positive Rate')
+        # plt.xlabel('False Positive Rate')
+        # plt.show()
+
         return scores.mean()
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    if X_train is None:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
     imp = imp.fit(X_train)
     X_train_imp = imp.transform(X_train)
     X_test_imp = imp.transform(X_test)
-
     results = []
+
     for clf, name in (
             (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
             (Perceptron(n_iter=50), "Perceptron"),
@@ -366,14 +396,15 @@ def evaluation(X, y):
         print('=' * 80)
         print(name)
         results.append([benchmark(clf), clf])
-    # Train sparse Naive Bayes classifiers
 
+    # Train sparse SVM likes
     for penalty in ["l2", "l1"]:
         print("%s penalty" % penalty.upper())
         for clf, name in (
                 (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
                 (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
             print('=' * 80)
+            print(name)
             results.append([benchmark(clf), clf])
     return results[np.argmax(np.asarray(results)[:, 0])]
 
@@ -430,11 +461,11 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     transformer = TfidfTransformer(smooth_idf=False)
     X_user = transformer.fit_transform(X_user)
 
-    #word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-    ch, pv= chi2(X_user, y)
+    # word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+    # ch, pv= chi2(X_user, y)
     # inspect how many words appear in word2vec
-    print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
-    #words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
+    # print(sorted([[idx_to_word[idx],p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
+    # words_in_vocab = np.asarray(sorted([t[0] for t in top10k if t[0] in word_vectors.vocab]))
     print(X_user.shape)
 
     ch2 = SelectKBest(chi2, k=10000)
@@ -445,6 +476,7 @@ def truth_prediction_for_users(word_to_idx, idx_to_word):
     lsa = make_pipeline(svd, normalizer)
     X = np.asarray(lsa.fit_transform(X_user, y))
 
+    print(Counter(y))
     evaluation(X, y)
 
 
