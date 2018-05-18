@@ -42,7 +42,7 @@ from decoder import decoder
 
 import gensim
 from gensim.models import KeyedVectors
-from collections import Counter
+from collections import Counter, defaultdict
 from sklearn.metrics import roc_curve, auc
 from sklearn.metrics import f1_score
 from sklearn.metrics import precision_recall_fscore_support
@@ -295,7 +295,7 @@ def build_sparse_matrix_word2vec(users):
     classification_data = []
 
     if not BUILD_NEW_SPARSE:
-        with open('model_data/classification_data_w2v.txt', 'rb') as f:
+        with open('model_data/classification_data_w2v', 'rb') as f:
             classification_data = pickle.load(f)
     else:
         classification_data = rebuild_sparse()
@@ -336,42 +336,48 @@ def build_fact_topics():
     return facts_df
 
 
-def train_test_split_on_facts(X, y, user_order, users):
+def train_test_split_on_facts(X, y, user_order, users, n=2):
     # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     # into pandas
     facts_df = pd.read_json(fact_file)
     # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.2)
     # map users to their fact
-    user_to_fact = {}
-    # get all transactions
-    _, transactions = get_data()
-    user_order_hashed_fact = []
-
-    for user in users:
-        # annotate each user with their fact hash
-        #for t in transactions:
-        #    if user.user_id == t.user_id:
-            user_to_fact[user.user_id] = user.fact
-        #    transactions.pop(transactions.index(t))
-    #        break
+    user_to_fact = {user.user_id: user.fact for user in users}
     # go through user order (ordered list of user ids), find hash and put it in new list
-    for u_id in user_order:
-        user_order_hashed_fact.append(user_to_fact[u_id])
+    user_order_fact = [user_to_fact[u_id] for u_id in user_order]
 
-    #print(len(f_train), len(f_test))
-    f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
+    # build a mask
+    f_train_mask = []
+    fact_to_n = defaultdict(lambda: 0)
+    for user_fact in user_order_fact:
+        # always true if in train set
+        if user_fact in f_train: f_train_mask.append(True); continue
+        # true to add at n samples of rumor to train set
+        if fact_to_n[user_fact] <= n:
+            f_train_mask.append(True)
+            fact_to_n[user_fact] += 1
+            continue
+        # otherwise false if in test set
+        f_train_mask.append(False)
+    f_train_mask = np.asarray(f_train_mask)
+
+    # f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
     X_train = X[f_train_mask == True]
     X_test = X[f_train_mask == False]
     y_train = y[f_train_mask == True]
     y_test = y[f_train_mask == False]
-    # print("Shapes after splitting")
-    # print(len(user_order), len(user_order_hashed_fact))
-    # print(user_order[:5])
-    # print(user_order_hashed_fact[:5])
-    # print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    print("Shapes after splitting")
+
+    for user in users:
+        if user.user_id not in user_order: continue
+        i = np.where(user_order==user.user_id)[0][0]
+        assert str(user.fact) == str(user_order_fact[i])
+        assert int(user.user_id) == int(user_order[i])
+
+    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
@@ -421,7 +427,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         # plt.xlabel('False Positive Rate')
         # plt.show()
 
-        return scores.mean()
+        return score, score2, scores.mean()
 
     if X_train is None:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
@@ -448,7 +454,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
             (BernoulliNB(alpha=.01), "Bernoulli NB")):
         print('=' * 80)
         print(name)
-        results.append([benchmark(clf), clf])
+        results.append([benchmark(clf)])
 
     # Train sparse SVM likes
     for penalty in ["l2", "l1"]:
@@ -458,8 +464,9 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
                 (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
             print('=' * 80)
             print(name)
-            results.append([benchmark(clf), clf])
-    return results[np.argmax(np.asarray(results)[:, 0])]
+            results.append([benchmark(clf)])
+    #return results[np.argmax(np.asarray(results)[:, 0])]
+    return results
 
 
 def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
@@ -507,15 +514,15 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
-def truth_prediction_for_users(users, chik, svdk):
+def truth_prediction_for_users(users, chik, svdk, N):
     print('%'*100)
     print('Credibility (Was user correct) Prediction using BOWs')
     print(chik, svdk)
 
     X_user, y, user_order = build_sparse_matrix_word2vec(users)
 
-    #print(X_user.shape, y.shape, user_order.shape)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users)
+    print(X_user.shape, y.shape, user_order.shape)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users, n=N)
 
     transformer = TfidfTransformer(smooth_idf=True)
     X_train = transformer.fit_transform(X_train)
@@ -534,7 +541,7 @@ def truth_prediction_for_users(users, chik, svdk):
     X = np.concatenate((X_train, X_test))
     y = np.concatenate((y_train, y_test))
     print(Counter(y), Counter(y_train), Counter(y_test))
-    evaluation(X, y, X_train, X_test, y_train, y_test)
+    return evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 def lda_analysis(users):
@@ -622,13 +629,16 @@ def main():
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
-           (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
-           (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
-           (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
-           (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
-    for chik, svdk in exp:
-        truth_prediction_for_users(users, chik, svdk)
+    # exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
+    #        (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
+    #        (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
+    #        (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
+    #        (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
+    # for chik, svdk in exp:
+    results = []
+    for N in range(15):
+        results.append(truth_prediction_for_users(users, 10000, 20, N))
+    print(np.average(np.asarray(results), axis=0))
     # lda_analysis(get_users())
 
 
