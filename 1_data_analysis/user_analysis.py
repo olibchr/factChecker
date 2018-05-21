@@ -341,13 +341,6 @@ def build_fact_topics():
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
-    mask = np.random.shuffle(np.arange(len(y)))
-
-    # X = X[mask]
-    # y = y[mask]
-    # user_order = user_order[mask]
-    # print(X.shape, y.shape, user_order.shape)
-
     # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     # into pandas
@@ -666,7 +659,7 @@ def main():
     #        (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
     # for chik, svdk in exp:
     results = []
-    N = 5
+    N = 0
     for N in range(15):
         results.append(truth_prediction_for_users(users, 10000, 20, N))
     print(np.average(np.asarray(results), axis=1))
