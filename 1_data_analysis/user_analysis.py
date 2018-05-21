@@ -343,7 +343,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     facts_df = pd.read_json(fact_file)
     # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.2 + n / 15)
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 18, 0.85))
     # map users to their fact
     user_to_fact = {user.user_id: user.fact for user in users}
     # go through user order (ordered list of user ids), find hash and put it in new list
@@ -356,12 +356,12 @@ def train_test_split_on_facts(X, y, user_order, users, n):
         # always true if in train set
         if user_fact in f_train: f_train_mask.append(True); continue
         # true to add n samples of rumor to train set
-        if fact_to_n[user_fact] <= n:
+        elif fact_to_n[user_fact] < n:
             f_train_mask.append(True)
             fact_to_n[user_fact] += 1
             continue
         # otherwise false if in test set
-        f_train_mask.append(False)
+        else: f_train_mask.append(False)
     f_train_mask = np.asarray(f_train_mask)
 
     # f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
@@ -440,6 +440,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         return score, score2, scores.mean()
 
     if X_train is None:
+        print("No pre-split data given")
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
@@ -475,7 +476,6 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
             print('=' * 80)
             print(name)
             results.append([benchmark(clf)])
-    #return results[np.argmax(np.asarray(results)[:, 0])]
     return results
 
 
@@ -558,7 +558,7 @@ def truth_prediction_for_users(users, chik, svdk, N):
     #y = np.concatenate((y_train, y_test))
     print(Counter(y), Counter(y_train), Counter(y_test))
     #evaluation(X,y)
-    return evaluation(X, y, X_train, X_test, y_train, y_test)
+    return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
 
 
 def lda_analysis(users):
