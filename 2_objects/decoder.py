@@ -8,10 +8,12 @@ def decoder(o):
     def user_decoder(obj):
         if 'user_id' not in obj.keys(): return obj
         return User(obj['user_id'], tweets=obj['tweets'], fact=obj['fact'], transactions=obj['transactions'],
-                    credibility=obj['credibility'],
                     controversy=obj['controversy'], features=obj['features'], was_correct=obj['was_correct'],
+                    fact_text=obj['fact_text'] if 'fact_text' in obj.keys() else None,
+                    fact_text_ts=obj['fact_text_ts'] if 'fact_text_ts' in obj.keys() else None,
+                    stance=obj['stance'] if 'stance' in obj.keys() else None,
+                    certainty=obj['certainty'] if 'certainty' in obj.keys() else None,
                     avg_time_to_retweet=obj['avg_time_to_retweet'] if 'avg_time_to_retweet' in obj.keys() else None,
-                    sent_tweets_density=obj['sent_tweets_density'] if 'sent_tweets_density' in obj.keys() else None,
                     sent_tweets_avg=obj['sent_tweets_avg'] if 'sent_tweets_avg' in obj.keys() else None
                     )
 

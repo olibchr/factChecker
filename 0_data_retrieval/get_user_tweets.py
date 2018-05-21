@@ -114,6 +114,9 @@ def was_user_correct(user, facts, transactions):
             user.transactions = tr
             transactions.remove(tr)
             user.fact = transaction.fact
+            user.fact_text = transaction.text
+            user.fact_text_ts = transaction.timestamp
+            user.stance = 0 if transaction.stance == 'denying' else 1 if transaction.stance == 'supporting' else 2 if transaction.stance == 'comment' else 3
             break
     for fact in facts:
         if fact.hash == transaction.fact:
