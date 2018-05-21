@@ -245,6 +245,14 @@ def build_user_vector(user, fact_topics, i):
                 user_data[word_to_idx[token]] += increment
             else:
                 user_data[word_to_idx[token]] = increment
+
+    # Extend topic description for text that is similar to topic
+    for token in tokenize_text(user.fact_text):
+        user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
+        # todo: test value
+        if user_to_fact_dist < 0.5:
+            fact_topics.loc['fact_terms']['hash' == user.fact] = user_fact_words + token
+
     this_position = []
     this_data = []
     for tuple in user_data.items():
@@ -262,11 +270,11 @@ def build_user_vector(user, fact_topics, i):
 
 
 def build_sparse_matrix_word2vec(users):
-    def rebuild_sparse():
+    def rebuild_sparse(users):
         print("Building sparse vectors")
         _, transactions = get_data()
         fact_topics = build_fact_topics()
-
+        users = sorted(users, key=lambda x: x.fact_text_ts)
         for user in users:
             if not user.tweets: users.pop(users.index(user))
             for t in transactions:
@@ -302,7 +310,7 @@ def build_sparse_matrix_word2vec(users):
             # with open('model_data/order_w2v', 'rb') as f:
             #     user_order = pickle.load(f)
     else:
-        classification_data = rebuild_sparse()
+        classification_data = rebuild_sparse(users)
 
     for item in classification_data:
         positions.append(item['positions'])
@@ -356,7 +364,8 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     for user_fact in user_order_fact:
         # always true if in train set
         if user_fact in f_train:
-            f_train_mask.append(True); continue
+            f_train_mask.append(True);
+            continue
         # true to add n samples of rumor to train set
         elif fact_to_n[user_fact] < n:
             f_train_mask.append(True)
@@ -409,14 +418,14 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         score = metrics.accuracy_score(y_test, pred)
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
         print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score, precision, recall, fscore))
+            score, precision, recall, fscore))
 
         clf.fit(X_train_imp2, y_train2)
         pred2 = clf.predict(X_test_imp2)
         score2 = metrics.accuracy_score(y_test2, pred2)
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
         print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score2, precision2, recall2, fscore2))
+            score2, precision2, recall2, fscore2))
 
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
@@ -641,17 +650,17 @@ def main():
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
-           (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
-           (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
-           (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
-           (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
+    exp = [(1000, 5), (5000, 5), (10000, 5), (20000, 5), (50000, 5),
+           (1000, 10), (5000, 10), (10000, 10), (20000, 10), (50000, 10),
+           (1000, 20), (5000, 20), (10000, 20), (20000, 20), (50000, 20),
+           (1000, 50), (5000, 50), (10000, 50), (20000, 50), (50000, 50),
+           (1000, 100), (5000, 100), (10000, 100), (20000, 100), (50000, 100)]
     results = []
-    N = 5
-    #for chik, svdk in exp:
+    N = 0
+    # for chik, svdk in exp:
     #    r= []
-    for N in range(15):
-        results.append(truth_prediction_for_users(users, 10000, 20, N))
+    # for N in range(15):
+    results.append(truth_prediction_for_users(users, 10000, 20, N))
     #    results.append(np.average(np.asarray(r), axis=1))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
