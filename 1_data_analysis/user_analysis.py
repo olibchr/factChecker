@@ -284,7 +284,6 @@ def build_sparse_matrix_word2vec(users):
             pickle.dump(classification_data, tmpfile)
         return classification_data
 
-    y = []
     positions = []
     data = []
     y = []
@@ -343,16 +342,12 @@ def build_fact_topics():
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
-    # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
-    # into pandas
     facts_df = pd.read_json(fact_file)
-    # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
     f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 25, 0.8))
-    # map users to their fact
+
     user_to_fact = {user.user_id: user.fact for user in users}
-    # go through user order (ordered list of user ids), find hash and put it in new list
     user_order_fact = [user_to_fact[u_id] for u_id in user_order]
 
     # build a mask
@@ -392,36 +387,6 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
     print("Training Set: {}, {}".format(X_train.shape, y_train.shape))
     print("Testing Set: {}, {}".format(X_test.shape, y_test.shape))
-    return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
-
-
-def get_train_test_split_on_facts(X, y, user_order):
-    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
-    facts_df = pd.read_json(fact_file)
-    facts_hsh = list(facts_df['hash'].as_matrix())
-    users = get_users()
-    user_to_fact = []
-    _, transactions = get_data()
-
-    for user in users:
-        for t in transactions:
-            if user.user_id == t.user_id:
-                user.fact = t.fact
-                transactions.pop(transactions.index(t))
-                break
-        for u_o in user_order:
-            if u_o == user.user_id:
-                user_to_fact.append(user.fact)
-                break
-
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.1)
-    f_train_mask = np.asarray([True if f in f_train else False for f in user_to_fact])
-    X_train = X[f_train_mask == True]
-    X_test = X[f_train_mask == False]
-    y_train = y[f_train_mask == True]
-    y_test = y[f_train_mask == False]
-    print("Shapes after splitting")
-    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
@@ -496,16 +461,16 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     X_test_imp2 = imp.transform(X_test2)
     results = []
 
-    for clf, name in (
-            (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
-            (Perceptron(n_iter=50), "Perceptron"),
-            (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
-            (KNeighborsClassifier(n_neighbors=10), "kNN"),
-            (RandomForestClassifier(n_estimators=100), "Random forest"),
-            (BernoulliNB(alpha=.01), "Bernoulli NB")):
-        print('=' * 80)
-        print(name)
-        results.append([benchmark(clf)])
+    # for clf, name in (
+    #         (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
+    #         (Perceptron(n_iter=50), "Perceptron"),
+    #         (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
+    #         (KNeighborsClassifier(n_neighbors=10), "kNN"),
+    #         (RandomForestClassifier(n_estimators=100), "Random forest"),
+    #         (BernoulliNB(alpha=.01), "Bernoulli NB")):
+    #     print('=' * 80)
+    #     print(name)
+    #     results.append([benchmark(clf)])
 
     # Train sparse SVM likes
     for penalty in ["l2", "l1"]:
@@ -570,8 +535,6 @@ def truth_prediction_for_users(users, chik, svdk, N):
     print(chik, svdk, N)
 
     X, y, user_order = build_sparse_matrix_word2vec(users)
-
-    print(X.shape, y.shape, user_order.shape)
 
     transformer = TfidfTransformer(smooth_idf=True)
     ch2 = SelectKBest(chi2, k=chik)
@@ -682,16 +645,19 @@ def main():
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    # exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
-    #        (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
-    #        (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
-    #        (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
-    #        (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
-    # for chik, svdk in exp:
+    exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
+           (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
+           (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
+           (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
+           (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
     results = []
-    N = 0
-    for N in range(15):
-        results.append(truth_prediction_for_users(users, 10000, 20, N))
+    N = 5
+    for chik, svdk in exp:
+        r= []
+        for N in range(15):
+            r.append(truth_prediction_for_users(users, chik, svdk, N))
+        results.append(np.average(np.asarray(r), axis=1))
+    print(np.asarray(results))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
 
