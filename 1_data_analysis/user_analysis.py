@@ -336,14 +336,14 @@ def build_fact_topics():
     return facts_df
 
 
-def train_test_split_on_facts(X, y, user_order, users, n=2):
+def train_test_split_on_facts(X, y, user_order, users, n):
     # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     # into pandas
     facts_df = pd.read_json(fact_file)
     # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.2)
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.2 + n / 15)
     # map users to their fact
     user_to_fact = {user.user_id: user.fact for user in users}
     # go through user order (ordered list of user ids), find hash and put it in new list
@@ -355,7 +355,7 @@ def train_test_split_on_facts(X, y, user_order, users, n=2):
     for user_fact in user_order_fact:
         # always true if in train set
         if user_fact in f_train: f_train_mask.append(True); continue
-        # true to add at n samples of rumor to train set
+        # true to add n samples of rumor to train set
         if fact_to_n[user_fact] <= n:
             f_train_mask.append(True)
             fact_to_n[user_fact] += 1
@@ -371,13 +371,19 @@ def train_test_split_on_facts(X, y, user_order, users, n=2):
     y_test = y[f_train_mask == False]
     print("Shapes after splitting")
 
+    fact_train = np.asarray(user_order_fact)[f_train_mask == True]
+    fact_test = np.asarray(user_order_fact)[f_train_mask == False]
+    print(Counter(fact_test))
+    print(Counter([f for f in fact_train if f in fact_test]))
     for user in users:
         if user.user_id not in user_order: continue
         i = np.where(user_order==user.user_id)[0][0]
         assert str(user.fact) == str(user_order_fact[i])
         assert int(user.user_id) == int(user_order[i])
+        assert int(user.was_correct) == int(y[i])
 
-    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    print("Training Set: {}, {}".format(X_train.shape, y_train.shape))
+    print("Testing Set: {}, {}".format(X_test.shape, y_test.shape))
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
@@ -394,7 +400,11 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
 
 
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
+    print('&'*80)
+    print("Evaluation")
     def benchmark(clf):
+        scores = cross_val_score(clf, X, y, cv=5)
+
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
         #print(X_test_imp.shape, y_test.shape, pred.shape)
@@ -409,11 +419,10 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
         print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score2, precision2, recall2, fscore2))
 
-        scores = cross_val_score(clf, X, y, cv=5)
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
 
-        fpr, tpr, thresholds = roc_curve(y_test, pred)
+        fpr, tpr, thresholds = roc_curve(y_test2, pred2)
         roc_auc = auc(fpr, tpr)
         # plt.title('Receiver Operating Characteristic')
         #
@@ -426,6 +435,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         # plt.ylabel('True Positive Rate')
         # plt.xlabel('False Positive Rate')
         # plt.show()
+        match = [1 if t == p else 0 for t, p in zip(y_test2, pred2)]
 
         return score, score2, scores.mean()
 
@@ -517,20 +527,24 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 def truth_prediction_for_users(users, chik, svdk, N):
     print('%'*100)
     print('Credibility (Was user correct) Prediction using BOWs')
-    print(chik, svdk)
+    print(chik, svdk, N)
 
-    X_user, y, user_order = build_sparse_matrix_word2vec(users)
+    X, y, user_order = build_sparse_matrix_word2vec(users)
 
-    print(X_user.shape, y.shape, user_order.shape)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X_user, y, user_order, users, n=N)
+    print(X.shape, y.shape, user_order.shape)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
 
     transformer = TfidfTransformer(smooth_idf=True)
     X_train = transformer.fit_transform(X_train)
     X_test = transformer.transform(X_test)
 
+    X = transformer.fit_transform(X)
+
     ch2 = SelectKBest(chi2, k=chik)
     X_train = ch2.fit_transform(X_train, y_train)
     X_test = ch2.transform(X_test)
+
+    X = ch2.fit_transform(X, y)
 
     svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
@@ -538,9 +552,12 @@ def truth_prediction_for_users(users, chik, svdk, N):
     X_train = np.asarray(lsa.fit_transform(X_train, y_train))
     X_test = np.asarray(lsa.transform(X_test))
 
-    X = np.concatenate((X_train, X_test))
-    y = np.concatenate((y_train, y_test))
+    X = np.asarray(lsa.fit_transform(X, y))
+
+    #X = np.concatenate((X_train, X_test))
+    #y = np.concatenate((y_train, y_test))
     print(Counter(y), Counter(y_train), Counter(y_test))
+    #evaluation(X,y)
     return evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
@@ -636,9 +653,10 @@ def main():
     #        (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
     # for chik, svdk in exp:
     results = []
+    N = 5
     for N in range(15):
         results.append(truth_prediction_for_users(users, 10000, 20, N))
-    print(np.average(np.asarray(results), axis=0))
+    print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
 
 
