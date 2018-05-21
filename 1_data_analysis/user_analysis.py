@@ -310,10 +310,8 @@ def build_sparse_matrix_word2vec(users):
     mask = [el != -1 for el in y]
     positions = np.asarray(positions)[mask]
     data = np.asarray(data)[mask]
-    #print(Counter(y))
     y = np.asarray(y)[mask]
     user_order = np.asarray(user_order)[mask]
-    #print(Counter(y))
 
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
@@ -337,13 +335,20 @@ def build_fact_topics():
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
+    mask = np.random.shuffle(np.arange(len(y)))
+
+    # X = X[mask]
+    # y = y[mask]
+    # user_order = user_order[mask]
+    # print(X.shape, y.shape, user_order.shape)
+
     # get all facts
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     # into pandas
     facts_df = pd.read_json(fact_file)
     # keep only hashes, split into test and train
     facts_hsh = list(facts_df['hash'].as_matrix())
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 18, 0.85))
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 25, 0.8))
     # map users to their fact
     user_to_fact = {user.user_id: user.fact for user in users}
     # go through user order (ordered list of user ids), find hash and put it in new list
@@ -532,33 +537,35 @@ def truth_prediction_for_users(users, chik, svdk, N):
     X, y, user_order = build_sparse_matrix_word2vec(users)
 
     print(X.shape, y.shape, user_order.shape)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
+
 
     transformer = TfidfTransformer(smooth_idf=True)
-    X_train = transformer.fit_transform(X_train)
-    X_test = transformer.transform(X_test)
-
-    X = transformer.fit_transform(X)
-
     ch2 = SelectKBest(chi2, k=chik)
-    X_train = ch2.fit_transform(X_train, y_train)
-    X_test = ch2.transform(X_test)
-
-    X = ch2.fit_transform(X, y)
-
     svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
-    X_train = np.asarray(lsa.fit_transform(X_train, y_train))
-    X_test = np.asarray(lsa.transform(X_test))
 
+
+    X = transformer.fit_transform(X)
+    X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
-    #X = np.concatenate((X_train, X_test))
-    #y = np.concatenate((y_train, y_test))
+    #X_train = transformer.fit_transform(X_train)
+    #X_test = transformer.transform(X_test)
+
+    #X_train = ch2.fit_transform(X_train, y_train)
+    #X_test = ch2.transform(X_test)
+
+    #X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+    #X_test = np.asarray(lsa.transform(X_test))
+
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
-    #evaluation(X,y)
     return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
+
+    #X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
+
+    #return evaluation(X, y, X_train=X_train2, X_test=X_test2, y_train=y_train2, y_test=y_test2)
 
 
 def lda_analysis(users):
