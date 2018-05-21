@@ -345,7 +345,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     facts_hsh = list(facts_df['hash'].as_matrix())
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 25, 0.8))
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 30, 0.8))
 
     user_to_fact = {user.user_id: user.fact for user in users}
     user_order_fact = [user_to_fact[u_id] for u_id in user_order]
@@ -399,9 +399,6 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
 
 
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
-    print('&' * 80)
-    print("Evaluation")
-
     def benchmark(clf):
         scores = cross_val_score(clf, X, y, cv=5)
 
@@ -438,7 +435,10 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         # plt.show()
         match = [1 if t == p else 0 for t, p in zip(y_test2, pred2)]
 
-        return score, score2, scores.mean()
+        return fscore, fscore2, scores.mean()
+
+    print('&' * 80)
+    print("Evaluation")
 
     if X_train is None:
         print("No pre-split data given")
@@ -650,10 +650,9 @@ def main():
     N = 5
     #for chik, svdk in exp:
     #    r= []
-    #    for N in range(15):
-    truth_prediction_for_users(users, 10000, 20, N)
+    for N in range(15):
+        results.append(truth_prediction_for_users(users, 10000, 20, N))
     #    results.append(np.average(np.asarray(r), axis=1))
-    print(np.asarray(results))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
 
