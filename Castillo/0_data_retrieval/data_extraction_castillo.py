@@ -22,7 +22,7 @@ def get_facts_tweet():
         reader = csv.reader(f, delimiter='\t')
         for r in reader:
             tweet_to_fact[r[1]] = r[0]
-    print(len(tweet_to_fact))
+    print("trendid-tweetid: {}".format(len(tweet_to_fact)))
     return tweet_to_fact
 
 def get_facts_y():
@@ -31,7 +31,7 @@ def get_facts_y():
         reader = csv.reader(f, delimiter='\t')
         for r in reader:
             fact_to_cred[r[0]] = r[1]
-    print(len(fact_to_cred))
+    print("Topcis classified with credibility: {}".format(len(fact_to_cred)))
     return fact_to_cred
 
 def get_facts_type():
@@ -40,7 +40,7 @@ def get_facts_type():
         reader = csv.reader(f, delimiter='\t')
         for r in reader:
             fact_to_type[r[0]] = r[1]
-    print(len(fact_to_type))
+    print("labels-trendid-newsworthy: {}".format(len(fact_to_type)))
     return fact_to_type
 
 
@@ -55,8 +55,15 @@ def build_facts(fact_to_cred, fact_to_type, fact_to_user):
     return facts
 
 
+def build_transactions(tweet_to_fact, fact_to_cred):
+    transactions = []
+    for fact, cred in fact_to_cred.items():
+        tweets_for_fact = {k:v for k,v in tweet_to_fact.items if v == fact}
+
+
+
 def store_result():
-    with open(DIR + '../facts.json', 'w') as out_file:
+    with open(OUT + 'facts.json', 'w') as out_file:
         out_file.write(json.dumps([f.__dict__ for f in FACTS]))
 
 
@@ -64,6 +71,6 @@ fact_to_cred = get_facts_y()
 fact_to_type = get_facts_type()
 tweet_to_fact = get_facts_tweet()
 tweet_to_fact = {k:v for k,v in tweet_to_fact.items() if v in fact_to_cred}
-print(len(tweet_to_fact))
+print("Tweets on topics that are classified as Cred or not: {}".format(len(tweet_to_fact)))
 FACTS = build_facts(fact_to_cred, fact_to_type, tweet_to_fact)
 store_result()

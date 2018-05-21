@@ -45,6 +45,13 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
 
 from gensim.models import KeyedVectors
+from collections import Counter, defaultdict
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import f1_score
+from sklearn.metrics import precision_recall_fscore_support
+from joblib import Parallel, delayed
+import multiprocessing
+
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -59,6 +66,12 @@ NLTK_STOPWORDS = set(stopwords.words('english'))
 
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
+
+# global Vars
+word_to_idx = {}
+word_vectors = None
+if BUILD_NEW_SPARSE:
+    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
 
 
 def datetime_converter(o):
@@ -91,9 +104,11 @@ def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
+    users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        yield user
+        users.append(user)
+    return users
 
 
 def get_corpus():
@@ -212,102 +227,81 @@ def build_sparse_matrix(users, word_to_idx):
     return X, np.array(y), np.array(user_order)
 
 
-def build_sparse_matrix_word2vec(users, word_to_idx):
-    def build_sparse_word2_vec(users):
-        def build_weight_map(word_to_idx, fact_topics):
-            print("Constructing weight map")
-            word_to_weights = {}
 
-            for token in word_to_idx.keys():
-                if token not in word_vectors.vocab: continue
-                print('------')
-                print(token)
-                fact_to_weight = {}
+def build_user_vector(user, fact_topics, i):
+    if i%50 == 0: print(i)
+    user_data = {}
+    if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
+    user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix())
+    if len(user_fact_words)==0:
+        print("%%%%%%%%")
+        print(user.user_id)
+        print(user.fact)
+        print(user_fact_words)
+        return
+    user_fact_words = [w for w in user_fact_words[0] if w in word_vectors.vocab]
+    # If X doesnt need to be rebuild, comment out
+    for tweet in user.tweets:
+        tokens = tokenize_text(tweet['text'], only_retweets=False)
+        for token in tokens:
+            if token not in word_to_idx: continue
+            if token not in word_vectors.vocab: continue
+            if len(user_fact_words) == 0: user_fact_words = [token]
+            increment = 1 - np.average(word_vectors.distances(token, other_words=user_fact_words))
+            if increment > 1: increment = 1
+            if increment < 0: increment = 0
 
-                for idx, f in fact_topics.iterrows():
-                    print(f)
-                    fact_words = np.array(f['fact_terms'])
-                    fact_words = [w for w in fact_words if w in word_vectors.vocab]
-                    # Todo: last resort safe guard. See following todo.
-                    if len(fact_words) == 0: fact_words = [token]
-                    weight = 1 - np.average(word_vectors.distances(token, other_words=fact_words))
-                    if weight > 1: weight = 1
-                    if weight < 0: weight = 0
-                    fact_to_weight[f['hash']] = weight
+            if token in user_data:
+                user_data[word_to_idx[token]] += increment
+            else:
+                user_data[word_to_idx[token]] = increment
+    this_position = []
+    this_data = []
+    for tuple in user_data.items():
+        this_position.append(tuple[0])
+        this_data.append(tuple[1])
 
-                word_to_weights[token] = fact_to_weight
+    package = {
+        'index' : i,
+        'positions' : this_position,
+        'data' : this_data,
+        'user_id' : user.user_id,
+        'y' : int(user.was_correct)
+    }
+    return package
 
-            with open('model_data/weights_w2v', 'wb') as tmpfile:
-                pickle.dump(word_to_weights, tmpfile)
-            return word_to_weights
 
-        def parse_tweets_add_to_index(tweet, fact):
-            tokens = tokenize_text(tweet['text'], only_retweets=False)
-            for token in tokens:
-                if token not in word_to_weights: continue
-                # Todo: Check if we get a problem here. There could be fact which dont have any words that are in w2v.vocab
-                # if len(user_fact_words) == 0: user_fact_words = [token]
-                increment = word_to_weights[token][fact]
-                if token in user_data:
-                    user_data[word_to_idx[token]] += increment
-                else:
-                    user_data[word_to_idx[token]] = increment
-
+def build_sparse_matrix_word2vec(users):
+    def rebuild_sparse():
         print("Building sparse vectors")
-        word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
         _, transactions = get_data()
-        fact_topics, idx_to_factword = build_fact_topics()
+        fact_topics = build_fact_topics()
 
-        if NEW_WEIGHT_MAP:
-            word_to_weights = build_weight_map(word_to_idx, fact_topics)
-        else:
-            with open('model_data/weights_w2v', 'rb') as f:
-                word_to_weights = pickle.load(f)
-        i = 0
         for user in users:
-            if i % 50 == 0: print(i)
-            user_data = {}
-            if not user.tweets: print(user.user_id); continue
-            i += 1
+            if not user.tweets: users.pop(users.index(user))
             for t in transactions:
                 if user.user_id == t.user_id:
                     user.fact = t.fact
                     transactions.pop(transactions.index(t))
                     break
+            if user.fact is None: print(user.user_id)
 
-            # If X doesnt need to be rebuild, comment out
-            for tweet in user.tweets:
-                parse_tweets_add_to_index(tweet, user.fact)
-
-            this_position = []
-            this_data = []
-            for tuple in user_data.items():
-                this_position.append(tuple[0])
-                this_data.append(tuple[1])
-
-            positions.append(this_position)
-            data.append(this_data)
-            user_order.append(user.user_id)
-            y.append(int(user.was_correct))
-            if int(user.was_correct) != -1: y_only_0_1.append(i)
-        with open('model_data/positions_w2v', 'wb') as tmpfile:
-            pickle.dump(positions, tmpfile)
-        with open('model_data/data_w2v', 'wb') as tmpfile:
-            pickle.dump(data, tmpfile)
-        with open('model_data/user_w2v', 'wb') as tmpfile:
-            pickle.dump(y, tmpfile)
-        with open('model_data/order_w2v', 'wb') as tmpfile:
-            pickle.dump(user_order, tmpfile)
-        with open('model_data/y_only_0_1_w2v', 'wb') as tmpfile:
-            pickle.dump(y_only_0_1, tmpfile)
-
+        classification_data = Parallel(n_jobs=num_jobs)(delayed(build_user_vector)(user, fact_topics, i) for i, user in enumerate(users))
+        classification_data = [x for x in classification_data if x != None]
+        classification_data = sorted(classification_data, key=lambda x: x['index'])
+        with open('model_data/classification_data_w2v', 'wb') as tmpfile:
+            pickle.dump(classification_data, tmpfile)
+        return classification_data
+    y = []
     positions = []
     data = []
     y = []
     user_order = []
-    y_only_0_1 = []
+    classification_data = []
+
     if not BUILD_NEW_SPARSE:
-        print("Using pre-computed sparse")
+        #with open('model_data/classification_data_w2v', 'rb') as f:
+            #classification_data = pickle.load(f)
         with open('model_data/positions_w2v', 'rb') as f:
             positions = pickle.load(f)
         with open('model_data/data_w2v', 'rb') as f:
@@ -316,21 +310,21 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
             y = pickle.load(f)
         with open('model_data/order_w2v', 'rb') as f:
             user_order = pickle.load(f)
-        y_all = np.asarray([int(u.was_correct) for u in [u for u in users if u.tweets] if u.user_id in user_order])
-        y_only_0_1 = [idx for idx, was_correct in enumerate(y_all) if was_correct != -1]
-        y = y_all
-        print(Counter(y))
-        print(Counter(y_all))
-        print(Counter(y_all[y_only_0_1]))
-        #print(Counter(y_only_0_1))
     else:
-        build_sparse_word2_vec(users)
-    print(len(data), len(word_to_idx), len(y), len(y_only_0_1))
+        classification_data = rebuild_sparse()
+
+    # for item in classification_data:
+    #     positions.append(item['positions'])
+    #     data.append(item['data'])
+    #     user_order.append(item['user_id'])
+    #     y.append(item['y'])
+
     # Only considering supports and denials [0,1], not comments etc. [-1]
-    positions = np.asarray(positions)[y_only_0_1]
-    data = np.asarray(data)[y_only_0_1]
-    y = np.asarray(y)[y_only_0_1]
-    user_order = np.asarray(user_order)[y_only_0_1]
+    mask = [el != -1 for el in y]
+    positions = np.asarray(positions)[mask]
+    data = np.asarray(data)[mask]
+    y = np.asarray(y)[mask]
+    user_order = np.asarray(user_order)[mask]
 
     X = lil_matrix((len(data), len(word_to_idx)))
     X.rows = positions
@@ -342,14 +336,6 @@ def build_sparse_matrix_word2vec(users, word_to_idx):
 
 def build_fact_topics():
     print("Build fact topics")
-
-    def build_feature_vector(terms):
-        vec = [0] * len(factword_to_idx)
-        for t in terms:
-            if t not in factword_to_idx: continue
-            vec[factword_to_idx[t]] += 1
-        return vec
-
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     remove_digits = str.maketrans('', '', digits)
@@ -361,19 +347,58 @@ def build_fact_topics():
                                                             for item in sublist])
     facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
     facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
-    facts_bow = {}
-    for terms in facts_df['fact_terms']:
-        for k in terms:
-            if k in facts_bow:
-                facts_bow[k] += 1
-            else:
-                facts_bow[k] = 1
-    bow_corpus_tmp = [w[0] for w in facts_bow.items() if w[1] > 2]
-    factword_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
-    idx_to_factword = {idx: k for k, idx in factword_to_idx.items()}
+    return facts_df
 
-    facts_df['feature_vector'] = facts_df['fact_terms'].map(lambda terms: build_feature_vector(terms))
-    return facts_df, idx_to_factword
+
+def train_test_split_on_facts(X, y, user_order, users, n):
+    # get all facts
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    # into pandas
+    facts_df = pd.read_json(fact_file)
+    # keep only hashes, split into test and train
+    facts_hsh = list(facts_df['hash'].as_matrix())
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 25, 0.8))
+    # map users to their fact
+    user_to_fact = {user.user_id: user.fact for user in users}
+    # go through user order (ordered list of user ids), find hash and put it in new list
+    user_order_fact = [user_to_fact[u_id] for u_id in user_order]
+
+    # build a mask
+    f_train_mask = []
+    fact_to_n = defaultdict(lambda: 0)
+    for user_fact in user_order_fact:
+        # always true if in train set
+        if user_fact in f_train: f_train_mask.append(True); continue
+        # true to add n samples of rumor to train set
+        elif fact_to_n[user_fact] < n:
+            f_train_mask.append(True)
+            fact_to_n[user_fact] += 1
+            continue
+        # otherwise false if in test set
+        else: f_train_mask.append(False)
+    f_train_mask = np.asarray(f_train_mask)
+
+    # f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
+    X_train = X[f_train_mask == True]
+    X_test = X[f_train_mask == False]
+    y_train = y[f_train_mask == True]
+    y_test = y[f_train_mask == False]
+    print("Shapes after splitting")
+
+    fact_train = np.asarray(user_order_fact)[f_train_mask == True]
+    fact_test = np.asarray(user_order_fact)[f_train_mask == False]
+    print(Counter(fact_test))
+    print(Counter([f for f in fact_train if f in fact_test]))
+    for user in users:
+        if user.user_id not in user_order: continue
+        i = np.where(user_order==user.user_id)[0][0]
+        assert str(user.fact) == str(user_order_fact[i])
+        assert int(user.user_id) == int(user_order[i])
+        assert int(user.was_correct) == int(y[i])
+
+    print("Training Set: {}, {}".format(X_train.shape, y_train.shape))
+    print("Testing Set: {}, {}".format(X_test.shape, y_test.shape))
+    return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
 def get_train_test_split_on_facts(X, y, user_order):
@@ -419,22 +444,29 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
 
 
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
+    print('&'*80)
+    print("Evaluation")
     def benchmark(clf):
+        scores = cross_val_score(clf, X, y, cv=5)
+
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
         #print(X_test_imp.shape, y_test.shape, pred.shape)
 
         score = metrics.accuracy_score(y_test, pred)
-        print("accuracy:   %0.3f" % score)
-
-        scores = cross_val_score(clf, X_test_imp, y_test, cv=5)
-        print("Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
-
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
+        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score, precision, recall, fscore))
 
-        print("Precision: {}, Recall: {}, F1 score: {}, Support: {}".format(precision, recall, fscore, sup))
+        clf.fit(X_train_imp2, y_train2)
+        pred2 = clf.predict(X_test_imp2)
+        score2 = metrics.accuracy_score(y_test2, pred2)
+        precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
+        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score2, precision2, recall2, fscore2))
 
-        fpr, tpr, thresholds = roc_curve(y_test, pred)
+        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+
+
+        fpr, tpr, thresholds = roc_curve(y_test2, pred2)
         roc_auc = auc(fpr, tpr)
         # plt.title('Receiver Operating Characteristic')
         #
@@ -447,16 +479,25 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         # plt.ylabel('True Positive Rate')
         # plt.xlabel('False Positive Rate')
         # plt.show()
+        match = [1 if t == p else 0 for t, p in zip(y_test2, pred2)]
 
-        return scores.mean()
+        return score, score2, scores.mean()
 
     if X_train is None:
+        print("No pre-split data given")
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
 
     imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
     imp = imp.fit(X_train)
     X_train_imp = imp.transform(X_train)
     X_test_imp = imp.transform(X_test)
+
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train2)
+    X_train_imp2 = imp.transform(X_train2)
+    X_test_imp2 = imp.transform(X_test2)
     results = []
 
     for clf, name in (
@@ -468,7 +509,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
             (BernoulliNB(alpha=.01), "Bernoulli NB")):
         print('=' * 80)
         print(name)
-        results.append([benchmark(clf), clf])
+        results.append([benchmark(clf)])
 
     # Train sparse SVM likes
     for penalty in ["l2", "l1"]:
@@ -478,8 +519,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
                 (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
             print('=' * 80)
             print(name)
-            results.append([benchmark(clf), clf])
-    return results[np.argmax(np.asarray(results)[:, 0])]
+            results.append([benchmark(clf)])
+    return results
 
 
 def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
@@ -527,56 +568,43 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
-def truth_prediction_for_users(word_to_idx, idx_to_word):
+def truth_prediction_for_users(users, chik, svdk, N):
+    print('%'*100)
     print('Credibility (Was user correct) Prediction using BOWs')
-    X_user, y_user, user_order = build_sparse_matrix_word2vec(get_users(), word_to_idx)
+    print(chik, svdk, N)
 
-    X_train, X_test, y_train, y_test = get_train_test_split_on_facts(X_user, y_user, user_order)
+    X, y, user_order = build_sparse_matrix_word2vec(users)
 
-    print("Fitting TF-IDF")
-    transformer = TfidfTransformer()
-    X_train = transformer.fit_transform(X_train, y_train)
-    X_test = transformer.transform(X_test)
+    print(X.shape, y.shape, user_order.shape)
 
-    print("Chi2 feature selection")
-    ch, pv = chi2(X_train, y_train)
-    # inspect how many words appear in word2vec
-    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pv)], reverse=True, key=lambda k: k[1])[:200])
 
-    ch2 = SelectKBest(chi2, k=10000)
-    X_train = ch2.fit_transform(X_train, y_train)
-    X_test = ch2.transform(X_test)
-
-    print("Dimensionality reduction")
-    svd = TruncatedSVD(20)
+    transformer = TfidfTransformer(smooth_idf=True)
+    ch2 = SelectKBest(chi2, k=chik)
+    svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
-    X_train = np.asarray(lsa.fit_transform(X_train, y_train))
-    X_test = np.asarray(lsa.transform(X_test))
-
-    X = np.concatenate((X_train, X_test))
-    y = np.concatenate((y_train, y_test))
-    print("Shapes before evaluation")
-    print(X.shape, y.shape, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-    print(Counter(y_train), Counter(y_test))
-    evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
-    print("Evaluation with only known facts")
-    transformer = TfidfTransformer()
-    X = transformer.fit_transform(X_user, y_user)
+    X = transformer.fit_transform(X)
+    X = ch2.fit_transform(X, y)
+    X = np.asarray(lsa.fit_transform(X, y))
 
-    ch2 = SelectKBest(chi2, k=10000)
-    X = ch2.fit_transform(X, y_user)
+    #X_train = transformer.fit_transform(X_train)
+    #X_test = transformer.transform(X_test)
 
-    svd = TruncatedSVD(20)
-    normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd, normalizer)
-    X = np.asarray(lsa.fit_transform(X, y_user))
-    print("Shapes before evaluation")
-    print(X.shape, y.shape, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-    print(Counter(y_train), Counter(y_test))
-    evaluation(X_user, y)
+    #X_train = ch2.fit_transform(X_train, y_train)
+    #X_test = ch2.transform(X_test)
+
+    #X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+    #X_test = np.asarray(lsa.transform(X_test))
+
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
+    print(Counter(y), Counter(y_train), Counter(y_test))
+    return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
+
+    #X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
+
+    #return evaluation(X, y, X_train=X_train2, X_test=X_test2, y_train=y_train2, y_test=y_test2)
 
 
 def lda_analysis(users):
@@ -647,6 +675,7 @@ def corpus_analysis(bow_corpus, word_to_idx, idx_to_word):
 
 def main():
     global bow_corpus
+    global word_to_idx
     wn.ensure_loaded()
     if NEW_CORPUS:
         bow_corpus = build_bow_corpus(get_users())
@@ -658,10 +687,22 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
+    users = get_users()
+
     # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
     # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
-    truth_prediction_for_users(word_to_idx, idx_to_word)
+    # exp = [(1000,5), (5000,5), (10000,5), (20000,5), (50000,5),
+    #        (1000,10), (5000,10), (10000,10), (20000,10), (50000,10),
+    #        (1000,20), (5000,20), (10000,20), (20000,20), (50000,20),
+    #        (1000,50), (5000,50), (10000,50), (20000,50), (50000,50),
+    #        (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
+    # for chik, svdk in exp:
+    results = []
+    N = 0
+    for N in range(15):
+        results.append(truth_prediction_for_users(users, 10000, 20, N))
+    print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
 
 
