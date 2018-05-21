@@ -6,13 +6,15 @@ import os
 import pickle
 import sys
 import warnings
+from collections import Counter, defaultdict
 from string import digits
-from collections import Counter
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from dateutil import parser
+from gensim.models import KeyedVectors
+from joblib import Parallel, delayed
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
@@ -29,6 +31,8 @@ from sklearn.linear_model import PassiveAggressiveClassifier
 from sklearn.linear_model import Perceptron
 from sklearn.linear_model import RidgeClassifier
 from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import BernoulliNB
@@ -37,27 +41,14 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
-from sklearn.metrics import roc_curve, auc
-from sklearn.metrics import f1_score
-from sklearn.metrics import precision_recall_fscore_support
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
-
-from gensim.models import KeyedVectors
-from collections import Counter, defaultdict
-from sklearn.metrics import roc_curve, auc
-from sklearn.metrics import f1_score
-from sklearn.metrics import precision_recall_fscore_support
-from joblib import Parallel, delayed
-import multiprocessing
-
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = False
-NEW_WEIGHT_MAP = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -227,13 +218,12 @@ def build_sparse_matrix(users, word_to_idx):
     return X, np.array(y), np.array(user_order)
 
 
-
 def build_user_vector(user, fact_topics, i):
-    if i%50 == 0: print(i)
+    if i % 50 == 0: print(i)
     user_data = {}
     if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
     user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix())
-    if len(user_fact_words)==0:
+    if len(user_fact_words) == 0:
         print("%%%%%%%%")
         print(user.user_id)
         print(user.fact)
@@ -262,11 +252,11 @@ def build_user_vector(user, fact_topics, i):
         this_data.append(tuple[1])
 
     package = {
-        'index' : i,
-        'positions' : this_position,
-        'data' : this_data,
-        'user_id' : user.user_id,
-        'y' : int(user.was_correct)
+        'index': i,
+        'positions': this_position,
+        'data': this_data,
+        'user_id': user.user_id,
+        'y': int(user.was_correct)
     }
     return package
 
@@ -286,12 +276,14 @@ def build_sparse_matrix_word2vec(users):
                     break
             if user.fact is None: print(user.user_id)
 
-        classification_data = Parallel(n_jobs=num_jobs)(delayed(build_user_vector)(user, fact_topics, i) for i, user in enumerate(users))
+        classification_data = Parallel(n_jobs=num_jobs)(
+            delayed(build_user_vector)(user, fact_topics, i) for i, user in enumerate(users))
         classification_data = [x for x in classification_data if x != None]
         classification_data = sorted(classification_data, key=lambda x: x['index'])
         with open('model_data/classification_data_w2v', 'wb') as tmpfile:
             pickle.dump(classification_data, tmpfile)
         return classification_data
+
     y = []
     positions = []
     data = []
@@ -300,24 +292,24 @@ def build_sparse_matrix_word2vec(users):
     classification_data = []
 
     if not BUILD_NEW_SPARSE:
-        #with open('model_data/classification_data_w2v', 'rb') as f:
-            #classification_data = pickle.load(f)
-        with open('model_data/positions_w2v', 'rb') as f:
-            positions = pickle.load(f)
-        with open('model_data/data_w2v', 'rb') as f:
-            data = pickle.load(f)
-        with open('model_data/user_w2v', 'rb') as f:
-            y = pickle.load(f)
-        with open('model_data/order_w2v', 'rb') as f:
-            user_order = pickle.load(f)
+        with open('model_data/classification_data_w2v', 'rb') as f:
+            classification_data = pickle.load(f)
+            # with open('model_data/positions_w2v', 'rb') as f:
+            #     positions = pickle.load(f)
+            # with open('model_data/data_w2v', 'rb') as f:
+            #     data = pickle.load(f)
+            # with open('model_data/user_w2v', 'rb') as f:
+            #     y = pickle.load(f)
+            # with open('model_data/order_w2v', 'rb') as f:
+            #     user_order = pickle.load(f)
     else:
         classification_data = rebuild_sparse()
 
-    # for item in classification_data:
-    #     positions.append(item['positions'])
-    #     data.append(item['data'])
-    #     user_order.append(item['user_id'])
-    #     y.append(item['y'])
+    for item in classification_data:
+        positions.append(item['positions'])
+        data.append(item['data'])
+        user_order.append(item['user_id'])
+        y.append(item['y'])
 
     # Only considering supports and denials [0,1], not comments etc. [-1]
     mask = [el != -1 for el in y]
@@ -368,14 +360,16 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     fact_to_n = defaultdict(lambda: 0)
     for user_fact in user_order_fact:
         # always true if in train set
-        if user_fact in f_train: f_train_mask.append(True); continue
+        if user_fact in f_train:
+            f_train_mask.append(True); continue
         # true to add n samples of rumor to train set
         elif fact_to_n[user_fact] < n:
             f_train_mask.append(True)
             fact_to_n[user_fact] += 1
             continue
         # otherwise false if in test set
-        else: f_train_mask.append(False)
+        else:
+            f_train_mask.append(False)
     f_train_mask = np.asarray(f_train_mask)
 
     # f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
@@ -391,7 +385,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     print(Counter([f for f in fact_train if f in fact_test]))
     for user in users:
         if user.user_id not in user_order: continue
-        i = np.where(user_order==user.user_id)[0][0]
+        i = np.where(user_order == user.user_id)[0][0]
         assert str(user.fact) == str(user_order_fact[i])
         assert int(user.user_id) == int(user_order[i])
         assert int(user.was_correct) == int(y[i])
@@ -444,27 +438,29 @@ def benchmark(clf, X_train, y_train, X_test, y_test):
 
 
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
-    print('&'*80)
+    print('&' * 80)
     print("Evaluation")
+
     def benchmark(clf):
         scores = cross_val_score(clf, X, y, cv=5)
 
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
-        #print(X_test_imp.shape, y_test.shape, pred.shape)
+        # print(X_test_imp.shape, y_test.shape, pred.shape)
 
         score = metrics.accuracy_score(y_test, pred)
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score, precision, recall, fscore))
+        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
 
         clf.fit(X_train_imp2, y_train2)
         pred2 = clf.predict(X_test_imp2)
         score2 = metrics.accuracy_score(y_test2, pred2)
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
-        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (score2, precision2, recall2, fscore2))
+        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score2, precision2, recall2, fscore2))
 
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
-
 
         fpr, tpr, thresholds = roc_curve(y_test2, pred2)
         roc_auc = auc(fpr, tpr)
@@ -569,7 +565,7 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
 
 
 def truth_prediction_for_users(users, chik, svdk, N):
-    print('%'*100)
+    print('%' * 100)
     print('Credibility (Was user correct) Prediction using BOWs')
     print(chik, svdk, N)
 
@@ -577,34 +573,28 @@ def truth_prediction_for_users(users, chik, svdk, N):
 
     print(X.shape, y.shape, user_order.shape)
 
-
     transformer = TfidfTransformer(smooth_idf=True)
     ch2 = SelectKBest(chi2, k=chik)
     svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
 
-
     X = transformer.fit_transform(X)
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
-    #X_train = transformer.fit_transform(X_train)
-    #X_test = transformer.transform(X_test)
+    # X_train = transformer.fit_transform(X_train)
+    # X_test = transformer.transform(X_test)
 
-    #X_train = ch2.fit_transform(X_train, y_train)
-    #X_test = ch2.transform(X_test)
+    # X_train = ch2.fit_transform(X_train, y_train)
+    # X_test = ch2.transform(X_test)
 
-    #X_train = np.asarray(lsa.fit_transform(X_train, y_train))
-    #X_test = np.asarray(lsa.transform(X_test))
+    # X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+    # X_test = np.asarray(lsa.transform(X_test))
 
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
     return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
-
-    #X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
-
-    #return evaluation(X, y, X_train=X_train2, X_test=X_test2, y_train=y_train2, y_test=y_test2)
 
 
 def lda_analysis(users):
