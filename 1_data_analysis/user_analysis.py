@@ -260,7 +260,6 @@ def build_user_vector(user, fact_topics, i):
         'positions' : this_position,
         'data' : this_data,
         'user_id' : user.user_id,
-        'was_correct_idx': i if int(user.was_correct) != -1 else None,
         'y' : int(user.was_correct)
     }
     return package
@@ -291,20 +290,27 @@ def build_sparse_matrix_word2vec(users):
     positions = []
     data = []
     user_order = []
-    y_only_0_1 = []
     classification_data = []
 
     if not BUILD_NEW_SPARSE:
-        with open('model_data/classification_data_w2v', 'rb') as f:
-            classification_data = pickle.load(f)
+        #with open('model_data/classification_data_w2v', 'rb') as f:
+            #classification_data = pickle.load(f)
+        with open('model_data/positions_w2v', 'rb') as f:
+            positions = pickle.load(f)
+        with open('model_data/data_w2v', 'rb') as f:
+            data = pickle.load(f)
+        with open('model_data/user_w2v', 'rb') as f:
+            y = pickle.load(f)
+        with open('model_data/order_w2v', 'rb') as f:
+            user_order = pickle.load(f)
     else:
         classification_data = rebuild_sparse()
-    for item in classification_data:
-        positions.append(item['positions'])
-        data.append(item['data'])
-        user_order.append(item['user_id'])
-        y.append(item['y'])
-        if item['was_correct_idx'] != None: y_only_0_1.append(item['was_correct_idx'])
+
+    # for item in classification_data:
+    #     positions.append(item['positions'])
+    #     data.append(item['data'])
+    #     user_order.append(item['user_id'])
+    #     y.append(item['y'])
 
     # Only considering supports and denials [0,1], not comments etc. [-1]
     mask = [el != -1 for el in y]
