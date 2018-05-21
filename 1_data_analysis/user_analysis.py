@@ -374,10 +374,6 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     y_test = y[f_train_mask == False]
     print("Shapes after splitting")
 
-    fact_train = np.asarray(user_order_fact)[f_train_mask == True]
-    fact_test = np.asarray(user_order_fact)[f_train_mask == False]
-    print(Counter(fact_test))
-    print(Counter([f for f in fact_train if f in fact_test]))
     for user in users:
         if user.user_id not in user_order: continue
         i = np.where(user_order == user.user_id)[0][0]
@@ -652,11 +648,11 @@ def main():
            (1000,100), (5000,100), (10000,100), (20000,100), (50000,100)]
     results = []
     N = 5
-    for chik, svdk in exp:
-        r= []
-        for N in range(15):
-            r.append(truth_prediction_for_users(users, chik, svdk, N))
-        results.append(np.average(np.asarray(r), axis=1))
+    #for chik, svdk in exp:
+    #    r= []
+    #    for N in range(15):
+    truth_prediction_for_users(users, 10000, 20, N)
+    #    results.append(np.average(np.asarray(r), axis=1))
     print(np.asarray(results))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
