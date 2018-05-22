@@ -222,14 +222,14 @@ def build_user_vector(user, fact_topics, i):
     if i % 50 == 0: print(i)
     user_data = {}
     if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
-    user_fact_words = np.array(fact_topics[fact_topics.hash == user.fact]['fact_terms'].as_matrix())
+    user_fact_words = fact_topics[user.fact]
     if len(user_fact_words) == 0:
         print("%%%%%%%%")
         print(user.user_id)
         print(user.fact)
         print(user_fact_words)
         return
-    user_fact_words = [w for w in user_fact_words[0] if w in word_vectors.vocab]
+    user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
     # If X doesnt need to be rebuild, comment out
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
@@ -247,11 +247,15 @@ def build_user_vector(user, fact_topics, i):
                 user_data[word_to_idx[token]] = increment
 
     # Extend topic description for text that is similar to topic
+    #print(fact_topics)
     for token in tokenize_text(user.fact_text):
+        if token not in word_vectors.vocab: continue
         user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
         # todo: test value
         if user_to_fact_dist < 0.5:
-            fact_topics.loc['fact_terms']['hash' == user.fact] = user_fact_words + token
+            # fact_topics.loc[fact_topics['hash'] == user.fact, ['fact_terms']] = user_fact_words + [token]
+            #fact_topics.loc[fact_topics.fact_terms]['hash' == user.fact] = user_fact_words + [token]
+            fact_topics[user.fact] += [token]
 
     this_position = []
     this_data = []
@@ -274,6 +278,8 @@ def build_sparse_matrix_word2vec(users):
         print("Building sparse vectors")
         _, transactions = get_data()
         fact_topics = build_fact_topics()
+        fact_to_words = {r['hash']: r['fact_terms'] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        print(fact_to_words)
         users = sorted(users, key=lambda x: x.fact_text_ts)
         for user in users:
             if not user.tweets: users.pop(users.index(user))
@@ -285,7 +291,7 @@ def build_sparse_matrix_word2vec(users):
             if user.fact is None: print(user.user_id)
 
         classification_data = Parallel(n_jobs=num_jobs)(
-            delayed(build_user_vector)(user, fact_topics, i) for i, user in enumerate(users))
+            delayed(build_user_vector)(user, fact_to_words, i) for i, user in enumerate(users))
         classification_data = [x for x in classification_data if x != None]
         classification_data = sorted(classification_data, key=lambda x: x['index'])
         with open('model_data/classification_data_w2v', 'wb') as tmpfile:
