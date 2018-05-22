@@ -10,7 +10,7 @@ from decoder import decoder
 import tweepy
 from collections import Counter
 
-ALT_ACCOUNT = True
+ALT_ACCOUNT = False
 
 # Generate your own at https://apps.twitter.com/app
 CONSUMER_KEY = '4Y897wHsZJ2Qud1EgncojnoNS'
@@ -23,7 +23,7 @@ if ALT_ACCOUNT:
     OAUTH_TOKEN = '978935525464858624-uBlhj4nIUr2eEJghiNkSzFO25hcHW2I'
     OAUTH_TOKEN_SECRET = 'eqgP2jzCzJVqcWxaqwTbFeHWKjDvMEKD6YR78UNhse6qp'
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../../5_DataCastillo/'
 
 
 def datetime_converter(o):
@@ -146,8 +146,8 @@ def main():
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
     api = tweepy.API(auth)
-    #users = get_user_tweets(api, transactions, user_files)
-    users = get_users()
+    users = get_user_tweets(api, transactions, user_files)
+    #users = get_users()
     users = [was_user_correct(user, facts, transactions) for user in users]
     print(Counter([u.was_correct for u in users]))
     for user in users:

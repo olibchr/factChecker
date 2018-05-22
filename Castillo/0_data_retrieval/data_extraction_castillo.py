@@ -75,7 +75,7 @@ def build_transactions(tweet_to_fact, fact_to_cred):
     api = tweepy.API(auth)
 
     for fact, cred in fact_to_cred.items():
-        tweets_for_fact = sorted([k for k,v in tweet_to_fact.items if v == fact])[:100]
+        tweets_for_fact = sorted([k for k,v in tweet_to_fact.items() if v == fact])[:100]
         tweets = api.statuses_lookup(tweets_for_fact)
 
         for status in tweets: # tweepy.Cursor(api.statuses_lookup, id=tweets_for_fact).items():
