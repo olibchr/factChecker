@@ -36,9 +36,10 @@ def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
+    users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        yield user
+        users.append(user)
 
 
 def tokenize_text(text):
@@ -96,7 +97,7 @@ def linguistic_f(users):
         user.features['neg_words'] = user_neg_words
         i += 1
         if i %100 == 0: print(i)
-        yield user
+    return users
     # bias
     assertives = ['think', 'believe', 'suppose', 'expect', 'imagine']
     factives = ['know', 'realize', 'regret', 'forget', 'find out']
@@ -126,7 +127,7 @@ def feature_user_tweet_sentiment(users):
         user.sent_tweets_avg = np.average(tweet_sents)
         i += 1
         if i %100 == 0: print(i)
-        yield user
+    return users
 
 
 def time_til_retweet(users):
@@ -148,7 +149,7 @@ def time_til_retweet(users):
             user.avg_time_to_retweet = average_timedelta
         i += 1
         if i %100 == 0: print(i)
-        yield user
+    return users
 
 
 def store_result(user):
