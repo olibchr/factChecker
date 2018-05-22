@@ -10,12 +10,10 @@ import numpy as np
 import csv
 import tweepy
 
-DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/4_RawData/Castillo/'
-OUT = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/5_DataCastillo/'
-# DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+DIR = os.path.dirname(__file__) + '../../../4_RawData/Castillo/'
+OUT = os.path.dirname(__file__) + '../../../5_DataCastillo/'
 
-
-ALT_ACCOUNT = True
+ALT_ACCOUNT = False
 
 # Generate your own at https://apps.twitter.com/app
 CONSUMER_KEY = '4Y897wHsZJ2Qud1EgncojnoNS'
@@ -97,7 +95,7 @@ fact_to_type = get_facts_type()
 tweet_to_fact = get_facts_tweet()
 tweet_to_fact = {k:v for k,v in tweet_to_fact.items() if v in fact_to_cred}
 print("Tweets on topics that are classified as Cred or not: {}".format(len(tweet_to_fact)))
-    
+
 FACTS = build_facts(fact_to_cred, fact_to_type, tweet_to_fact)
 
 TRANSACTIONS = build_transactions(tweet_to_fact, fact_to_cred)

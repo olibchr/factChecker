@@ -233,14 +233,12 @@ def build_user_vector(user, i):
         return
 
     # Extend topic description for text that is similar to topic
-    for token in tokenize_text(user.fact_text):
-        if token not in word_vectors.vocab: continue
-        user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
-        # todo: test value
-        if user_to_fact_dist < 0.5:
-            # fact_topics.loc[fact_topics['hash'] == user.fact, ['fact_terms']] = user_fact_words + [token]
-            #fact_topics.loc[fact_topics.fact_terms]['hash' == user.fact] = user_fact_words + [token]
-            fact_to_words[user.fact] += [token]
+    # for token in tokenize_text(user.fact_text):
+    #     if token not in word_vectors.vocab: continue
+    #     user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
+    #     # todo: test value
+    #     if user_to_fact_dist < 0.5:
+    #         fact_to_words[user.fact] += [token]
 
     user_fact_words = fact_to_words[user.fact]
     # If X doesnt need to be rebuild, comment out
