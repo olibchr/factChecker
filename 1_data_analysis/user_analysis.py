@@ -282,7 +282,6 @@ def build_sparse_matrix_word2vec(users):
         _, transactions = get_data()
         fact_topics = build_fact_topics()
         fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
-        print(fact_to_words)
         users = sorted(users, key=lambda x: x.fact_text_ts)
         for user in users:
             if not user.tweets: users.pop(users.index(user))
@@ -294,7 +293,7 @@ def build_sparse_matrix_word2vec(users):
             if user.fact is None: print(user.user_id)
 
         classification_data = Parallel(n_jobs=num_jobs)(
-            delayed(build_user_vector)(user, fact_to_words, i) for i, user in enumerate(users))
+            delayed(build_user_vector)(user, i) for i, user in enumerate(users))
         classification_data = [x for x in classification_data if x != None]
         classification_data = sorted(classification_data, key=lambda x: x['index'])
         with open('model_data/classification_data_w2v', 'wb') as tmpfile:
@@ -356,6 +355,16 @@ def build_fact_topics():
     facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
     facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
     return facts_df
+
+
+def build_alternative_features(users, user_order):
+    X = []
+    for user in users:
+        feature_vec = []
+        feature_vec.append(int(users.features['followers']))
+        feature_vec.append(int(users.features['friends']))
+        feature_vec.append(1 if users.features['verified'] == 'true' else 0)
+        feature_vec.append(int(users.features['statuses_count']))
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
