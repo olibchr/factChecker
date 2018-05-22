@@ -61,6 +61,7 @@ num_jobs = round(num_cores * 3 / 4)
 # global Vars
 word_to_idx = {}
 word_vectors = None
+fact_to_words = {}
 if BUILD_NEW_SPARSE:
     word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
 
@@ -218,18 +219,30 @@ def build_sparse_matrix(users, word_to_idx):
     return X, np.array(y), np.array(user_order)
 
 
-def build_user_vector(user, fact_topics, i):
+def build_user_vector(user, i):
+    global fact_to_words
     if i % 50 == 0: print(i)
     user_data = {}
     if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
-    user_fact_words = fact_topics[user.fact]
+    user_fact_words = fact_to_words[user.fact]
     if len(user_fact_words) == 0:
         print("%%%%%%%%")
         print(user.user_id)
         print(user.fact)
         print(user_fact_words)
         return
-    user_fact_words = [w for w in user_fact_words if w in word_vectors.vocab]
+
+    # Extend topic description for text that is similar to topic
+    for token in tokenize_text(user.fact_text):
+        if token not in word_vectors.vocab: continue
+        user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
+        # todo: test value
+        if user_to_fact_dist < 0.5:
+            # fact_topics.loc[fact_topics['hash'] == user.fact, ['fact_terms']] = user_fact_words + [token]
+            #fact_topics.loc[fact_topics.fact_terms]['hash' == user.fact] = user_fact_words + [token]
+            fact_to_words[user.fact] += [token]
+
+    user_fact_words = fact_to_words[user.fact]
     # If X doesnt need to be rebuild, comment out
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
@@ -245,17 +258,6 @@ def build_user_vector(user, fact_topics, i):
                 user_data[word_to_idx[token]] += increment
             else:
                 user_data[word_to_idx[token]] = increment
-
-    # Extend topic description for text that is similar to topic
-    #print(fact_topics)
-    for token in tokenize_text(user.fact_text):
-        if token not in word_vectors.vocab: continue
-        user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
-        # todo: test value
-        if user_to_fact_dist < 0.5:
-            # fact_topics.loc[fact_topics['hash'] == user.fact, ['fact_terms']] = user_fact_words + [token]
-            #fact_topics.loc[fact_topics.fact_terms]['hash' == user.fact] = user_fact_words + [token]
-            fact_topics[user.fact] += [token]
 
     this_position = []
     this_data = []
@@ -275,10 +277,11 @@ def build_user_vector(user, fact_topics, i):
 
 def build_sparse_matrix_word2vec(users):
     def rebuild_sparse(users):
+        global fact_to_words
         print("Building sparse vectors")
         _, transactions = get_data()
         fact_topics = build_fact_topics()
-        fact_to_words = {r['hash']: r['fact_terms'] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         print(fact_to_words)
         users = sorted(users, key=lambda x: x.fact_text_ts)
         for user in users:
