@@ -37,6 +37,7 @@ with open(neg_words_f, 'r', encoding = "ISO-8859-1") as f:
     neg_words = f.readlines()
 with open(pos_words_f, 'r', encoding = "ISO-8859-1") as f:
     pos_words = f.readlines()
+print(len(neg_words), neg_words[:10])
 sid = SentimentIntensityAnalyzer()
 
 
@@ -158,9 +159,10 @@ def main():
     #users = [was_user_correct(user) for user in users]
     print("Linguistic features..")
     users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
-    print("Calculating tweet sentiment for each user")
-    users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
-    users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
+    #print("Calculating tweet sentiment for each user")
+    #users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
+    #print("Avg time to retweet")
+    #users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
     [store_result(user) for user in users]
 
 

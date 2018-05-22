@@ -17,7 +17,7 @@ class User():
         # Avg time in minutes
         self.avg_time_to_retweet = avg_time_to_retweet
         # Sentiment of tweets
-        self.sent_tweet_avg = sent_tweets_avg
+        self.sent_tweets_avg = sent_tweets_avg
         # Annotated data
         self.stance = stance
         self.certainty = certainty

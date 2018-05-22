@@ -89,7 +89,7 @@ def build_transactions(tweet_to_fact, fact_to_cred):
 def store_result():
     with open(OUT + 'facts.json', 'w') as out_file:
         out_file.write(json.dumps([f.__dict__ for f in FACTS]))
-    with open(OUT + 'factTransactions.json', 'w') as out_file:
+    with open(OUT + 'factTransaction.json', 'w') as out_file:
         out_file.write(json.dumps([f.__dict__ for f in TRANSACTIONS]))
 
 fact_to_cred = get_facts_y()
