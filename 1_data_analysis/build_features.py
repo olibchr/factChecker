@@ -34,9 +34,9 @@ NLTK_STOPWORDS = set(stopwords.words('english'))
 neg_words_f = glob.glob(DIR + 'model_data/negative-words.txt')[0]
 pos_words_f = glob.glob(DIR + 'model_data/positive-words.txt')[0]
 with open(neg_words_f, 'r', encoding = "ISO-8859-1") as f:
-    neg_words = f.readlines()
+    neg_words = [w.strip().replace('\n','') for w in f.readlines()]
 with open(pos_words_f, 'r', encoding = "ISO-8859-1") as f:
-    pos_words = f.readlines()
+    pos_words = [w.strip().replace('\n','') for w in f.readlines()]
 print(len(neg_words), neg_words[:10])
 sid = SentimentIntensityAnalyzer()
 
@@ -126,19 +126,19 @@ def feature_user_tweet_sentiment(user):
 
 def time_til_retweet(user):
     print("Calculating avg time between original tweet and retweet per user")
+    user.avg_time_to_retweet = 0
     if not user.tweets or len(user.tweets) < 1: return user
     time_btw_rt = []
-    if user.avg_time_to_retweet is None:
-        for tweet in user.tweets:
-            if not 'quoted_status' in tweet: return user
-            if not 'created_at' in tweet['quoted_status']: return user
-            date_original = parser.parse(tweet['quoted_status']['created_at'])
-            date_retweet = parser.parse(tweet['created_at'])
-            time_btw_rt.append(date_original - date_retweet)
-        if len(time_btw_rt) == 0: return user
+    for tweet in user.tweets:
+        if not 'quoted_status' in tweet: return user
+        if not 'created_at' in tweet['quoted_status']: return user
+        date_original = parser.parse(tweet['quoted_status']['created_at'])
+        date_retweet = parser.parse(tweet['created_at'])
+        time_btw_rt.append(date_original - date_retweet)
+    if len(time_btw_rt) == 0: return user
 
-        average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
-        user.avg_time_to_retweet = average_timedelta
+    average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
+    user.avg_time_to_retweet = average_timedelta
     return user
 
 
@@ -161,8 +161,8 @@ def main():
     users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
     #print("Calculating tweet sentiment for each user")
     #users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
-    #print("Avg time to retweet")
-    #users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
+    print("Avg time to retweet")
+    users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
     [store_result(user) for user in users]
 
 
