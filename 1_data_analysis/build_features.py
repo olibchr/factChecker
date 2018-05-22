@@ -31,6 +31,14 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 
+neg_words_f = glob.glob(DIR + 'model_data/negative-words.txt')[0]
+pos_words_f = glob.glob(DIR + 'model_data/positive-words.txt')[0]
+with open(neg_words_f, 'r', encoding = "ISO-8859-1") as f:
+    neg_words = f.readlines()
+with open(pos_words_f, 'r', encoding = "ISO-8859-1") as f:
+    pos_words = f.readlines()
+sid = SentimentIntensityAnalyzer()
+
 
 def get_users():
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
@@ -40,6 +48,7 @@ def get_users():
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
         users.append(user)
+    return users
 
 
 def tokenize_text(text):
@@ -74,30 +83,20 @@ def was_user_correct(user, facts, transactions):
     return user
 
 
-def linguistic_f(users):
-    neg_words_f = glob.glob(DIR + 'model_data/negative-words.txt')[0]
-    pos_words_f = glob.glob(DIR + 'model_data/positive-words.txt')[0]
-    with open(neg_words_f, 'r', encoding = "ISO-8859-1") as f:
-        neg_words = f.readlines()
-    with open(pos_words_f, 'r', encoding = "ISO-8859-1") as f:
-        pos_words = f.readlines()
+def linguistic_f(user):
+    user_pos_words = 0
+    user_neg_words = 0
+    print(user.user_id)
+    for tweet in user.tweets:
+        for token in tokenize_text(tweet['text']):
+            if token in neg_words:
+                user_neg_words += 1
+            if token in pos_words:
+                user_pos_words += 1
+    user.features['pos_words'] = user_pos_words
+    user.features['neg_words'] = user_neg_words
+    return user
 
-    i = 0
-    for user in users:
-        user_pos_words = 0
-        user_neg_words = 0
-        print(user.user_id)
-        for tweet in user.tweets:
-            for token in tokenize_text(tweet['text']):
-                if token in neg_words:
-                    user_neg_words += 1
-                if token in pos_words:
-                    user_pos_words += 1
-        user.features['pos_words'] = user_pos_words
-        user.features['neg_words'] = user_neg_words
-        i += 1
-        if i %100 == 0: print(i)
-    return users
     # bias
     assertives = ['think', 'believe', 'suppose', 'expect', 'imagine']
     factives = ['know', 'realize', 'regret', 'forget', 'find out']
@@ -111,45 +110,34 @@ def linguistic_f(users):
     affective = ['disgust', 'anxious', 'revolt', 'guilt', 'confident']
 
 
-def feature_user_tweet_sentiment(users):
-    print("Calculating tweet sentiment for each user")
-    sid = SentimentIntensityAnalyzer()
-    bins = np.arange(-1, 1.1, 0.2)
-    i = 0
-    for user in users:
-        if not user.tweets: continue
-        tweet_sents = []
-        for tweet in user.tweets:
-            ss = sid.polarity_scores(tweet['text'])
-            tweet_sents.append(ss['compound'])
-        #density, _ = np.histogram(tweet_sents, bins=bins, density=True)
-        #user.sent_tweets_density = density / density.sum()
-        user.sent_tweets_avg = np.average(tweet_sents)
-        i += 1
-        if i %100 == 0: print(i)
-    return users
+def feature_user_tweet_sentiment(user):
+    if not user.tweets: return user
+    tweet_sents = []
+    for tweet in user.tweets:
+        ss = sid.polarity_scores(tweet['text'])
+        tweet_sents.append(ss['compound'])
+    #density, _ = np.histogram(tweet_sents, bins=bins, density=True)
+    #user.sent_tweets_density = density / density.sum()
+    user.sent_tweets_avg = np.average(tweet_sents)
+    return user
 
 
-def time_til_retweet(users):
+def time_til_retweet(user):
     print("Calculating avg time between original tweet and retweet per user")
-    i = 0
-    for user in users:
-        if not user.tweets or len(user.tweets) < 1: continue
-        time_btw_rt = []
-        if user.avg_time_to_retweet is None:
-            for tweet in user.tweets:
-                if not 'quoted_status' in tweet: continue
-                if not 'created_at' in tweet['quoted_status']: continue
-                date_original = parser.parse(tweet['quoted_status']['created_at'])
-                date_retweet = parser.parse(tweet['created_at'])
-                time_btw_rt.append(date_original - date_retweet)
-            if len(time_btw_rt) == 0: continue
+    if not user.tweets or len(user.tweets) < 1: return user
+    time_btw_rt = []
+    if user.avg_time_to_retweet is None:
+        for tweet in user.tweets:
+            if not 'quoted_status' in tweet: return user
+            if not 'created_at' in tweet['quoted_status']: return user
+            date_original = parser.parse(tweet['quoted_status']['created_at'])
+            date_retweet = parser.parse(tweet['created_at'])
+            time_btw_rt.append(date_original - date_retweet)
+        if len(time_btw_rt) == 0: return user
 
-            average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
-            user.avg_time_to_retweet = average_timedelta
-        i += 1
-        if i %100 == 0: print(i)
-    return users
+        average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
+        user.avg_time_to_retweet = average_timedelta
+    return user
 
 
 def store_result(user):
@@ -167,7 +155,9 @@ def main():
     users = get_users()
 
     #users = [was_user_correct(user) for user in users]
+    print("Linguistic features..")
     users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
+    print("Calculating tweet sentiment for each user")
     users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
     users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
     [store_result(user) for user in users]
