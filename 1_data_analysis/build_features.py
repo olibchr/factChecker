@@ -82,9 +82,9 @@ def linguistic_f(users):
         pos_words = f.readlines()
 
     i = 0
-    user_pos_words = 0
-    user_neg_words = 0
     for user in users:
+        user_pos_words = 0
+        user_neg_words = 0
         print(user.user_id)
         for tweet in user.tweets:
             for token in tokenize_text(tweet['text']):
