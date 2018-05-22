@@ -76,7 +76,9 @@ def build_transactions(tweet_to_fact, fact_to_cred):
 
     for fact, cred in fact_to_cred.items():
         tweets_for_fact = sorted([k for k,v in tweet_to_fact.items if v == fact])[:100]
-        for idx, status in enumerate(tweepy.Cursor(api.statuses_lookup, id=tweets_for_fact).items()):
+        tweets = api.statuses_lookup(tweets_for_fact)
+
+        for status in tweets: # tweepy.Cursor(api.statuses_lookup, id=tweets_for_fact).items():
             tr = Transaction(tweets_for_fact[0], status._json['id_str'], status._json['user']['id_str'], fact, status._json['created_at'], -1, -1, status._json['text'])
             transactions.append(tr)
 
@@ -99,4 +101,5 @@ print("Tweets on topics that are classified as Cred or not: {}".format(len(tweet
 FACTS = build_facts(fact_to_cred, fact_to_type, tweet_to_fact)
 
 TRANSACTIONS = build_transactions(tweet_to_fact, fact_to_cred)
-#store_result()
+
+store_result()
