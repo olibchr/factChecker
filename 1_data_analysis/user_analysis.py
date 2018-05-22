@@ -359,17 +359,15 @@ def build_alternative_features(users, user_order):
     X = []
     for u_id in user_order:
         user = [u for u in users if u.user_id == u_id][0]
-        feature_vec = []
-        feature_vec.append(int(user.features['followers']))
-        feature_vec.append(int(user.features['friends']))
-        feature_vec.append(1 if user.features['verified'] == 'true' else 0)
-        feature_vec.append(int(user.features['statuses_count']))
-        feature_vec.append(int(user.features['pos_words']))
-        feature_vec.append(int(user.features['neg_words']))
-        feature_vec.append(int(user.sent_tweets_avg))
-        feature_vec.append(int(user.avg_time_to_retweet))
-
-        X.append(feature_vec)
+        followers = int(user.features['followers']) if 'followers' in user.features else -1
+        friends = int(user.features['friends']) if 'friends' in user.features else -1
+        verified = 1 if user.features['verified'] == 'true' else 0 if 'followers' in user.features else -1
+        status_cnt = int(user.features['statuses_count']) if 'statuses_count' in user.features else -1
+        pos_words = int(user.features['pos_words']) if 'pos_words' in user.features else -1
+        neg_words = int(user.features['neg_words']) if 'neg_words' in user.features else -1
+        sent_avg = int(user.sent_tweets_avg)
+        time_retweet = int(user.avg_time_to_retweet)
+        X.append([followers, friends, verified, status_cnt, pos_words, neg_words, sent_avg, time_retweet])
     return X
 
 
