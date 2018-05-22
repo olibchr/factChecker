@@ -86,13 +86,14 @@ def was_user_correct(user, facts, transactions):
 def linguistic_f(user):
     user_pos_words = 0
     user_neg_words = 0
-    print(user.user_id)
+    if not user.tweets: return user
     for tweet in user.tweets:
         for token in tokenize_text(tweet['text']):
             if token in neg_words:
                 user_neg_words += 1
             if token in pos_words:
                 user_pos_words += 1
+    if user.features is None: user.features = {}; print(user.user_id)
     user.features['pos_words'] = user_pos_words
     user.features['neg_words'] = user_neg_words
     return user

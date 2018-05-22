@@ -359,12 +359,20 @@ def build_fact_topics():
 
 def build_alternative_features(users, user_order):
     X = []
-    for user in users:
+    for u_id in user_order:
+        user = [u for u in users if u.user_id == u_id][0]
         feature_vec = []
-        feature_vec.append(int(users.features['followers']))
-        feature_vec.append(int(users.features['friends']))
-        feature_vec.append(1 if users.features['verified'] == 'true' else 0)
-        feature_vec.append(int(users.features['statuses_count']))
+        feature_vec.append(int(user.features['followers']))
+        feature_vec.append(int(user.features['friends']))
+        feature_vec.append(1 if user.features['verified'] == 'true' else 0)
+        feature_vec.append(int(user.features['statuses_count']))
+        feature_vec.append(int(user.features['pos_words']))
+        feature_vec.append(int(user.features['neg_words']))
+        feature_vec.append(int(user.sent_tweets_avg))
+        feature_vec.append(int(user.avg_time_to_retweet))
+
+        X.append(feature_vec)
+    return X
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
@@ -569,6 +577,14 @@ def truth_prediction_for_users(users, chik, svdk, N):
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
+    X_alt = build_alternative_features(users, user_order)
+    ch2, pval = chi2(X_alt, y)
+    print(pval)
+
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
+    print(Counter(y), Counter(y_train), Counter(y_test))
+    return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
+
     # X_train = transformer.fit_transform(X_train)
     # X_test = transformer.transform(X_test)
 
@@ -577,10 +593,6 @@ def truth_prediction_for_users(users, chik, svdk, N):
 
     # X_train = np.asarray(lsa.fit_transform(X_train, y_train))
     # X_test = np.asarray(lsa.transform(X_test))
-
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
-    print(Counter(y), Counter(y_train), Counter(y_test))
-    return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
 
 
 def lda_analysis(users):

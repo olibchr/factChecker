@@ -8,10 +8,25 @@ from collections import Counter
 import datetime, hashlib
 import numpy as np
 import csv
+import tweepy
 
 DIR = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/4_RawData/Castillo/'
 OUT = '/Users/oliverbecher/Google_Drive/0_University_Amsterdam/0_Thesis/5_DataCastillo/'
 # DIR = '/var/scratch/obr280/0_Thesis/3_Data/'
+
+
+ALT_ACCOUNT = True
+
+# Generate your own at https://apps.twitter.com/app
+CONSUMER_KEY = '4Y897wHsZJ2Qud1EgncojnoNS'
+CONSUMER_SECRET = 'sMpckIKpf00c1slGciCe4FvWlUTkFUGKkMAu88x2SBdJRW3laR'
+OAUTH_TOKEN = '1207416314-pX3roPjOm0xNuGJxxRFfE6H0CyHRCgnzXvNfFII'
+OAUTH_TOKEN_SECRET = 'NVS29lZafbCF4kvc1yCEKg0f00AYE3Ogj7XkygHsBI5LD'
+if ALT_ACCOUNT:
+    CONSUMER_KEY = '0pUhFi92XQbPTB70eEnhJ0fTH'
+    CONSUMER_SECRET = 'DLjLTOoonzO5ADVfIppnLmMpCL1qM9fOHkhoXfXYIQXe3hvC9W'
+    OAUTH_TOKEN = '978935525464858624-uBlhj4nIUr2eEJghiNkSzFO25hcHW2I'
+    OAUTH_TOKEN_SECRET = 'eqgP2jzCzJVqcWxaqwTbFeHWKjDvMEKD6YR78UNhse6qp'
 
 # Objectives:
 # Build Users + Facts
@@ -57,20 +72,33 @@ def build_facts(fact_to_cred, fact_to_type, fact_to_user):
 
 def build_transactions(tweet_to_fact, fact_to_cred):
     transactions = []
+    auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
+    auth.set_access_token(OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
+    api = tweepy.API(auth)
+
     for fact, cred in fact_to_cred.items():
-        tweets_for_fact = {k:v for k,v in tweet_to_fact.items if v == fact}
+        tweets_for_fact = sorted([k for k,v in tweet_to_fact.items if v == fact])[:100]
+        for idx, status in enumerate(tweepy.Cursor(api.statuses_lookup, id=tweets_for_fact).items()):
+            tr = Transaction(tweets_for_fact[0], status._json['id_str'], status._json['user']['id_str'], fact, status._json['created_at'], -1, -1, status._json['text'])
+            transactions.append(tr)
+
+    return transactions
 
 
 
 def store_result():
     with open(OUT + 'facts.json', 'w') as out_file:
         out_file.write(json.dumps([f.__dict__ for f in FACTS]))
-
+    with open(OUT + 'factTransactions.json', 'w') as out_file:
+        out_file.write(json.dumps([f.__dict__ for f in TRANSACTIONS]))
 
 fact_to_cred = get_facts_y()
 fact_to_type = get_facts_type()
 tweet_to_fact = get_facts_tweet()
 tweet_to_fact = {k:v for k,v in tweet_to_fact.items() if v in fact_to_cred}
 print("Tweets on topics that are classified as Cred or not: {}".format(len(tweet_to_fact)))
+    
 FACTS = build_facts(fact_to_cred, fact_to_type, tweet_to_fact)
-store_result()
+
+TRANSACTIONS = build_transactions(tweet_to_fact, fact_to_cred)
+#store_result()
