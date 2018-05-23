@@ -21,12 +21,20 @@ from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
+from keras.datasets import imdb
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import LSTM
+from keras.layers.embeddings import Embedding
+from keras.preprocessing import sequence
+
 from scipy.sparse import lil_matrix
 from sklearn import metrics
 from sklearn.cluster import KMeans
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.decomposition import TruncatedSVD
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.linear_model import PassiveAggressiveClassifier
@@ -44,8 +52,6 @@ from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
 
-import tensorflow as tf
-from tensorflow.contrib import rnn
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
 
@@ -67,9 +73,6 @@ word_to_idx = {}
 fact_to_words = {}
 #if BUILD_NEW_SPARSE:
 word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-
-logs_path = '/tmp/tensorflow/rnn_words'
-writer = tf.summary.FileWriter(logs_path)
 
 
 def datetime_converter(o):
@@ -144,17 +147,17 @@ def get_series_from_user(user):
         for token in tokens:
             if token not in word_to_idx: continue
             if token not in word_vectors.vocab: continue
-            increment = 1 - np.average(word_vectors.distances(token, other_words=user_fact_words))
+            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
             if increment > 1: increment = 1
             if increment < 0: increment = 0
             distance_to_topic.append(increment)
-        distance_to_topic = sum(distance_to_topic)*1.0/len(distance_to_topic)
+        distance_to_topic = np.average(distance_to_topic)
         all_distances.append(distance_to_topic)
-        if distance_to_topic > 0.5:
+        if distance_to_topic < 0.5:
             relevant_tweets.append(tweet)
             tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
             relevant_tweet_vecs.append(tweet_vec)
-    print(sum(all_distances)*1.0/len(all_distances))
+    print(np.average(all_distances))
     user.features['relevant_tweets'] = relevant_tweets
     user.features['relevant_tweet_vecs'] = relevant_tweet_vecs
     return user
@@ -188,6 +191,17 @@ def format_training_data(users):
     return X,y,user_order
 
 
+def keep_n_best_words(X, n = 5000):
+    vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
+    X = vectorizer.fit_transform(X)
+    ch2 = SelectKBest(chi2, k=n)
+    ch2.fit(X)
+    mask = ch2.get_support(indices=True)
+    X = [x for x in X for w in x if w in mask]
+    return X
+
+
+
 def main():
     global bow_corpus
     global word_to_idx
@@ -202,9 +216,28 @@ def main():
     users = get_users()
     users_relevant_tweets = build_dataset(users)
     X,y,user_order = format_training_data(users_relevant_tweets)
+    top_words = 50000
+    X = keep_n_best_words(X,top_words)
 
+    X_train, X_test, y_train, y_test = train_test_split(X,y)
 
+    max_tweet_length = 500
+    X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
+    X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
+    # create the model
+    embedding_vecor_length = 32
+    model = Sequential()
+    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
+    model.add(LSTM(100))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    print(model.summary())
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=3, batch_size=64)
+
+    # Final evaluation of the model
+    scores = model.evaluate(X_test, y_test, verbose=0)
+    print("Accuracy: %.2f%%" % (scores[1]*100))
 
 
 if __name__ == "__main__":

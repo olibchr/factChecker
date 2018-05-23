@@ -631,7 +631,8 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     print(X.shape, X_alt.shape, X_alt2.shape)
 
-    X = np.concatenate((X, X_alt, X_alt2))
+    X = np.concatenate((X, X_alt2), axis=1)
+    X = np.concatenate((X, X_alt), axis=1)
 
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
