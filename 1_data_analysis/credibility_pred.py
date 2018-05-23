@@ -53,9 +53,7 @@ from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
-sys.path.insert(0, os.path.dirname(__file__) + '/model_data/word2vec_twitter_model')
 from decoder import decoder
-from word2vecReader import Word2Vec
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -74,7 +72,7 @@ num_jobs = round(num_cores * 3 / 4)
 word_to_idx = {}
 fact_to_words = {}
 #if BUILD_NEW_SPARSE:
-word_vectors = Word2Vec.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=False)
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def datetime_converter(o):
@@ -154,13 +152,12 @@ def get_series_from_user(user):
             distance_to_topic.append(increment)
         distance_to_topic = np.asarray(distance_to_topic)
         distance_to_topic = np.average(distance_to_topic)
-        all_distances.append(distance_to_topic)
+        all_distances.append(float(distance_to_topic))
         if distance_to_topic < 0.8:
             relevant_tweets.append(tweet)
             tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
             relevant_tweet_vecs.append(tweet_vec)
-    print(np.average(all_distances))
-    print(len(relevant_tweets))
+    # print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
     user.features['relevant_tweet_vecs'] = relevant_tweet_vecs
     return user

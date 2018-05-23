@@ -64,7 +64,8 @@ word_vectors = None
 fact_to_words = {}
 bow_corpus_cnt = {}
 #if BUILD_NEW_SPARSE:
-word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+#word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def datetime_converter(o):
@@ -628,8 +629,8 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     print(X.shape, X_alt.shape, X_alt2.shape)
 
-    X = np.concatenate((X, X_alt2), axis=1)
-    X = np.concatenate((X, X_alt), axis=1)
+    # X = np.concatenate((X, X_alt2), axis=1)
+    # X = np.concatenate((X, X_alt), axis=1)
 
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
@@ -740,7 +741,7 @@ def main():
     # for chik, svdk in exp:
     #    r= []
     # for N in range(15):
-    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 10, N))
+    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
     #    results.append(np.average(np.asarray(r), axis=1))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
