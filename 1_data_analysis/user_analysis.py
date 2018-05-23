@@ -368,6 +368,13 @@ def build_alternative_features(users, user_order):
         sent_avg = int(user.sent_tweets_avg)
         time_retweet = int(user.avg_time_to_retweet)
         X.append([followers, friends, verified, status_cnt, pos_words, neg_words, sent_avg, time_retweet])
+    print(Counter(X[:,0]))
+    print(Counter(X[:,1]))
+    print(Counter(X[:,2]))
+    print(Counter(X[:,3]))
+    print(Counter(X[:,4]))
+    print(Counter(X[:,5]))
+    print(Counter(X[:,6]))
     return X
 
 
