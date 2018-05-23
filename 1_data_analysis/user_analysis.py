@@ -340,7 +340,7 @@ def build_sparse_matrix_word2vec(users, retweets_only=False):
     user_order = []
     classification_data = []
 
-    if not BUILD_NEW_SPARSE:
+    if not BUILD_NEW_SPARSE and not retweets_only:
         with open('model_data/classification_data_w2v', 'rb') as f:
             classification_data = pickle.load(f)
             # with open('model_data/positions_w2v', 'rb') as f:
@@ -404,13 +404,6 @@ def build_alternative_features(users, user_order):
         sent_avg = int(user.sent_tweets_avg)
         time_retweet = int(user.avg_time_to_retweet)
         X.append([followers, friends, verified, status_cnt, pos_words, neg_words, sent_avg, time_retweet])
-    # print(Counter(list(X[:,0])))
-    # print(Counter(list(X[:,1])))
-    # print(Counter(list(X[:,2])))
-    # print(Counter(list(X[:,3])))
-    # print(Counter(list(X[:,4])))
-    # print(Counter(list(X[:,5])))
-    # print(Counter(list(X[:,6])))
     print(X[:5])
     return X
 
@@ -614,6 +607,8 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     lsa = make_pipeline(svd, normalizer)
 
     X = transformer.fit_transform(X)
+    ch2, pval = chi2(X, y)
+    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
@@ -621,10 +616,11 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     X_alt = transformer.fit_transform(X_alt)
     ch2, pval = chi2(X_alt, y)
     print(pval)
-    X_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
+
+    X_alt, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
     X_alt = transformer.fit_transform(X_alt)
     ch2, pval = chi2(X_alt, y)
-    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], reverse=True, key=lambda k: k[1])[:200])
+    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
 
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
