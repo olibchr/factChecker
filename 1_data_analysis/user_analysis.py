@@ -600,7 +600,7 @@ def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
         print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
-def truth_prediction_for_users(users, chik, svdk, N):
+def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     print('%' * 100)
     print('Credibility (Was user correct) Prediction using BOWs')
     print(chik, svdk, N)
@@ -618,13 +618,13 @@ def truth_prediction_for_users(users, chik, svdk, N):
     X = np.asarray(lsa.fit_transform(X, y))
 
     X_alt = build_alternative_features(users, user_order)
-    X_alt = transformer.fit_transform(X)
+    X_alt = transformer.fit_transform(X_alt)
     ch2, pval = chi2(X_alt, y)
     print(pval)
     X_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
-    X_alt = transformer.fit_transform(X)
+    X_alt = transformer.fit_transform(X_alt)
     ch2, pval = chi2(X_alt, y)
-    print(pval)
+    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], reverse=True, key=lambda k: k[1])[:200])
 
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
@@ -735,7 +735,7 @@ def main():
     # for chik, svdk in exp:
     #    r= []
     # for N in range(15):
-    results.append(truth_prediction_for_users(users, 10000, 20, N))
+    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
     #    results.append(np.average(np.asarray(r), axis=1))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
