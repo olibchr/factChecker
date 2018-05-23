@@ -4,7 +4,7 @@ import json
 import multiprocessing
 import os
 import pickle
-import sys
+import sys, re
 import warnings
 from collections import Counter, defaultdict
 from string import digits
@@ -62,6 +62,7 @@ num_jobs = round(num_cores * 3 / 4)
 word_to_idx = {}
 word_vectors = None
 fact_to_words = {}
+bow_corpus_cnt = {}
 #if BUILD_NEW_SPARSE:
 word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
 
@@ -614,10 +615,9 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     X_alt = build_alternative_features(users, user_order)
     X_alt = transformer.fit_transform(X_alt)
-    ch2 = SelectKBest(chi2, k=2)
-    X_alt = np.asarray(ch2.fit_transform(X_alt, y))
-    ch2r, pval = chi2(X_alt, y)
-    print(pval)
+    X_alt = X_alt[:,[1,5,7]]
+    #ch2r, pval = chi2(X_alt, y)
+    #print(pval)
 
     X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
     ch2 = SelectKBest(chi2, k=50)
