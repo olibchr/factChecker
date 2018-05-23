@@ -608,14 +608,14 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     X = transformer.fit_transform(X)
     ch2r, pval = chi2(X, y)
-    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
+    # print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
     X_alt = build_alternative_features(users, user_order)
     X_alt = transformer.fit_transform(X_alt)
     ch2 = SelectKBest(chi2, k=2)
-    X_alt = ch2.fit_transform(X_alt, y)
+    X_alt = np.asarray(ch2.fit_transform(X_alt, y))
     ch2r, pval = chi2(X_alt, y)
     print(pval)
 
@@ -627,10 +627,9 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     X_alt2 = transformer.fit_transform(X_alt2)
     X_alt2 = ch2.fit_transform(X_alt2, y_alt)
     X_alt2 = np.asarray(lsa.fit_transform(X_alt2, y_alt))
-    X_alt2 = [X_alt2[user_order_alt.index(uid_alt)] for uid_alt in user_order_alt for uid in user_order if uid == uid_alt]
+    X_alt2 = np.asarray([X_alt2[np.where(user_order_alt == uid_alt)][0] for uid_alt in user_order_alt for uid in user_order if uid == uid_alt])
 
-    ch2r, pval = chi2(X_alt2, y_alt)
-    print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
+    print(X.shape, X_alt.shape, X_alt2.shape)
 
     X = np.concatenate((X, X_alt, X_alt2))
 
