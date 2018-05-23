@@ -130,8 +130,8 @@ def time_til_retweet(user):
     if not user.tweets or len(user.tweets) < 1: return user
     time_btw_rt = []
     for tweet in user.tweets:
-        if not 'quoted_status' in tweet: return user
-        if not 'created_at' in tweet['quoted_status']: return user
+        if not 'quoted_status' in tweet: continue
+        if not 'created_at' in tweet['quoted_status']: continue
         date_original = parser.parse(tweet['quoted_status']['created_at'])
         date_retweet = parser.parse(tweet['created_at'])
         time_btw_rt.append(date_original - date_retweet)
@@ -157,12 +157,14 @@ def main():
     users = get_users()
 
     #users = [was_user_correct(user) for user in users]
-    print("Linguistic features..")
-    users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
+    #print("Linguistic features..")
+    #users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
     #print("Calculating tweet sentiment for each user")
-    #users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
+    users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
     print("Avg time to retweet")
     users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
+    print([u.sent_tweets_avg for u in users[:10]])
+    print([u.avg_time_to_retweet for u in users[:10]])
     [store_result(user) for user in users]
 
 

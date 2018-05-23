@@ -273,7 +273,39 @@ def build_user_vector(user, i):
     return package
 
 
-def build_sparse_matrix_word2vec(users):
+def build_user_vector_retweets_topic_independent(user, i):
+    global fact_to_words
+    if i % 50 == 0: print(i)
+    user_data = {}
+    if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
+
+    # If X doesnt need to be rebuild, comment out
+    for tweet in user.tweets:
+        tokens = tokenize_text(tweet['text'], only_retweets=True)
+        for token in tokens:
+            if token not in word_to_idx: continue
+            if token in user_data:
+                user_data[word_to_idx[token]] += 1
+            else:
+                user_data[word_to_idx[token]] = 1
+
+    this_position = []
+    this_data = []
+    for tuple in user_data.items():
+        this_position.append(tuple[0])
+        this_data.append(tuple[1])
+
+    package = {
+        'index': i,
+        'positions': this_position,
+        'data': this_data,
+        'user_id': user.user_id,
+        'y': int(user.was_correct)
+    }
+    return package
+
+
+def build_sparse_matrix_word2vec(users, retweets_only=False):
     def rebuild_sparse(users):
         global fact_to_words
         print("Building sparse vectors")
@@ -289,6 +321,10 @@ def build_sparse_matrix_word2vec(users):
                     transactions.pop(transactions.index(t))
                     break
             if user.fact is None: print(user.user_id)
+        if retweets_only:
+            classification_data = Parallel(n_jobs=num_jobs)(
+            delayed(build_user_vector_retweets_topic_independent)(user, i) for i, user in enumerate(users))
+            return sorted([x for x in classification_data if x != None], key=lambda x: x['index'])
 
         classification_data = Parallel(n_jobs=num_jobs)(
             delayed(build_user_vector)(user, i) for i, user in enumerate(users))
@@ -368,13 +404,14 @@ def build_alternative_features(users, user_order):
         sent_avg = int(user.sent_tweets_avg)
         time_retweet = int(user.avg_time_to_retweet)
         X.append([followers, friends, verified, status_cnt, pos_words, neg_words, sent_avg, time_retweet])
-    print(Counter(X[:,0]))
-    print(Counter(X[:,1]))
-    print(Counter(X[:,2]))
-    print(Counter(X[:,3]))
-    print(Counter(X[:,4]))
-    print(Counter(X[:,5]))
-    print(Counter(X[:,6]))
+    # print(Counter(list(X[:,0])))
+    # print(Counter(list(X[:,1])))
+    # print(Counter(list(X[:,2])))
+    # print(Counter(list(X[:,3])))
+    # print(Counter(list(X[:,4])))
+    # print(Counter(list(X[:,5])))
+    # print(Counter(list(X[:,6])))
+    print(X[:5])
     return X
 
 
@@ -581,6 +618,11 @@ def truth_prediction_for_users(users, chik, svdk, N):
     X = np.asarray(lsa.fit_transform(X, y))
 
     X_alt = build_alternative_features(users, user_order)
+    X_alt = transformer.fit_transform(X)
+    ch2, pval = chi2(X_alt, y)
+    print(pval)
+    X_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
+    X_alt = transformer.fit_transform(X)
     ch2, pval = chi2(X_alt, y)
     print(pval)
 
