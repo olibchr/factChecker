@@ -62,8 +62,8 @@ num_jobs = round(num_cores * 3 / 4)
 word_to_idx = {}
 word_vectors = None
 fact_to_words = {}
-if BUILD_NEW_SPARSE:
-    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+#if BUILD_NEW_SPARSE:
+word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
 
 
 def datetime_converter(o):
@@ -607,20 +607,32 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     lsa = make_pipeline(svd, normalizer)
 
     X = transformer.fit_transform(X)
-    ch2, pval = chi2(X, y)
+    ch2r, pval = chi2(X, y)
     print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
     X_alt = build_alternative_features(users, user_order)
     X_alt = transformer.fit_transform(X_alt)
-    ch2, pval = chi2(X_alt, y)
+    ch2 = SelectKBest(chi2, k=2)
+    X_alt = ch2.fit_transform(X_alt, y)
+    ch2r, pval = chi2(X_alt, y)
     print(pval)
 
-    X_alt, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
-    X_alt = transformer.fit_transform(X_alt)
-    ch2, pval = chi2(X_alt, y)
+    X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
+    ch2 = SelectKBest(chi2, k=50)
+    svd = TruncatedSVD(5)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd, normalizer)
+    X_alt2 = transformer.fit_transform(X_alt2)
+    X_alt2 = ch2.fit_transform(X_alt2, y_alt)
+    X_alt2 = np.asarray(lsa.fit_transform(X_alt2, y_alt))
+    X_alt2 = [X_alt2[user_order_alt.index(uid_alt)] for uid_alt in user_order_alt for uid in user_order if uid == uid_alt]
+
+    ch2r, pval = chi2(X_alt2, y_alt)
     print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
+
+    X = np.concatenate((X, X_alt, X_alt2))
 
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     print(Counter(y), Counter(y_train), Counter(y_test))
@@ -731,7 +743,7 @@ def main():
     # for chik, svdk in exp:
     #    r= []
     # for N in range(15):
-    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
+    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 10, N))
     #    results.append(np.average(np.asarray(r), axis=1))
     print(np.average(np.asarray(results), axis=1))
     # lda_analysis(get_users())
