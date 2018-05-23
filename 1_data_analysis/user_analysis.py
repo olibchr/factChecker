@@ -608,16 +608,14 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     lsa = make_pipeline(svd, normalizer)
 
     X = transformer.fit_transform(X)
-    ch2r, pval = chi2(X, y)
-    # print(sorted([[idx_to_word[idx], p] for idx, p in enumerate(pval)], key=lambda k: k[1])[:200])
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
     X_alt = build_alternative_features(users, user_order)
-    X_alt = transformer.fit_transform(X_alt)
-    X_alt = X_alt[:,(1,5,7)]
-    #ch2r, pval = chi2(X_alt, y)
-    #print(pval)
+    X_alt = np.asarray(transformer.fit_transform(X_alt))
+    print(X_alt.shape)
+    X_alt = np.delete(X_alt, [0,2,3,4,6])
+    print(X_alt.shape)
 
     X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
     ch2 = SelectKBest(chi2, k=50)
