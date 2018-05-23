@@ -72,7 +72,7 @@ num_jobs = round(num_cores * 3 / 4)
 word_to_idx = {}
 fact_to_words = {}
 #if BUILD_NEW_SPARSE:
-word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True)
 
 
 def datetime_converter(o):
@@ -143,6 +143,7 @@ def get_series_from_user(user):
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
+        # print(tokens, user_fact_words)
         distance_to_topic = []
         for token in tokens:
             if token not in word_to_idx: continue
@@ -167,6 +168,7 @@ def build_dataset(users):
     global fact_to_words
     fact_topics = build_fact_topics()
     fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+    print(fact_to_words)
     users = Parallel(n_jobs=num_jobs)(
             delayed(get_series_from_user)(user) for i, user in enumerate(users))
     users = sorted(users, key= lambda x: x.user_id)
@@ -213,8 +215,11 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
+    print("Retrieving data and shaping")
     users = get_users()
+    users = [u for u in users if u.tweets]
     users_relevant_tweets = build_dataset(users)
+    print("Subselecting best words")
     X,y,user_order = format_training_data(users_relevant_tweets)
     top_words = 50000
     X = keep_n_best_words(X,top_words)

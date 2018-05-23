@@ -615,7 +615,7 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     X_alt = build_alternative_features(users, user_order)
     X_alt = transformer.fit_transform(X_alt)
-    X_alt = X_alt[:,[1,5,7]]
+    X_alt = X_alt[:,(1,5,7)]
     #ch2r, pval = chi2(X_alt, y)
     #print(pval)
 
