@@ -168,7 +168,7 @@ def build_dataset(users):
     global fact_to_words
     fact_topics = build_fact_topics()
     fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
-    print(fact_to_words)
+    #print(fact_to_words)
     users = Parallel(n_jobs=num_jobs)(
             delayed(get_series_from_user)(user) for i, user in enumerate(users))
     users = sorted(users, key= lambda x: x.user_id)
@@ -191,14 +191,22 @@ def format_training_data(users):
     y = np.asarray(y)
     user_order = np.asarray(user_order)
     print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
+    print("Shapes:")
     print(X.shape, y.shape, user_order.shape)
+    construct = {
+        'X': X,
+        'y': y,
+        'user_order': user_order
+    }
+    with open('model_data/lstm_data','wb') as tmpfile:
+        pickle.dump(construct, tmpfile)
     return X, X_str, y, user_order
 
 
 def keep_n_best_words(X, X_str, n = 5000):
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
 
-    X_words = [' '.join(idx_to_word[x]) for x in X]
+    X_words = [' '.join([idx_to_word[w] for w in x]) for x in X]
     X_words = vectorizer.fit_transform(X_words)
     ch2 = SelectKBest(chi2, k=n)
     ch2.fit(X_words)
@@ -206,7 +214,9 @@ def keep_n_best_words(X, X_str, n = 5000):
     vocab = vectorizer.vocabulary_
     vocab_inv = {v:k for k,v in vocab.items()}
 
-    X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
+    X = [[vocab[idx_to_word[w]] for w in x if vocab[idx_to_word[w]] in mask] for x in X]
+    print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
+    #X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
     return X
 
 
@@ -220,7 +230,7 @@ def main():
 
     top_words = 50000
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
-    print(len(bow_corpus_tmp))
+    print("Corpus size: {}".format(len(bow_corpus_tmp)))
     #bow_corpus_top_n = sorted(bow_corpus.items(), reverse=True, key=lambda w: w[1])[:top_words]
 
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
@@ -236,7 +246,7 @@ def main():
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
 
-    max_tweet_length = 500
+    max_tweet_length = 12
     X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
