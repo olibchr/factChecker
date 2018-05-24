@@ -39,7 +39,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -205,20 +205,18 @@ def keep_n_best_words(X, y, n = 5000):
     ch2.fit(X_words, y)
     mask = ch2.get_support(indices=True)
     vocab = vectorizer.vocabulary_
+    vocab = {k:v for k,v in vocab.items() if v in mask}
     vocab_inv = {v:k for k,v in vocab.items()}
+    print(len(vocab))
 
     # x is list of indeces
     X_mod = []
     for x in X:
         sample_mod = []
-        # w is one index
         for w in x:
             word = idx_to_word[w]
             if word in vocab:
-                tfidf_index = vocab[word]
-                if tfidf_index in mask:
-                    sample_mod.append(tfidf_index)
-            else: print(word)
+                sample_mod.append(vocab[word])
         X_mod.append(sample_mod)
 
     # X = [[vocab[idx_to_word[w]] for w in x if idx_to_word[w] in vocab and vocab[idx_to_word[w]] in mask] for x in X]
