@@ -442,6 +442,14 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     return results
 
 
+def find_correlation_to_heuristic(X,y,user_order, users):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    user_df = pd.DataFrame(users).sort_values(by=['user_id'])
+    X_df = pd.DataFrame({'X': X, 'y':y, 'user_id': user_order})
+    user_df['tweets'] = user_df['user_id'].map(lambda uid: users[np.where(users.user_id==uid)].tweets)
+    user_df['hash'] =
+    pass
+
 def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     print('%' * 100)
     print('Credibility (Was user correct) Prediction using BOWs')

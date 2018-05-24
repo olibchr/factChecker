@@ -25,6 +25,7 @@ from keras.datasets import imdb
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
+from keras.layers import Dropout
 from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
 
@@ -252,7 +253,9 @@ def main():
 
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
 
+    print(Counter(y))
     X_train, X_test, y_train, y_test = train_test_split(X,y)
+    print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
     X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
@@ -262,11 +265,13 @@ def main():
     embedding_vecor_length = 32
     model = Sequential()
     model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
+    model.add(Dropout(0.2))
     model.add(LSTM(100))
+    model.add(Dropout(0.2))
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=30, batch_size=64)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)
