@@ -28,34 +28,16 @@ from keras.layers import LSTM
 from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
 
-from scipy.sparse import lil_matrix
-from sklearn import metrics
-from sklearn.cluster import KMeans
-from sklearn.decomposition import LatentDirichletAllocation
-from sklearn.decomposition import TruncatedSVD
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.linear_model import PassiveAggressiveClassifier
-from sklearn.linear_model import Perceptron
-from sklearn.linear_model import RidgeClassifier
-from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import roc_curve, auc
-from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import train_test_split
-from sklearn.naive_bayes import BernoulliNB
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import Imputer
-from sklearn.preprocessing import Normalizer
-from sklearn.svm import LinearSVC
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+# fix random seed for reproducibility
+np.random.seed(7)
 
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = False
@@ -158,7 +140,7 @@ def get_series_from_user(user):
             relevant_tweets.append(tweet)
             tweet_vec = [word_to_idx[t] for t in tokens if t in bow_corpus_top_n]
             relevant_tweet_vecs.append(tweet_vec)
-    # print(len(relevant_tweets))
+    print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
     user.features['relevant_tweet_vecs'] = relevant_tweet_vecs
     return user
@@ -203,13 +185,13 @@ def format_training_data(users):
     return X, X_str, y, user_order
 
 
-def keep_n_best_words(X, X_str, n = 5000):
+def keep_n_best_words(X, y, n = 5000):
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
 
     X_words = [' '.join([idx_to_word[w] for w in x]) for x in X]
     X_words = vectorizer.fit_transform(X_words)
     ch2 = SelectKBest(chi2, k=n)
-    ch2.fit(X_words)
+    ch2.fit(X_words, y)
     mask = ch2.get_support(indices=True)
     vocab = vectorizer.vocabulary_
     vocab_inv = {v:k for k,v in vocab.items()}
@@ -242,7 +224,7 @@ def main():
     users_relevant_tweets = build_dataset(users)
     print("Subselecting best words")
     X, X_str, y, user_order = format_training_data(users_relevant_tweets)
-    X = keep_n_best_words(X,X_str, top_words)
+    X = keep_n_best_words(X,y, top_words)
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
 
