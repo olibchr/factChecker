@@ -71,6 +71,7 @@ num_jobs = round(num_cores * 3 / 4)
 # global Vars
 word_to_idx = {}
 fact_to_words = {}
+bow_corpus_top_n = []
 #if BUILD_NEW_SPARSE:
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
@@ -155,7 +156,7 @@ def get_series_from_user(user):
         all_distances.append(float(distance_to_topic))
         if distance_to_topic < 0.8:
             relevant_tweets.append(tweet)
-            tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
+            tweet_vec = [word_to_idx[t] for t in tokens if t in bow_corpus_top_n]
             relevant_tweet_vecs.append(tweet_vec)
     # print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
@@ -178,10 +179,12 @@ def format_training_data(users):
     X = []
     user_order = []
     y = []
+    X_str = []
     for user in users:
         if 'relevant_tweet_vecs' not in user.features: continue
-        for vec in user.features['relevant_tweet_vecs']:
+        for idx, vec in enumerate(user.features['relevant_tweet_vecs']):
             X.append(vec)
+            X_str.append(user.features['relevant_tweet_vecs'][idx])
             y.append(user.was_correct)
             user_order.append(user.user_id)
     X = np.asarray(X)
@@ -189,11 +192,12 @@ def format_training_data(users):
     user_order = np.asarray(user_order)
     print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
     print(X.shape, y.shape, user_order.shape)
-    return X,y,user_order
+    return X, X_str, y, user_order
 
 
-def keep_n_best_words(X, n = 5000):
+def keep_n_best_words(X, X_str, n = 5000):
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
+
     X = vectorizer.fit_transform(X)
     ch2 = SelectKBest(chi2, k=n)
     ch2.fit(X)
@@ -206,11 +210,15 @@ def keep_n_best_words(X, n = 5000):
 def main():
     global bow_corpus
     global word_to_idx
+    global bow_corpus_top_n
     wn.ensure_loaded()
     bow_corpus = get_corpus()
 
+    top_words = 50000
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     print(len(bow_corpus_tmp))
+    bow_corpus_top_n = sorted(bow_corpus.items(), reverse=True, key=lambda w: w[1])[:top_words]
+
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
@@ -219,9 +227,8 @@ def main():
     users = [u for u in users if u.tweets]
     users_relevant_tweets = build_dataset(users)
     print("Subselecting best words")
-    X,y,user_order = format_training_data(users_relevant_tweets)
-    top_words = 50000
-    X = keep_n_best_words(X,top_words)
+    X, X_str, y, user_order = format_training_data(users_relevant_tweets)
+    #X = keep_n_best_words(X,X_str, top_words)
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
 
@@ -237,7 +244,7 @@ def main():
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=3, batch_size=64)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=300, batch_size=64)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)

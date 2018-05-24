@@ -615,7 +615,7 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     X_alt = build_alternative_features(users, user_order)
     X_alt = np.asarray(transformer.fit_transform(X_alt))
     print(X_alt.shape)
-    X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
+    #X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
 
     X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
     ch2 = SelectKBest(chi2, k=50)
