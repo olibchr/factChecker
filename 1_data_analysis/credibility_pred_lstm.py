@@ -206,23 +206,23 @@ def keep_n_best_words(X, y, n = 5000):
     mask = ch2.get_support(indices=True)
     vocab = vectorizer.vocabulary_
     vocab = {k:v for k,v in vocab.items() if v in mask}
-    vocab_inv = {v:k for k,v in vocab.items()}
-    print(len(vocab))
+    vocab_new_indexed = {k:idx for idx, k,_ in enumerate(vocab.items())}
+    print("Vocabulary length: {}".format(len(vocab_new_indexed)))
 
     # x is list of indeces
-    X_mod = []
-    for x in X:
-        sample_mod = []
-        for w in x:
-            word = idx_to_word[w]
-            if word in vocab:
-                sample_mod.append(vocab[word])
-        X_mod.append(sample_mod)
+    # X_mod = []
+    # for x in X:
+    #     sample_mod = []
+    #     for w in x:
+    #         word = idx_to_word[w]
+    #         if word in vocab_new_indexed:
+    #             sample_mod.append(vocab_new_indexed[word])
+    #     X_mod.append(sample_mod)
 
-    # X = [[vocab[idx_to_word[w]] for w in x if idx_to_word[w] in vocab and vocab[idx_to_word[w]] in mask] for x in X]
+    X = [[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X]
     #X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
     print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
-    return X_mod
+    return X, vocab_new_indexed
 
 
 def main():
@@ -250,7 +250,7 @@ def main():
     else:
         X,y,user_order = get_prebuilt_data()
 
-    X = keep_n_best_words(X,y, top_words)
+    X, new_word_to_idx = keep_n_best_words(X,y, top_words)
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
 
@@ -266,7 +266,7 @@ def main():
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=300, batch_size=64)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=30, batch_size=64)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)
