@@ -127,7 +127,7 @@ def lda_analysis(users):
     n_components = 50
     n_top_words = 20
     print("Constructing user docs")
-    X = [[tweet['text'] for tweet in user.tweets] for user in users]
+    X = np.asarray([[tweet['text'] for tweet in user.tweets] for user in users]).flatten()
     print("TF fitting user docs")
     tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
                                     max_features=n_features,
@@ -276,7 +276,7 @@ def main():
     print(X[:10])
     print([[new_idx_to_word[w] for w in x] for x in X])
     print(Counter(y))
-    X_train, X_test, y_train, y_test = train_test_split(X,y)
+    X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
