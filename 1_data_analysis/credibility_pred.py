@@ -92,7 +92,8 @@ def get_users():
     users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        users.append(user)
+        if int(user.was_correct) != -1:
+            users.append(user)
     return users
 
 
