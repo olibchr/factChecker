@@ -29,7 +29,8 @@ from keras.layers import Dropout
 from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
 
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.model_selection import train_test_split
 
@@ -121,6 +122,33 @@ def build_fact_topics():
     return facts_df
 
 
+def lda_analysis(users):
+    n_features = 1000
+    n_components = 50
+    n_top_words = 20
+    print("Constructing user docs")
+    X = [[tweet['text'] for tweet in user.tweets] for user in users]
+    print("TF fitting user docs")
+    tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
+                                    max_features=n_features,
+                                    stop_words='english')
+    tf = tf_vectorizer.fit_transform(X)
+
+    print("Training LDA model")
+    lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
+                                    learning_method='online',
+                                    learning_offset=50.,
+                                    random_state=0)
+    lda.fit(tf)
+    tf_feature_names = tf_vectorizer.get_feature_names()
+    for topic_idx, topic in enumerate(lda.components_):
+        message = "Topic #%d: " % topic_idx
+        message += " ".join([tf_feature_names[i]
+                             for i in topic.argsort()[:-n_top_words - 1:-1]])
+        print(message)
+    print()
+
+
 def get_series_from_user(user):
     relevant_tweets= []
     relevant_tweet_vecs = []
@@ -207,21 +235,11 @@ def keep_n_best_words(X, y, n = 5000):
     mask = ch2.get_support(indices=True)
     vocab = vectorizer.vocabulary_
     vocab = {k:v for k,v in vocab.items() if v in mask}
-    vocab_new_indexed = {k:idx for idx, k,_ in enumerate(vocab.items())}
+    vocab_new_indexed = {k[0]:idx for idx, k in enumerate(vocab.items())}
     print("Vocabulary length: {}".format(len(vocab_new_indexed)))
 
-    # x is list of indeces
-    # X_mod = []
-    # for x in X:
-    #     sample_mod = []
-    #     for w in x:
-    #         word = idx_to_word[w]
-    #         if word in vocab_new_indexed:
-    #             sample_mod.append(vocab_new_indexed[word])
-    #     X_mod.append(sample_mod)
-
+    # only keep words that are selected by chi2
     X = [[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X]
-    #X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
     print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
     return X, vocab_new_indexed
 
@@ -233,17 +251,18 @@ def main():
     wn.ensure_loaded()
     bow_corpus = get_corpus()
 
+    users = get_users()
+    lda_analysis(users)
+
     top_words = 50000
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     print("Corpus size: {}".format(len(bow_corpus_tmp)))
-    #bow_corpus_top_n = sorted(bow_corpus.items(), reverse=True, key=lambda w: w[1])[:top_words]
 
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
     if BUILD_NEW_DATA:
         print("Retrieving data and shaping")
-        users = get_users()
         users = [u for u in users if u.tweets]
         users_relevant_tweets = build_dataset(users)
         print("Subselecting best words")
@@ -252,7 +271,10 @@ def main():
         X,y,user_order = get_prebuilt_data()
 
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
+    new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
 
+    print(X[:10])
+    print([[new_idx_to_word[w] for w in x] for x in X])
     print(Counter(y))
     X_train, X_test, y_train, y_test = train_test_split(X,y)
     print(Counter(y_train), Counter(y_test))
@@ -271,7 +293,7 @@ def main():
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=10, batch_size=64)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)

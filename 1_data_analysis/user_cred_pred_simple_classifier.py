@@ -446,8 +446,14 @@ def find_correlation_to_heuristic(X,y,user_order, users):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     user_df = pd.DataFrame(users).sort_values(by=['user_id'])
     X_df = pd.DataFrame({'X': X, 'y':y, 'user_id': user_order})
+    user_df = user_df.join(X_df.set_index('user_id'), on='user_id')
+
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    facts_df = pd.read_json(fact_file)
+
+    user_df = user_df.join(facts_df.set_index('hash'), on='fact')
+
     user_df['tweets'] = user_df['user_id'].map(lambda uid: users[np.where(users.user_id==uid)].tweets)
-    user_df['hash'] =
     pass
 
 def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
