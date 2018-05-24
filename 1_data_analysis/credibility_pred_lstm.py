@@ -139,7 +139,7 @@ def get_series_from_user(user):
         all_distances.append(float(distance_to_topic))
         if distance_to_topic < 0.8:
             relevant_tweets.append(tweet)
-            tweet_vec = [word_to_idx[t] for t in tokens if t in bow_corpus_tmp]
+            tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
             relevant_tweet_vecs.append(tweet_vec)
     print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
@@ -207,10 +207,24 @@ def keep_n_best_words(X, y, n = 5000):
     vocab = vectorizer.vocabulary_
     vocab_inv = {v:k for k,v in vocab.items()}
 
-    X = [[vocab[idx_to_word[w]] for w in x if vocab[idx_to_word[w]] in mask] for x in X]
+    # x is list of indeces
+    X_mod = []
+    for x in X:
+        sample_mod = []
+        # w is one index
+        for w in x:
+            word = idx_to_word[w]
+            if word in vocab:
+                tfidf_index = vocab[word]
+                if tfidf_index in mask:
+                    sample_mod.append(tfidf_index)
+            else: print(word)
+        X_mod.append(sample_mod)
+
+    # X = [[vocab[idx_to_word[w]] for w in x if idx_to_word[w] in vocab and vocab[idx_to_word[w]] in mask] for x in X]
     #X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
     print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
-    return X
+    return X_mod
 
 
 def main():
