@@ -39,7 +39,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -139,7 +139,7 @@ def get_series_from_user(user):
         all_distances.append(float(distance_to_topic))
         if distance_to_topic < 0.8:
             relevant_tweets.append(tweet)
-            tweet_vec = [word_to_idx[t] for t in tokens if t in bow_corpus_top_n]
+            tweet_vec = [word_to_idx[t] for t in tokens if t in bow_corpus_tmp]
             relevant_tweet_vecs.append(tweet_vec)
     print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
@@ -163,8 +163,11 @@ def format_training_data(users):
     user_order = []
     y = []
     for user in users:
-        if 'relevant_tweet_vecs' not in user.features: continue
-        for idx, vec in enumerate(user.features['relevant_tweet_vecs']):
+        if 'relevant_tweet_vecs' not in user.features:
+            print('&§$%&§$%&§$%&')
+            print(user.user_id)
+            continue
+        for vec in user.features['relevant_tweet_vecs']:
             X.append(vec)
             y.append(user.was_correct)
             user_order.append(user.user_id)
@@ -234,6 +237,7 @@ def main():
         X, y, user_order = format_training_data(users_relevant_tweets)
     else:
         X,y,user_order = get_prebuilt_data()
+
     X = keep_n_best_words(X,y, top_words)
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
