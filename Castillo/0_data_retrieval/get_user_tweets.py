@@ -43,6 +43,7 @@ def get_data():
     user_files = [user_file for user_file in glob.glob(DIR + 'user_tweets/' + 'user_*.json') if
                   'user_' in user_file]
     user_files = [user_file[user_file.rfind('_') + 1:user_file.rfind('.')] for user_file in user_files]
+    print(len(user_files))
     return facts, transactions, user_files
 
 
@@ -53,7 +54,7 @@ def get_user_tweets(api, transactions, user_files):
         i += 1
         user_id = tr.user_id
         if str(user_id) in user_files:
-            # print("User {} has been crawled before".format(user_id))
+            print("User {} has been crawled before".format(user_id))
             continue
         try:
             user_tweets = []

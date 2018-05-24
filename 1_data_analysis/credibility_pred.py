@@ -39,8 +39,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-NEW_CORPUS = False
-BUILD_NEW_SPARSE = False
+BUILD_NEW_DATA = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -161,12 +160,10 @@ def format_training_data(users):
     X = []
     user_order = []
     y = []
-    X_str = []
     for user in users:
         if 'relevant_tweet_vecs' not in user.features: continue
         for idx, vec in enumerate(user.features['relevant_tweet_vecs']):
             X.append(vec)
-            X_str.append(user.features['relevant_tweet_vecs'][idx])
             y.append(user.was_correct)
             user_order.append(user.user_id)
     X = np.asarray(X)
@@ -182,7 +179,16 @@ def format_training_data(users):
     }
     with open('model_data/lstm_data','wb') as tmpfile:
         pickle.dump(construct, tmpfile)
-    return X, X_str, y, user_order
+    return X, y, user_order
+
+
+def get_prebuilt_data():
+    with open('model_data/lstm_data','rb') as tmpfile:
+        construct = pickle.load(tmpfile)
+    X = construct['X']
+    y = construct['y']
+    user_order = construct['user_order']
+    return X,y,user_order
 
 
 def keep_n_best_words(X, y, n = 5000):
@@ -197,10 +203,9 @@ def keep_n_best_words(X, y, n = 5000):
     vocab_inv = {v:k for k,v in vocab.items()}
 
     X = [[vocab[idx_to_word[w]] for w in x if vocab[idx_to_word[w]] in mask] for x in X]
-    print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
     #X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
+    print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
     return X
-
 
 
 def main():
@@ -218,12 +223,15 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
-    print("Retrieving data and shaping")
-    users = get_users()
-    users = [u for u in users if u.tweets]
-    users_relevant_tweets = build_dataset(users)
-    print("Subselecting best words")
-    X, X_str, y, user_order = format_training_data(users_relevant_tweets)
+    if BUILD_NEW_DATA:
+        print("Retrieving data and shaping")
+        users = get_users()
+        users = [u for u in users if u.tweets]
+        users_relevant_tweets = build_dataset(users)
+        print("Subselecting best words")
+        X, X_str, y, user_order = format_training_data(users_relevant_tweets)
+    else:
+        X,y,user_order = get_prebuilt_data()
     X = keep_n_best_words(X,y, top_words)
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
