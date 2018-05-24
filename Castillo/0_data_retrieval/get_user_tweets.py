@@ -49,6 +49,7 @@ def get_data():
 
 def get_user_tweets(api, transactions, user_files):
     i = 0
+    print(len(transactions))
     while i < len(transactions):
         tr = transactions[i]
         i += 1
@@ -85,8 +86,6 @@ def get_user_tweets(api, transactions, user_files):
                 user_tweets.append(parsed_status)
             # <user_id, tweets, fact, transactions, credibility, controversy>
             this_user = User(user_id, transactions=tr, tweets=user_tweets, features=user_features)
-            this_user = was_user_correct(this_user)
-            store_result(this_user)
             print('Got tweets for user: {}, found: {}'.format(user_id, len(this_user.tweets)))
             user_files.append(str(user_id))
             yield this_user
@@ -151,10 +150,10 @@ def main():
     api = tweepy.API(auth)
     users = get_user_tweets(api, transactions, user_files)
     #users = get_users()
-    #users = [was_user_correct(user, facts, transactions) for user in users]
+    users = [was_user_correct(user, facts, transactions) for user in users]
     # print(Counter([u.was_correct for u in users]))
-    #for user in users:
-    #    store_result(user)
+    for user in users:
+        store_result(user)
 
 
 if __name__ == "__main__":
