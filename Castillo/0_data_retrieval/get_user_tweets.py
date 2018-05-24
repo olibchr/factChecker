@@ -47,7 +47,7 @@ def get_data():
     return facts, transactions, user_files
 
 
-def get_user_tweets(api, transactions, user_files):
+def get_user_tweets(api, transactions, user_files, facts):
     i = 0
     print(len(transactions))
     while i < len(transactions):
@@ -85,11 +85,12 @@ def get_user_tweets(api, transactions, user_files):
                     }
                 user_tweets.append(parsed_status)
             # <user_id, tweets, fact, transactions, credibility, controversy>
-            this_user = User(user_id, transactions=tr, tweets=user_tweets, features=user_features)
+            this_user = User(user_id, transactions=tr.id, tweets=user_tweets, features=user_features)
+            this_user = was_user_correct(this_user, facts, transactions)
+            store_result(this_user)
             print('Got tweets for user: {}, found: {}'.format(user_id, len(this_user.tweets)))
             user_files.append(str(user_id))
-            store_result(this_user)
-            yield this_user
+            #yield this_user
         except tweepy.error.TweepError as e:
             print('Twitter error: {}'.format(e))
             if 'status code = 429' in str(e):
@@ -98,7 +99,7 @@ def get_user_tweets(api, transactions, user_files):
                 i -= 1
         except Exception as e:
             print('Error: {}'.format(e))
-            yield User(tr.user_id, transactions=tr)
+            #yield User(tr.user_id, transactions=tr.id)
 
 
 def get_users():
@@ -129,7 +130,7 @@ def was_user_correct(user, facts, transactions):
             else:
                 user.was_correct = -1
             print(fact.true, transaction.stance, user.was_correct)
-    yield user
+    return user
 
 
 def store_result(user):
@@ -149,9 +150,9 @@ def main():
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
     api = tweepy.API(auth)
-    users = get_user_tweets(api, transactions, user_files)
-    #users = get_users()
-    #users = [was_user_correct(user, facts, transactions) for user in users]
+    get_user_tweets(api, transactions, user_files, facts)
+    # users = get_users()
+    # users = was_user_correct(users, facts, transactions)
     # print(Counter([u.was_correct for u in users]))
     #for user in users:
     #    store_result(user)
