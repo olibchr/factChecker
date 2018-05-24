@@ -69,7 +69,7 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 
 # global Vars
-word_to_idx = {}
+word_to_idx, idx_to_word = {}, {}
 fact_to_words = {}
 bow_corpus_top_n = []
 #if BUILD_NEW_SPARSE:
@@ -198,18 +198,22 @@ def format_training_data(users):
 def keep_n_best_words(X, X_str, n = 5000):
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
 
-    X = vectorizer.fit_transform(X)
+    X_words = [' '.join(idx_to_word[x]) for x in X]
+    X_words = vectorizer.fit_transform(X_words)
     ch2 = SelectKBest(chi2, k=n)
-    ch2.fit(X)
+    ch2.fit(X_words)
     mask = ch2.get_support(indices=True)
-    X = [x for x in X for w in x if w in mask]
+    vocab = vectorizer.vocabulary_
+    vocab_inv = {v:k for k,v in vocab.items()}
+
+    X = [[vocab[idx_to_word[w]] for w in x if w in mask] for x in X]
     return X
 
 
 
 def main():
     global bow_corpus
-    global word_to_idx
+    global word_to_idx, idx_to_word
     global bow_corpus_top_n
     wn.ensure_loaded()
     bow_corpus = get_corpus()
@@ -217,7 +221,7 @@ def main():
     top_words = 50000
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     print(len(bow_corpus_tmp))
-    bow_corpus_top_n = sorted(bow_corpus.items(), reverse=True, key=lambda w: w[1])[:top_words]
+    #bow_corpus_top_n = sorted(bow_corpus.items(), reverse=True, key=lambda w: w[1])[:top_words]
 
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
@@ -228,7 +232,7 @@ def main():
     users_relevant_tweets = build_dataset(users)
     print("Subselecting best words")
     X, X_str, y, user_order = format_training_data(users_relevant_tweets)
-    #X = keep_n_best_words(X,X_str, top_words)
+    X = keep_n_best_words(X,X_str, top_words)
 
     X_train, X_test, y_train, y_test = train_test_split(X,y)
 

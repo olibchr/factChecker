@@ -612,22 +612,22 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
-    X_alt = build_alternative_features(users, user_order)
-    X_alt = np.asarray(transformer.fit_transform(X_alt))
-    print(X_alt.shape)
-    #X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
-
-    X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
-    ch2 = SelectKBest(chi2, k=50)
-    svd = TruncatedSVD(5)
-    normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd, normalizer)
-    X_alt2 = transformer.fit_transform(X_alt2)
-    X_alt2 = ch2.fit_transform(X_alt2, y_alt)
-    X_alt2 = np.asarray(lsa.fit_transform(X_alt2, y_alt))
-    X_alt2 = np.asarray([X_alt2[np.where(user_order_alt == uid_alt)][0] for uid_alt in user_order_alt for uid in user_order if uid == uid_alt])
-
-    print(X.shape, X_alt.shape, X_alt2.shape)
+    # X_alt = build_alternative_features(users, user_order)
+    # X_alt = np.asarray(transformer.fit_transform(X_alt))
+    # print(X_alt.shape)
+    # #X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
+    #
+    # X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
+    # ch2 = SelectKBest(chi2, k=50)
+    # svd = TruncatedSVD(5)
+    # normalizer = Normalizer(copy=False)
+    # lsa = make_pipeline(svd, normalizer)
+    # X_alt2 = transformer.fit_transform(X_alt2)
+    # X_alt2 = ch2.fit_transform(X_alt2, y_alt)
+    # X_alt2 = np.asarray(lsa.fit_transform(X_alt2, y_alt))
+    # X_alt2 = np.asarray([X_alt2[np.where(user_order_alt == uid_alt)][0] for uid_alt in user_order_alt for uid in user_order if uid == uid_alt])
+    #
+    # print(X.shape, X_alt.shape, X_alt2.shape)
 
     # X = np.concatenate((X, X_alt2), axis=1)
     # X = np.concatenate((X, X_alt), axis=1)
