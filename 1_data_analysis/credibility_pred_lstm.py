@@ -94,6 +94,7 @@ def get_users():
         user = json.loads(open(user_file).readline(), object_hook=decoder)
         if int(user.was_correct) != -1:
             users.append(user)
+    print('Kept {} users'.format(len(users)))
     return users
 
 
@@ -230,7 +231,7 @@ def main():
         users = [u for u in users if u.tweets]
         users_relevant_tweets = build_dataset(users)
         print("Subselecting best words")
-        X, X_str, y, user_order = format_training_data(users_relevant_tweets)
+        X, y, user_order = format_training_data(users_relevant_tweets)
     else:
         X,y,user_order = get_prebuilt_data()
     X = keep_n_best_words(X,y, top_words)
