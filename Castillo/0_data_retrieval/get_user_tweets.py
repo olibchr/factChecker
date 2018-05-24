@@ -127,7 +127,7 @@ def was_user_correct(user, facts, transactions):
             else:
                 user.was_correct = -1
             print(fact.true, transaction.stance, user.was_correct)
-    return user
+    yield user
 
 
 def store_result(user):
@@ -149,7 +149,7 @@ def main():
     api = tweepy.API(auth)
     users = get_user_tweets(api, transactions, user_files)
     #users = get_users()
-    users = [was_user_correct(user, facts, transactions) for user in users]
+    # users = [was_user_correct(user, facts, transactions) for user in users]
     print(Counter([u.was_correct for u in users]))
     for user in users:
         store_result(user)
