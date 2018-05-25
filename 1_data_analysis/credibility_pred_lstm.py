@@ -127,7 +127,9 @@ def lda_analysis(users):
     n_components = 50
     n_top_words = 20
     print("Constructing user docs")
-    X = np.asarray([[tweet['text'] for tweet in user.tweets] for user in users]).flatten()
+    X = [[tweet['text'] for tweet in user.tweets] for user in users]
+    X = [tweet for sublist in X for tweet in sublist]
+    print(X[:5])
     print("TF fitting user docs")
     tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
                                     max_features=n_features,
@@ -244,6 +246,45 @@ def keep_n_best_words(X, y, n = 5000):
     return X, vocab_new_indexed
 
 
+def train_test_split_on_users(X, y, user_order, users, n):
+    u_train, u_test, _, _ = train_test_split(set(user_order), [0] * len(set(user_order)), test_size=max(0.2 + n / 30, 0.8))
+
+    # build a mask
+    u_train_mask = []
+    user_to_n = defaultdict(lambda: 0)
+    for uid in user_order:
+        # always true if in train set
+        if uid in u_train:
+            u_train_mask.append(True);
+            continue
+        # true to add n samples of rumor to train set
+        elif user_to_n[uid] < n:
+            u_train_mask.append(True)
+            user_to_n[uid] += 1
+            continue
+        # otherwise false if in test set
+        else:
+            u_train_mask.append(False)
+    u_train_mask = np.asarray(u_train_mask)
+
+    # f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
+    X_train = X[u_train_mask == True]
+    X_test = X[u_train_mask == False]
+    y_train = y[u_train_mask == True]
+    y_test = y[u_train_mask == False]
+    print("Shapes after splitting")
+
+    for user in users:
+        if user.user_id not in user_order: continue
+        i = np.where(user_order == user.user_id)[0][0]
+        assert int(user.user_id) == int(user_order[i])
+        assert int(user.was_correct) == int(y[i])
+
+    print("Training Set: {}, {}".format(X_train.shape, y_train.shape))
+    print("Testing Set: {}, {}".format(X_test.shape, y_test.shape))
+    return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
+
+
 def main():
     global bow_corpus
     global word_to_idx, idx_to_word
@@ -273,10 +314,11 @@ def main():
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
     new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
 
-    print(X[:10])
-    print([[new_idx_to_word[w] for w in x] for x in X])
+    print(X[:5])
+    print([[new_idx_to_word[w] for w in x] for x in X[:5]])
     print(Counter(y))
-    X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
+    # X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
+    X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
