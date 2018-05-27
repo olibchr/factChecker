@@ -265,9 +265,9 @@ def train_test_split_on_users(X, y, user_order, users, n):
         # otherwise false if in test set
         else:
             u_train_mask.append(False)
-    u_train_mask = np.asarray(u_train_mask)
+    # u_train_mask = np.asarray(u_train_mask)
 
-    # f_train_mask = np.asarray([True if f in f_train else False for f in user_order_hashed_fact])
+    print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
     X_train = X[u_train_mask == True]
     X_test = X[u_train_mask == False]
     y_train = y[u_train_mask == True]
@@ -318,7 +318,7 @@ def main():
     print([[new_idx_to_word[w] for w in x] for x in X[:5]])
     print(Counter(y))
     # X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
-    X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y)
+    X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y, user_order, users, 0)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
@@ -335,7 +335,7 @@ def main():
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=10, batch_size=64)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)

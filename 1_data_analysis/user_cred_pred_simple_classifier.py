@@ -456,6 +456,7 @@ def find_correlation_to_heuristic(X,y,user_order, users):
     user_df['tweets'] = user_df['user_id'].map(lambda uid: users[np.where(users.user_id==uid)].tweets)
     pass
 
+
 def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     print('%' * 100)
     print('Credibility (Was user correct) Prediction using BOWs')
