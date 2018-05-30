@@ -67,7 +67,7 @@ class RankSVM(svm.LinearSVC):
     See object :ref:`svm.LinearSVC` for a full description of parameters.
     """
 
-    def fit(self, X, y):
+    def fit(self, X, y, sample_weight=None):
         """
         Fit a pairwise ranking model.
         Parameters
@@ -77,6 +77,8 @@ class RankSVM(svm.LinearSVC):
         Returns
         -------
         self
+        :param y:
+        :param sample_weight:
         """
         X_trans, y_trans = transform_pairwise(X, y)
         super(RankSVM, self).fit(X_trans, y_trans)
@@ -106,12 +108,13 @@ class RankSVM(svm.LinearSVC):
         else:
             raise ValueError("Must call fit() prior to predict()")
 
-    def score(self, X, y):
+    def score(self, X, y, sample_weight=None):
         """
         Because we transformed into a pairwise problem, chance level is at 0.5
+        :param sample_weight:
         """
         X_trans, y_trans = transform_pairwise(X, y)
-        return np.mean(super(RankSVM, self).predict(X_trans) == y_trans)
+        return np.mean(super(RankSVM, self).predict(X_trans) == np.asarray(y_trans))
 
 
 if __name__ == '__main__':

@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
 sys.path.insert(0, os.path.dirname(__file__) + '../5_models')
 from decoder import decoder
 from svm_rank import RankSVM
+from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
@@ -44,6 +45,8 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
+fact_to_words = {}
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def tokenize_text(text, only_retweets=False):
@@ -88,6 +91,38 @@ def get_corpus():
     return bow_corpus
 
 
+def get_relevant_tweets(user):
+    relevant_tweets= []
+    user_fact_words = fact_to_words[user.fact]
+    for tweet in user.tweets:
+        distance_to_topic = []
+        tokens = tokenize_text(tweet['text'], only_retweets=False)
+        for token in tokens:
+            if token not in word_vectors.vocab: continue
+            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+            distance_to_topic.append(increment)
+        if np.average(np.asarray(distance_to_topic)) < 0.8:
+            relevant_tweets.append(tweet)
+
+    return relevant_tweets
+
+
+def build_fact_topics():
+    print("Build fact topics")
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    facts_df = pd.read_json(fact_file)
+    remove_digits = str.maketrans('', '', digits)
+    facts_df['text_parsed'] = facts_df['text'].map(lambda t: tokenize_text(t.translate(remove_digits)))
+    facts_df['entities_parsed'] = facts_df['entities'].map(lambda ents:
+                                                           [item for sublist in
+                                                            [e['surfaceForm'].lower().split() for e in ents if
+                                                             e['similarityScore'] >= 0.6]
+                                                            for item in sublist])
+    facts_df['topic'] = facts_df['topic'].map(lambda t: [t])
+    facts_df['fact_terms'] = facts_df['text_parsed'] + facts_df['entities_parsed'] + facts_df['topic']
+    return facts_df
+
+
 def build_features_for_user(user):
     # Message based features: number of swear language words
     # Source based features length of screen name, has URL, ratio of followers to followees
@@ -116,7 +151,8 @@ def build_features_for_user(user):
 
     link_pattern = re.compile('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 
-    for t in user.tweets:
+    relevant_tweets = get_relevant_tweets(user.tweets)
+    for t in relevant_tweets:
         avg_len.append(len(t['text']))
         avg_words.append(len(tokenize_text(t['text'])))
         chars = [c for c in t['text']]
@@ -130,20 +166,21 @@ def build_features_for_user(user):
         avg_emoticons.append(1 if emoji_pattern.search(t['text']) is not None else 0)
         if 'reply' in t and t['reply'] is not None: tweets_that_are_reply.append(t)
         avg_links.append(1 if link_pattern.search(t['text']) is not None else 0)
+    if len(relevant_tweets) == 0: relevant_tweets = [0]
 
-    avg_len = 1.0 * sum(avg_len) / len(user.tweets)
-    avg_words = 1.0 * sum(avg_words) / len(user.tweets)
-    avg_unique_char = 1.0 * sum(avg_unique_char) / len(user.tweets)
-    avg_hashtags = sum(avg_hashtags) / len(user.tweets)
+    avg_len = 1.0 * sum(avg_len) / len(relevant_tweets)
+    avg_words = 1.0 * sum(avg_words) / len(relevant_tweets)
+    avg_unique_char = 1.0 * sum(avg_unique_char) / len(relevant_tweets)
+    avg_hashtags = sum(avg_hashtags) / len(relevant_tweets)
     avg_retweets = 1.0 * sum(retweets) / len(retweets)
     pos_words = int(user.features['pos_words']) if 'pos_words' in user.features else 0
     neg_words = int(user.features['neg_words']) if 'neg_words' in user.features else 0
-    avg_tweet_is_retweet = len(tweets_that_are_retweet) / len(user.tweets)
-    avg_special_symbol = sum(avg_special_symbol) / len(user.tweets)
-    avg_emoticons = 1.0 * sum(avg_emoticons) / len(user.tweets)
-    avg_tweet_is_reply = len(tweets_that_are_reply) / len(user.tweets)
-    avg_mentions = sum(avg_mentions) / len(user.tweets)
-    avg_links = 1.0 * sum(avg_links) / len(user.tweets)
+    avg_tweet_is_retweet = len(tweets_that_are_retweet) / len(relevant_tweets)
+    avg_special_symbol = sum(avg_special_symbol) / len(relevant_tweets)
+    avg_emoticons = 1.0 * sum(avg_emoticons) / len(relevant_tweets)
+    avg_tweet_is_reply = len(tweets_that_are_reply) / len(relevant_tweets)
+    avg_mentions = sum(avg_mentions) / len(relevant_tweets)
+    avg_links = 1.0 * sum(avg_links) / len(relevant_tweets)
 
     # followers, friends, description, created_at, verified, statuses_count, lang}
     followers = int(user.features['followers']) if 'followers' in user.features else 0
@@ -181,14 +218,16 @@ def build_features_for_user(user):
 
 
 def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
-    scores = cross_val_score(clf, X, y, cv=5)
-    clf.fit(X_train, y_train)
+    #scores = cross_val_score(clf, X, y, cv=5)
+    #print("Cross validation: {}".format(scores))
+
+    clf.fit(X=X_train, y=y_train)
     pred = clf.predict(X_test)
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-    ndgc = metrics.ndcg_score(y_test, pred)
-    print("Cross validation: {}".format(scores))
+    ndgc = ndcg_score(y_test, pred)
     print("NDCG: {}".format(ndgc))
+    print("CLF score: {}".format(clf.score(X_test, y_test)))
     print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
             score, precision, recall, fscore))
 
@@ -196,24 +235,28 @@ def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
 def main():
     global bow_corpus
     global word_to_idx
+    global fact_to_words
     wn.ensure_loaded()
 
     if BUILD_NEW_DATA:
         users = get_users()
         print("Getting user features")
+        fact_topics = build_fact_topics()
+        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_features = [build_features_for_user(u) for u in users if len(u.tweets) > 0]
         with open('model_data/user_featues', 'wb') as tmpfile:
-                pickle.dump(users_with_features, tmpfile)
+            pickle.dump(users_with_features, tmpfile)
     else:
         with open('model_data/user_featues', 'rb') as tmpfile:
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
+    print(users_df)
     print(users_df.describe())
 
     features = ['avg_len','avg_words','avg_unique_char','avg_hashtags','avg_retweets','pos_words','neg_words','avg_tweet_is_retweet','avg_special_symbol','avg_emoticons','avg_tweet_is_reply','avg_mentions','avg_links','followers','friends','verified','status_cnt','time_retweet','len_description','len_name']
-    X = users_df.loc[features].values
-    y = users_df.loc['y'].values
+    X = users_df[features].values
+    y = users_df['y'].values
     print("Chi square test")
     ch2, pval = chi2(X,y)
     print(features)
@@ -225,9 +268,9 @@ def main():
     print("SVM, l2")
     benchmark(clf, X_train, X_test, y_train, y_test , X, y)
 
-    clf = RankSVM
+    clf = RankSVM()
     print("RankSVM")
-    benchmark(clf, X_train, X_test, y_train, y_test , X, y)
+    benchmark(clf, X_train, X_test, y_train, y_test, X, y)
 
 
 
