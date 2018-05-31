@@ -42,6 +42,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 BUILD_NEW_DATA = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
+num_cores = multiprocessing.cpu_count()
+num_jobs = round(num_cores * 3 / 4)
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
@@ -243,7 +245,9 @@ def main():
         print("Getting user features")
         fact_topics = build_fact_topics()
         fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
-        users_with_features = [build_features_for_user(u) for u in users if len(u.tweets) > 0]
+        users_with_tweets = [u for u in users if len(u.tweets) > 0]
+        users_with_features = Parallel(n_jobs=num_jobs)(
+            delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
         with open('model_data/user_featues', 'wb') as tmpfile:
             pickle.dump(users_with_features, tmpfile)
     else:
