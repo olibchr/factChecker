@@ -247,7 +247,7 @@ def keep_n_best_words(X, y, n = 5000):
 
 
 def train_test_split_on_users(X, y, user_order, users, n):
-    u_train, u_test, _, _ = train_test_split(set(user_order), [0] * len(set(user_order)), test_size=max(0.2 + n / 30, 0.8))
+    u_train, u_test, _, _ = train_test_split(list(set(user_order)), [0] * len(set(user_order)), test_size=max(0.2 + n / 30, 0.8))
 
     # build a mask
     u_train_mask = []
@@ -293,7 +293,7 @@ def main():
     bow_corpus = get_corpus()
 
     users = get_users()
-    lda_analysis(users)
+    # lda_analysis(users)
 
     top_words = 50000
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]

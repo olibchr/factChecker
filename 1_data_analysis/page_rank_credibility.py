@@ -143,8 +143,8 @@ def build_graph(user_to_links, user_to_weight):
     G=nx.Graph()
     all_nodes = [u[0] for u in user_to_links] + list(set([e for sublist in [u[1] for u in user_to_links] for e in sublist]))
     G.add_nodes_from(all_nodes)
-    G.add_edges_from([(userlinks[0],v) for userlinks in user_to_links for v in userlinks[1]])
-    #G.add_weighted_edges_from([(userlinks[0],v,user_to_weight[k]) for userlinks in user_to_links for v in userlinks[1]])
+    #G.add_edges_from([(userlinks[0],v) for userlinks in user_to_links for v in userlinks[1]])
+    G.add_weighted_edges_from([(userlinks[0],v,user_to_weight[k]) for userlinks in user_to_links for v in userlinks[1]])
     obsolete_nodes = [k for k,v in dict(nx.degree(G)).items() if v <= 1]
     G.remove_nodes_from(obsolete_nodes)
     return G
@@ -172,11 +172,10 @@ def rank_users(users):
     pr = nx.pagerank(G)
 
     pr_cred_users = {u:v for u,v in list(pr.items()) if u in user_to_links}
-    print([(pr, y) for pr in pr_cred_users for y in user_to_weight if pr[0] == y[0]])
+    # print(sorted([(v,y[1]) for u,v in pr_cred_users.items() for y in user_to_weight if u == y[0]], reverse=True, key=lambda x: x[0]))
 
     pred = get_ranks(X_test, G, pr)
-    print(zip(pred, y_test))
-
+    print(sorted(np.asarray([e for e in zip(pred, [y[1] for y in y_test])]), reverse=True, key=lambda x: x[0]))
 
     ndgc = ndcg_score([y[1] for y in y_test], pred)
     print("NDCG: {}".format(ndgc))
