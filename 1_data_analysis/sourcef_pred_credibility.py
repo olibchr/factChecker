@@ -329,7 +329,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     return results
 
 
-def main():
+def sourcef_pred(chi_k= 15, ldak=5):
     global bow_corpus
     global word_to_idx
     global fact_to_words
@@ -368,9 +368,9 @@ def main():
     X, y = ada.fit_sample(X, y)
 
 
-    ch2 = SelectKBest(chi2, k=10)
+    ch2 = SelectKBest(chi2, k=18)
     normalizer = Normalizer(copy=False)
-    svd = TruncatedSVD(5)
+    svd = TruncatedSVD(8)
     lsa = make_pipeline(svd,normalizer)
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
@@ -378,6 +378,13 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
     print(Counter(y), Counter(y_train), Counter(y_test))
     evaluation(X, y, X_train, X_test, y_train, y_test)
+
+
+def main():
+
+    for chik in range(4,20):
+        for ldak in range(2,chik):
+            sourcef_pred(chik, ldak)
 
 
 if __name__ == "__main__":

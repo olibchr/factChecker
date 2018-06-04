@@ -28,6 +28,7 @@ from keras.layers import LSTM
 from keras.layers import Dropout
 from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
+from imblearn.over_sampling import RandomOverSampler
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -41,7 +42,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -55,6 +56,7 @@ num_jobs = round(num_cores * 3 / 4)
 word_to_idx, idx_to_word = {}, {}
 fact_to_words = {}
 bow_corpus_top_n = []
+lda = ()
 #if BUILD_NEW_SPARSE:
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
@@ -149,14 +151,33 @@ def lda_analysis(users):
                              for i in topic.argsort()[:-n_top_words - 1:-1]])
         print(message)
     print()
+    return lda
 
 
 def get_series_from_user(user):
+    def topic_overlap(lda, t1, t2):
+        n_topics = 5
+        threshold=1
+        doc_topics = lda.transform((t1, t2))
+        print(doc_topics)
+        t_topics1 = doc_topics[0].argsort()[-n_topics:][::-1]
+        t_topics2 = doc_topics[1].argsort()[-n_topics:][::-1]
+        overlap = [val for val in t_topics1 if val in t_topics2]
+        if len(overlap)>=threshold:
+            return True
+        return False
+    
     relevant_tweets= []
     relevant_tweet_vecs = []
     all_distances = []
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
+        if topic_overlap(lda, tweet['text'], ' '.join(user_fact_words)):
+            relevant_tweets.append(tweet)
+            tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
+            relevant_tweet_vecs.append(tweet_vec)
+        continue
+
         tokens = tokenize_text(tweet['text'], only_retweets=False)
         # print(tokens, user_fact_words)
         distance_to_topic = []
@@ -268,10 +289,10 @@ def train_test_split_on_users(X, y, user_order, users, n):
     u_train_mask = np.asarray(u_train_mask)
 
     print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
-    X_train = X[u_train_mask == True]
-    X_test = X[u_train_mask == False]
-    y_train = y[u_train_mask == True]
-    y_test = y[u_train_mask == False]
+    X_train = [x for x,s in zip(X, u_train_mask) if s]
+    X_test = [x for x,s in zip(X, u_train_mask) if not s]
+    y_train = [ys for ys,s in zip(y, u_train_mask) if s]
+    y_test = [ys for ys,s in zip(y, u_train_mask) if not s]
     print("Shapes after splitting")
 
     for user in users:
@@ -286,12 +307,13 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def lstm_pred(n = 0):
+    global lda
     users = get_users()
-    # lda_analysis(users)
 
     top_words = 50000
 
     if BUILD_NEW_DATA:
+        lda = lda_analysis(users)
         print("Retrieving data and shaping")
         users = [u for u in users if u.tweets]
         users_relevant_tweets = build_dataset(users)
@@ -300,12 +322,13 @@ def lstm_pred(n = 0):
     else:
         X,y,user_order = get_prebuilt_data()
 
+    print(Counter(y))
+    ada = RandomOverSampler(random_state=42)
+    X, y = ada.fit_sample(X, y)
+
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
     #new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
 
-    #print(X[:5])
-    #print([[new_idx_to_word[w] for w in x] for x in X[:5]])
-    #print(Counter(y))
     # X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
     X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y, user_order, users, n)
     print(Counter(y_train), Counter(y_test))
