@@ -5,7 +5,7 @@ import warnings, json, glob
 import sys, os, requests
 from SPARQLWrapper import SPARQLWrapper, JSON
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from Fact import Fact
 from Transaction import Transaction
 

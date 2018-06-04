@@ -1,5 +1,5 @@
 import sys, json, glob, os, hashlib, pandas
-sys.path.insert(0, os.path.dirname(__file__) + '../../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from Transaction import Transaction
 from Fact import Fact
 from User import User

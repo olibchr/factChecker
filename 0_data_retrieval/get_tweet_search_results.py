@@ -2,7 +2,7 @@ from datetime import datetime
 import json, glob, time, random
 import sys, os
 from six.moves import urllib
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 import re, nltk
 from User import User
 from bs4 import BeautifulSoup

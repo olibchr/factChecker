@@ -1,6 +1,6 @@
 import textrazor, json, warnings, sys, os, glob
 from datetime import datetime
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from Fact import Fact
 from Transaction import Transaction
 

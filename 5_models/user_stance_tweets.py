@@ -4,7 +4,7 @@ import sys, os, csv
 import numpy as np
 from dateutil import parser
 import pickle
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) +  '../../991_packages/liblinear-2.20/python/')
 from User import User
 from Transaction import Transaction

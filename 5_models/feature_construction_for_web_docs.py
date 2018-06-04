@@ -2,7 +2,7 @@ import glob, os, sys, json, datetime
 import pandas as pd
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 import re, nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
