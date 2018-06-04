@@ -5,12 +5,14 @@ import json
 import multiprocessing
 import os
 import pickle
+import random
 import sys
 import warnings
 from collections import Counter, defaultdict
 from string import digits
 import re
 
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -166,7 +168,7 @@ def get_series_from_user(user):
         if len(overlap)>=threshold:
             return True
         return False
-    
+
     relevant_tweets= []
     relevant_tweet_vecs = []
     all_distances = []
@@ -301,10 +303,28 @@ def train_test_split_on_users(X, y, user_order, users, n):
         assert int(user.user_id) == int(user_order[i])
         assert int(user.was_correct) == int(y[i])
 
+    X_train = np.asarray(X_train)
+    X_test = np.asarray(X_test)
+    y_train = np.asarray(y_train)
+    y_test = np.asarray(y_test)
+
     print("Training Set: {}, {}".format(X_train.shape, y_train.shape))
     print("Testing Set: {}, {}".format(X_test.shape, y_test.shape))
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
+
+def balance_classes(X,y):
+    while True:
+        if Counter(y)[0] == Counter(y)[1]: break
+
+        i = random.randrange(len(y))
+        if y[i] == 0:
+            X = X + [X[i]]
+            y = y + [y[i]]
+        elif y[i] == 1:
+            X.pop(i)
+            y.pop(i)
+    return X,y
 
 def lstm_pred(n = 0):
     global lda
@@ -316,6 +336,7 @@ def lstm_pred(n = 0):
         lda = lda_analysis(users)
         print("Retrieving data and shaping")
         users = [u for u in users if u.tweets]
+        print(Counter([u.was_correct for u in users]))
         users_relevant_tweets = build_dataset(users)
         print("Subselecting best words")
         X, y, user_order = format_training_data(users_relevant_tweets)
@@ -323,8 +344,8 @@ def lstm_pred(n = 0):
         X,y,user_order = get_prebuilt_data()
 
     print(Counter(y))
-    ada = RandomOverSampler(random_state=42)
-    X, y = ada.fit_sample(X, y)
+    X, y = balance_classes(X,y)
+    print(Counter(y))
 
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
     #new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
