@@ -319,8 +319,8 @@ def balance_classes(X,y):
 
         i = random.randrange(len(y))
         if y[i] == 0:
-            X = X + [X[i]]
-            y = y + [y[i]]
+            X = np.append(X, [X[i]])
+            y = np.append(y, [y[i]])
         elif y[i] == 1:
             np.delete(X,i,0)
             np.delete(y,i,0)
