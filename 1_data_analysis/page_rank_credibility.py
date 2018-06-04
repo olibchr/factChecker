@@ -27,7 +27,7 @@ from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../5_models')
 from decoder import decoder
 from metrics import ndcg_score
@@ -134,7 +134,7 @@ def get_user_edges(users):
                 user_links.append(rt)
         if len(user_links) <= 1: continue
         user_to_links.append([user.user_id, user_links])
-        y.append([user.user_id, user.was_correct])
+        y.append([user.user_id, user.was_correct +0.01])
         i += 1
     return user_to_links, np.asarray(y)
 
@@ -143,8 +143,8 @@ def build_graph(user_to_links, user_to_weight):
     G=nx.Graph()
     all_nodes = [u[0] for u in user_to_links] + list(set([e for sublist in [u[1] for u in user_to_links] for e in sublist]))
     G.add_nodes_from(all_nodes)
-    #G.add_edges_from([(userlinks[0],v) for userlinks in user_to_links for v in userlinks[1]])
-    G.add_weighted_edges_from([(userlinks[0],v,user_to_weight[k]) for userlinks in user_to_links for v in userlinks[1]])
+    G.add_edges_from([(userlinks[0],v) for i, userlinks in enumerate(user_to_links) if user_to_weight[i] == 1 for v in userlinks[1]])
+    #G.add_weighted_edges_from([(userlinks[0],v,user_to_weight[i]) for i, userlinks in enumerate(user_to_links) for v in userlinks[1]])
     obsolete_nodes = [k for k,v in dict(nx.degree(G)).items() if v <= 1]
     G.remove_nodes_from(obsolete_nodes)
     return G

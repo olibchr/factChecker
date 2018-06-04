@@ -34,7 +34,7 @@ from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.model_selection import train_test_split
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -247,7 +247,7 @@ def keep_n_best_words(X, y, n = 5000):
 
 
 def train_test_split_on_users(X, y, user_order, users, n):
-    u_train, u_test, _, _ = train_test_split(list(set(user_order)), [0] * len(set(user_order)), test_size=max(0.2 + n / 30, 0.8))
+    u_train, u_test, _, _ = train_test_split(list(set(user_order)), [0] * len(set(user_order)))
 
     # build a mask
     u_train_mask = []
@@ -265,7 +265,7 @@ def train_test_split_on_users(X, y, user_order, users, n):
         # otherwise false if in test set
         else:
             u_train_mask.append(False)
-    # u_train_mask = np.asarray(u_train_mask)
+    u_train_mask = np.asarray(u_train_mask)
 
     print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
     X_train = X[u_train_mask == True]
@@ -285,22 +285,11 @@ def train_test_split_on_users(X, y, user_order, users, n):
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
-def main():
-    global bow_corpus
-    global word_to_idx, idx_to_word
-    global bow_corpus_top_n
-    wn.ensure_loaded()
-    bow_corpus = get_corpus()
-
+def lstm_pred(n = 0):
     users = get_users()
     # lda_analysis(users)
 
     top_words = 50000
-    bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
-    print("Corpus size: {}".format(len(bow_corpus_tmp)))
-
-    word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
-    idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
     if BUILD_NEW_DATA:
         print("Retrieving data and shaping")
@@ -312,13 +301,13 @@ def main():
         X,y,user_order = get_prebuilt_data()
 
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
-    new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
+    #new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
 
-    print(X[:5])
-    print([[new_idx_to_word[w] for w in x] for x in X[:5]])
-    print(Counter(y))
+    #print(X[:5])
+    #print([[new_idx_to_word[w] for w in x] for x in X[:5]])
+    #print(Counter(y))
     # X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
-    X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y, user_order, users, 0)
+    X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y, user_order, users, n)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
@@ -340,6 +329,23 @@ def main():
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)
     print("Accuracy: %.2f%%" % (scores[1]*100))
+
+
+def main():
+    global bow_corpus
+    global word_to_idx, idx_to_word
+    global bow_corpus_top_n
+    wn.ensure_loaded()
+    bow_corpus = get_corpus()
+
+    bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
+    #print("Corpus size: {}".format(len(bow_corpus_tmp)))
+
+    word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
+    idx_to_word = {idx: k for k, idx in word_to_idx.items()}
+
+    for n in range(0,1000,100):
+        lstm_pred(n)
 
 
 if __name__ == "__main__":

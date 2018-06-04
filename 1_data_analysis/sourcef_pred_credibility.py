@@ -21,17 +21,29 @@ from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
+from sklearn.ensemble import RandomForestClassifier
 
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import SGDClassifier, RidgeClassifier, Perceptron, PassiveAggressiveClassifier
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import cross_val_score
 from sklearn import metrics
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import LinearSVC
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Normalizer
+from imblearn.under_sampling import AllKNN
+from imblearn.over_sampling import RandomOverSampler
+from sklearn.decomposition import TruncatedSVD
+import seaborn as sns
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sns.set(style="ticks")
+
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../5_models')
 from decoder import decoder
 from svm_rank import RankSVM
@@ -39,7 +51,7 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 num_cores = multiprocessing.cpu_count()
@@ -94,7 +106,8 @@ def get_corpus():
 
 
 def get_relevant_tweets(user):
-    relevant_tweets= []
+    relevant_tweets = []
+    print(user.user_id)
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -153,7 +166,7 @@ def build_features_for_user(user):
 
     link_pattern = re.compile('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 
-    relevant_tweets = get_relevant_tweets(user.tweets)
+    relevant_tweets = get_relevant_tweets(user)
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
         avg_words.append(len(tokenize_text(t['text'])))
@@ -168,7 +181,7 @@ def build_features_for_user(user):
         avg_emoticons.append(1 if emoji_pattern.search(t['text']) is not None else 0)
         if 'reply' in t and t['reply'] is not None: tweets_that_are_reply.append(t)
         avg_links.append(1 if link_pattern.search(t['text']) is not None else 0)
-    if len(relevant_tweets) == 0: relevant_tweets = [0]
+    if len(relevant_tweets) == 0: relevant_tweets = [0]; retweets = [0]
 
     avg_len = 1.0 * sum(avg_len) / len(relevant_tweets)
     avg_words = 1.0 * sum(avg_words) / len(relevant_tweets)
@@ -220,8 +233,8 @@ def build_features_for_user(user):
 
 
 def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
-    #scores = cross_val_score(clf, X, y, cv=5)
-    #print("Cross validation: {}".format(scores))
+    scores = cross_val_score(clf, X, y, cv=5)
+    print("Cross validation: {}".format(np.average(scores)))
 
     clf.fit(X=X_train, y=y_train)
     pred = clf.predict(X_test)
@@ -231,7 +244,89 @@ def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
     print("NDCG: {}".format(ndgc))
     print("CLF score: {}".format(clf.score(X_test, y_test)))
     print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
+
+
+def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
+    def benchmark(clf):
+        scores = cross_val_score(clf, X, y, cv=5)
+
+        clf.fit(X_train_imp, y_train)
+        pred = clf.predict(X_test_imp)
+        # print(X_test_imp.shape, y_test.shape, pred.shape)
+
+        score = metrics.accuracy_score(y_test, pred)
+        precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
+        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
             score, precision, recall, fscore))
+
+        clf.fit(X_train_imp2, y_train2)
+        pred2 = clf.predict(X_test_imp2)
+        score2 = metrics.accuracy_score(y_test2, pred2)
+        precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
+        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+            score2, precision2, recall2, fscore2))
+
+        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+
+        fpr, tpr, thresholds = roc_curve(y_test2, pred2)
+        roc_auc = auc(fpr, tpr)
+        # plt.title('Receiver Operating Characteristic')
+        #
+        # plt.plot(fpr, tpr, 'b',
+        # label='AUC = %0.2f'% roc_auc)
+        # plt.legend(loc='lower right')
+        # plt.plot([0,1],[0,1],'r--')
+        # plt.xlim([-0.1,1.2])
+        # plt.ylim([-0.1,1.2])
+        # plt.ylabel('True Positive Rate')
+        # plt.xlabel('False Positive Rate')
+        # plt.show()
+        match = [1 if t == p else 0 for t, p in zip(y_test2, pred2)]
+
+        return fscore, fscore2, scores.mean()
+
+    print('&' * 80)
+    print("Evaluation")
+
+    if X_train is None:
+        print("No pre-split data given")
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
+
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train)
+    X_train_imp = imp.transform(X_train)
+    X_test_imp = imp.transform(X_test)
+
+    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    imp = imp.fit(X_train2)
+    X_train_imp2 = imp.transform(X_train2)
+    X_test_imp2 = imp.transform(X_test2)
+    results = []
+
+    # for clf, name in (
+    #         (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
+    #         (Perceptron(n_iter=50), "Perceptron"),
+    #         (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
+    #         (KNeighborsClassifier(n_neighbors=10), "kNN"),
+    #         (RandomForestClassifier(n_estimators=100), "Random forest"),
+    #         (BernoulliNB(alpha=.01), "Bernoulli NB")):
+    #     print('=' * 80)
+    #     print(name)
+    #     results.append([benchmark(clf)])
+
+    # Train sparse SVM likes
+    for penalty in ["l2", "l1"]:
+        print("%s penalty" % penalty.upper())
+        for clf, name in (
+                (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
+                (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
+            print('=' * 80)
+            print(name)
+            results.append([benchmark(clf)])
+    return results
 
 
 def main():
@@ -244,7 +339,8 @@ def main():
         users = get_users()
         print("Getting user features")
         fact_topics = build_fact_topics()
-        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in
+                         fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
@@ -255,29 +351,33 @@ def main():
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-    print(users_df)
-    print(users_df.describe())
+    #print(users_df.describe())
 
-    features = ['avg_len','avg_words','avg_unique_char','avg_hashtags','avg_retweets','pos_words','neg_words','avg_tweet_is_retweet','avg_special_symbol','avg_emoticons','avg_tweet_is_reply','avg_mentions','avg_links','followers','friends','verified','status_cnt','time_retweet','len_description','len_name']
+    features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
+                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_emoticons', 'avg_tweet_is_reply', 'avg_mentions',
+                'avg_links', 'followers', 'friends', 'verified', 'status_cnt', 'time_retweet', 'len_description',
+                'len_name']
     X = users_df[features].values
     y = users_df['y'].values
-    print("Chi square test")
-    ch2, pval = chi2(X,y)
-    print(features)
-    print(pval)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y)
     print(Counter(y))
-    clf = LinearSVC(penalty='l2', dual=False, tol=1e-3)
-    print("SVM, l2")
-    benchmark(clf, X_train, X_test, y_train, y_test , X, y)
 
-    clf = RankSVM()
-    print("RankSVM")
-    benchmark(clf, X_train, X_test, y_train, y_test, X, y)
+    #sns.pairplot(users_df[features+['y']], hue="y")
+    #plt.show()
 
+    ada = RandomOverSampler(random_state=42)
+    X, y = ada.fit_sample(X, y)
 
 
+    ch2 = SelectKBest(chi2, k=10)
+    normalizer = Normalizer(copy=False)
+    svd = TruncatedSVD(5)
+    lsa = make_pipeline(svd,normalizer)
+    X = ch2.fit_transform(X, y)
+    X = np.asarray(lsa.fit_transform(X, y))
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
+    print(Counter(y), Counter(y_train), Counter(y_test))
+    evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@ from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_objects')
+sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
