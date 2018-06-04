@@ -250,6 +250,7 @@ def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         scores = cross_val_score(clf, X, y, cv=5)
+        if scores.mean() <= 0.54: return 0,0,0
 
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
@@ -368,9 +369,9 @@ def sourcef_pred(chi_k= 15, ldak=5):
     X, y = ada.fit_sample(X, y)
 
 
-    ch2 = SelectKBest(chi2, k=18)
+    ch2 = SelectKBest(chi2, k=chi_k)
     normalizer = Normalizer(copy=False)
-    svd = TruncatedSVD(8)
+    svd = TruncatedSVD(ldak)
     lsa = make_pipeline(svd,normalizer)
     X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
