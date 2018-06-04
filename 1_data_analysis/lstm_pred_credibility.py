@@ -322,8 +322,8 @@ def balance_classes(X,y):
             X = X + [X[i]]
             y = y + [y[i]]
         elif y[i] == 1:
-            X.pop(i)
-            y.pop(i)
+            np.delete(X,i,0)
+            np.delete(y,i,0)
     return X,y
 
 def lstm_pred(n = 0):

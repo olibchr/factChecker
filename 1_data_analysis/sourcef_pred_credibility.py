@@ -288,7 +288,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         return fscore, fscore2, scores.mean()
 
     print('&' * 80)
-    print("Evaluation")
+    #print("Evaluation")
 
     if X_train is None:
         print("No pre-split data given")
@@ -324,7 +324,7 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         for clf, name in (
                 (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
                 (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
-            print('=' * 80)
+            #print('=' * 80)
             print(name)
             results.append([benchmark(clf)])
     return results
@@ -360,7 +360,7 @@ def sourcef_pred(chi_k= 15, ldak=5):
                 'len_name']
     X = users_df[features].values
     y = users_df['y'].values
-    print(Counter(y))
+    #print(Counter(y))
 
     #sns.pairplot(users_df[features+['y']], hue="y")
     #plt.show()
@@ -385,6 +385,7 @@ def main():
 
     for chik in range(4,20):
         for ldak in range(2,chik):
+            print(chik, ldak)
             sourcef_pred(chik, ldak)
 
 
