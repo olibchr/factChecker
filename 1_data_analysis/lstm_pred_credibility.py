@@ -44,7 +44,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -59,6 +59,7 @@ word_to_idx, idx_to_word = {}, {}
 fact_to_words = {}
 bow_corpus_top_n = []
 lda = ()
+users = ()
 #if BUILD_NEW_SPARSE:
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
@@ -270,27 +271,36 @@ def keep_n_best_words(X, y, n = 5000):
 
 
 def train_test_split_on_users(X, y, user_order, users, n):
-    u_train, u_test, _, _ = train_test_split(list(set(user_order)), [0] * len(set(user_order)))
+    def build_mask():
+        u_train, u_test, _, _ = train_test_split(list(set(user_order)), [0] * len(set(user_order)))
 
-    # build a mask
-    u_train_mask = []
-    user_to_n = defaultdict(lambda: 0)
-    for uid in user_order:
-        # always true if in train set
-        if uid in u_train:
-            u_train_mask.append(True);
-            continue
-        # true to add n samples of rumor to train set
-        elif user_to_n[uid] < n:
-            u_train_mask.append(True)
-            user_to_n[uid] += 1
-            continue
-        # otherwise false if in test set
-        else:
-            u_train_mask.append(False)
-    u_train_mask = np.asarray(u_train_mask)
+        # build a mask
+        u_train_mask = []
+        user_to_n = defaultdict(lambda: 0)
+        for uid in user_order:
+            # always true if in train set
+            if uid in u_train:
+                u_train_mask.append(True);
+                continue
+            # true to add n samples of rumor to train set
+            elif user_to_n[uid] < n:
+                u_train_mask.append(True)
+                user_to_n[uid] += 1
+                continue
+            # otherwise false if in test set
+            else:
+                u_train_mask.append(False)
+        return np.asarray(u_train_mask)
 
-    print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
+    ratio = 0
+    i = 0
+    while ratio < 0.9 or ratio > 1.1:
+        u_train_mask = build_mask()
+        ratio=Counter(u_train_mask)['False'] / Counter(u_train_mask)['True']
+        i+=1
+        if i>=25: print("Cant build even classes"); break
+
+    #print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
     X_train = [x for x,s in zip(X, u_train_mask) if s]
     X_test = [x for x,s in zip(X, u_train_mask) if not s]
     y_train = [ys for ys,s in zip(y, u_train_mask) if s]
@@ -314,29 +324,29 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def balance_classes(X,y):
-    while True:
+    for i in range(80):
         if Counter(y)[0] == Counter(y)[1]: break
+        k_add = random.sample(np.where(y==0)[0][0], 100)
 
-        i = random.randrange(len(y))
-        if y[i] == 0:
-            X = np.append(X, [X[i]])
-            y = np.append(y, [y[i]])
-        elif y[i] == 1:
-            np.delete(X,i,0)
-            np.delete(y,i,0)
+        X = np.append(X, [X[k_add]])
+        y = np.append(y, [y[k_add]])
+
+        k_del = random.sample(np.where(y==1)[0][0], 100)
+        np.delete(X,k_del,0)
+        np.delete(y,k_del,0)
+        print(Counter(y))
     return X,y
 
-def lstm_pred(n = 0):
-    global lda
-    users = get_users()
 
+def lstm_pred(n = 0):
+    global lda, users
+    print(n)
     top_words = 50000
 
     if BUILD_NEW_DATA:
         lda = lda_analysis(users)
         print("Retrieving data and shaping")
         users = [u for u in users if u.tweets]
-        print(Counter([u.was_correct for u in users]))
         users_relevant_tweets = build_dataset(users)
         print("Subselecting best words")
         X, y, user_order = format_training_data(users_relevant_tweets)
@@ -344,14 +354,14 @@ def lstm_pred(n = 0):
         X,y,user_order = get_prebuilt_data()
 
     print(Counter(y))
-    X, y = balance_classes(X,y)
+    #X, y = balance_classes(X,y)
     print(Counter(y))
 
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
     #new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
 
-    # X_train, X_test, y_train, y_test = train_test_split(X,y, shuffle=False)
-    X_train, X_test, y_train, y_test  = train_test_split_on_users(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split(X,y)
+    X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
@@ -379,8 +389,10 @@ def main():
     global bow_corpus
     global word_to_idx, idx_to_word
     global bow_corpus_top_n
+    global users
     wn.ensure_loaded()
     bow_corpus = get_corpus()
+    users = get_users()
 
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     #print("Corpus size: {}".format(len(bow_corpus_tmp)))
