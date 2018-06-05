@@ -325,17 +325,17 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def balance_classes(X,y):
-    for i in range(15):
+    for i in range(150):
         if Counter(y)[0] == Counter(y)[1]: break
-        k_add = random.sample(np.where(y==0)[0][0], 1000)
+        k_add = random.sample(list(np.where(y==0)[0]), 100)
 
         X = np.append(X, [X[k_add]])
         y = np.append(y, [y[k_add]])
 
-        k_del = random.sample(np.where(y==1)[0][0], 1000)
+        k_del = random.sample(list(np.where(y==1)[0]), 100)
         np.delete(X,k_del,0)
         np.delete(y,k_del,0)
-        print(Counter(y))
+    print(X[-1:])
     return X,y
 
 
