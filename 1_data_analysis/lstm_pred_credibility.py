@@ -290,21 +290,22 @@ def train_test_split_on_users(X, y, user_order, users, n):
             # otherwise false if in test set
             else:
                 u_train_mask.append(False)
-        return np.asarray(u_train_mask)
+        X_train = [x for x,s in zip(X, u_train_mask) if s]
+        X_test = [x for x,s in zip(X, u_train_mask) if not s]
+        y_train = [ys for ys,s in zip(y, u_train_mask) if s]
+        y_test = [ys for ys,s in zip(y, u_train_mask) if not s]
+        return X_train, X_test, y_train, y_test
 
     ratio = 0
     i = 0
     while ratio < 0.9 or ratio > 1.1:
-        u_train_mask = build_mask()
-        ratio=Counter(u_train_mask)['False'] / Counter(u_train_mask)['True']
+        X_train, X_test, y_train, y_test = build_mask()
+        ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
         i+=1
         if i>=25: print("Cant build even classes"); break
 
     #print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
-    X_train = [x for x,s in zip(X, u_train_mask) if s]
-    X_test = [x for x,s in zip(X, u_train_mask) if not s]
-    y_train = [ys for ys,s in zip(y, u_train_mask) if s]
-    y_test = [ys for ys,s in zip(y, u_train_mask) if not s]
+
     print("Shapes after splitting")
 
     for user in users:
@@ -324,14 +325,14 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def balance_classes(X,y):
-    for i in range(80):
+    for i in range(15):
         if Counter(y)[0] == Counter(y)[1]: break
-        k_add = random.sample(np.where(y==0)[0][0], 100)
+        k_add = random.sample(np.where(y==0)[0][0], 1000)
 
         X = np.append(X, [X[k_add]])
         y = np.append(y, [y[k_add]])
 
-        k_del = random.sample(np.where(y==1)[0][0], 100)
+        k_del = random.sample(np.where(y==1)[0][0], 1000)
         np.delete(X,k_del,0)
         np.delete(y,k_del,0)
         print(Counter(y))
@@ -353,12 +354,11 @@ def lstm_pred(n = 0):
     else:
         X,y,user_order = get_prebuilt_data()
 
+    X, new_word_to_idx = keep_n_best_words(X,y, top_words)
+
     print(Counter(y))
     #X, y = balance_classes(X,y)
     print(Counter(y))
-
-    X, new_word_to_idx = keep_n_best_words(X,y, top_words)
-    #new_idx_to_word = {idx: k for k, idx in new_word_to_idx.items()}
 
     # X_train, X_test, y_train, y_test = train_test_split(X,y)
     X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
