@@ -44,7 +44,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -60,6 +60,8 @@ fact_to_words = {}
 bow_corpus_top_n = []
 lda = ()
 users = ()
+lda_text_to_id = {}
+lda_topics_per_text =[]
 #if BUILD_NEW_SPARSE:
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
@@ -128,25 +130,35 @@ def build_fact_topics():
 
 
 def lda_analysis(users):
+    global lda_text_to_id, lda_topics_per_text
+
     n_features = 1000
     n_components = 50
     n_top_words = 20
     print("Constructing user docs")
     X = [[tweet['text'] for tweet in user.tweets] for user in users]
     X = [tweet for sublist in X for tweet in sublist]
+    fact_topics = build_fact_topics()
+    X.append([' '.join(f) for f in fact_topics['fact_terms'].values])
+
     print(X[:5])
     print("TF fitting user docs")
     tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
                                     max_features=n_features,
                                     stop_words='english')
-    tf = tf_vectorizer.fit_transform(X)
+    tf = tf_vectorizer.fit(X)
+    X_tf = tf.transform(X)
 
     print("Training LDA model")
     lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
                                     learning_method='online',
                                     learning_offset=50.,
                                     random_state=0)
-    lda.fit(tf)
+    lda.fit(X_tf)
+
+    lda_text_to_id = {k:v for k, v in enumerate(X)}
+    lda_topics_per_text = lda.transform(X_tf)
+
     tf_feature_names = tf_vectorizer.get_feature_names()
     for topic_idx, topic in enumerate(lda.components_):
         message = "Topic #%d: " % topic_idx
@@ -161,10 +173,12 @@ def get_series_from_user(user):
     def topic_overlap(lda, t1, t2):
         n_topics = 5
         threshold=1
+        t1_topics = lda_topics_per_text[lda_text_to_id[t1]]
+        t2_topics = lda_topics_per_text[lda_text_to_id[t2]]
         doc_topics = lda.transform((t1, t2))
         print(doc_topics)
-        t_topics1 = doc_topics[0].argsort()[-n_topics:][::-1]
-        t_topics2 = doc_topics[1].argsort()[-n_topics:][::-1]
+        t_topics1 = t1_topics.argsort()[-n_topics:][::-1]
+        t_topics2 = t2_topics.argsort()[-n_topics:][::-1]
         overlap = [val for val in t_topics1 if val in t_topics2]
         if len(overlap)>=threshold:
             return True
@@ -265,7 +279,7 @@ def keep_n_best_words(X, y, n = 5000):
     print("Vocabulary length: {}".format(len(vocab_new_indexed)))
 
     # only keep words that are selected by chi2
-    X = [[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X]
+    X = np.asarray([[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X])
     print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
     return X, vocab_new_indexed
 
@@ -329,8 +343,8 @@ def balance_classes(X,y):
         if Counter(y)[0] == Counter(y)[1]: break
         k_add = random.sample(list(np.where(y==0)[0]), 100)
 
-        X = np.append(X, [X[k_add]])
-        y = np.append(y, [y[k_add]])
+        X = np.append(X, X[k_add])
+        y = np.append(y, y[k_add])
 
         k_del = random.sample(list(np.where(y==1)[0]), 100)
         np.delete(X,k_del,0)
@@ -357,7 +371,7 @@ def lstm_pred(n = 0):
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
 
     print(Counter(y))
-    #X, y = balance_classes(X,y)
+    X, y = balance_classes(X,y)
     print(Counter(y))
 
     # X_train, X_test, y_train, y_test = train_test_split(X,y)

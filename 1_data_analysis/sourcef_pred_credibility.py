@@ -60,7 +60,7 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0# KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def tokenize_text(text, only_retweets=False):
@@ -358,12 +358,31 @@ def sourcef_pred(chi_k= 15, ldak=5):
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_emoticons', 'avg_tweet_is_reply', 'avg_mentions',
                 'avg_links', 'followers', 'friends', 'verified', 'status_cnt', 'time_retweet', 'len_description',
                 'len_name']
+    features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
+                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
+                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
+                'len_name']
     X = users_df[features].values
     y = users_df['y'].values
     #print(Counter(y))
 
     #sns.pairplot(users_df[features+['y']], hue="y")
-    #plt.show()
+    #  %%%%%% Plot %%%%%%
+    corr = users_df[features].corr()
+    mask = np.zeros_like(corr, dtype=np.bool)
+    mask[np.triu_indices_from(mask)] = True
+
+    # Set up the matplotlib figure
+    f, ax = plt.subplots(figsize=(11, 9))
+
+    # Generate a custom diverging colormap
+    cmap = sns.diverging_palette(220, 10, as_cmap=True)
+
+    # Draw the heatmap with the mask and correct aspect ratio
+    sns.heatmap(corr, mask=mask, cmap=cmap, vmax=.3, center=0,
+                square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    plt.show()
+    # %%%%%%%%
 
     ada = RandomOverSampler(random_state=42)
     X, y = ada.fit_sample(X, y)
@@ -372,8 +391,8 @@ def sourcef_pred(chi_k= 15, ldak=5):
     ch2 = SelectKBest(chi2, k=chi_k)
     normalizer = Normalizer(copy=False)
     svd = TruncatedSVD(ldak)
-    lsa = make_pipeline(svd,normalizer)
-    X = ch2.fit_transform(X, y)
+    lsa = make_pipeline(normalizer)
+    #X = ch2.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
@@ -383,10 +402,10 @@ def sourcef_pred(chi_k= 15, ldak=5):
 
 def main():
 
-    for chik in range(4,20):
-        for ldak in range(2,chik):
-            print(chik, ldak)
-            sourcef_pred(chik, ldak)
+    #for chik in range(4,20):
+        #for ldak in range(2,chik):
+    #        print(chik, ldak)
+    sourcef_pred()
 
 
 if __name__ == "__main__":
