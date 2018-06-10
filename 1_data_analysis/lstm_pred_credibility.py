@@ -278,7 +278,7 @@ def keep_n_best_words(X_train, y_train, X_test, y_test, n = 5000):
     vocab = vectorizer.vocabulary_
     vocab = {k:v for k,v in vocab.items() if v in mask}
     # Cannot use 0 due to keras padding (0 will be placeholder)
-    vocab_new_indexed = {k[0]:idx+1 for idx, k in enumerate(vocab.items())}
+    vocab_new_indexed = {k[0]:idx for idx, k in enumerate(vocab.items())}
     print("Vocabulary length: {}".format(len(vocab_new_indexed)))
 
     # only keep words that are selected by chi2
@@ -442,7 +442,7 @@ def lstm_pred(n = 0):
     # X_train, X_test, y_train, y_test = train_test_split(X,y)
     #X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
-    
+
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
     print(Counter(y_train), Counter(y_test))
 
@@ -454,7 +454,7 @@ def lstm_pred(n = 0):
     # create the model
     embedding_vecor_length = 32
     model = Sequential()
-    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length, mask_zero=True))
+    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
     model.add(Dropout(0.2))
     model.add(LSTM(100))
     model.add(Dropout(0.2))
