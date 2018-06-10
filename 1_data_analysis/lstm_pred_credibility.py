@@ -388,14 +388,14 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     i = 0
     testsize = 0.2
     actual_testsize = 0
-    while ratio < 0.9 or ratio > 1.1 or actual_testsize<0.15 or actual_testsize>0.4:
+    while ratio < 0.85 or ratio > 1.15 or actual_testsize<0.15 or actual_testsize>0.4:
         X_train, X_test, y_train, y_test = build_mask(testsize)
         ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
         actual_testsize = len(y_train) / (1.0*len(y_test))
 
         i+=1
         if actual_testsize < 0.15: testsize *= 1.5
-        if i>=25: print("Cant build even classes"); break
+        if i>=100: print("Cant build even classes"); break
 
     print("Shapes after splitting")
 
@@ -418,13 +418,13 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 def balance_classes(X,y, user_order):
     for i in range(150):
         if Counter(y)[0] == Counter(y)[1]: break
-        k_add = random.sample(list(np.where(y==0)[0]), 100)
+        #k_add = random.sample(list(np.where(y==0)[0]), 100)
 
-        X = np.append(X, X[k_add])
-        y = np.append(y, y[k_add])
-        user_order = np.append(user_order, user_order[k_add])
+        #X = np.append(X, X[k_add])
+        #y = np.append(y, y[k_add])
+        #user_order = np.append(user_order, user_order[k_add])
 
-        k_del = random.sample(list(np.where(y==1)[0]), 100)
+        k_del = random.sample(list(np.where(y==1)[0]), 200)
         np.delete(X,k_del,0)
         np.delete(y,k_del,0)
         np.delete(user_order,k_del,0)
