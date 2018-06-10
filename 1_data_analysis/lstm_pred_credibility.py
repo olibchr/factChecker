@@ -274,10 +274,10 @@ def get_prebuilt_data():
 
 
 def keep_n_best_words(X_train, y_train, X_test, y_test, n = 5000):
+    print(X_train.shape, X_test.shape)
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
 
     X_words = [' '.join([idx_to_word[w] for w in x]) for x in X_train]
-    X_test_words = [' '.join([idx_to_word[w] for w in x]) for x in X_test]
     X_words = vectorizer.fit_transform(X_words)
     ch2 = SelectKBest(chi2, k=n)
     ch2.fit(X_words, y_train)
@@ -410,19 +410,20 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
-def balance_classes(X,y):
+def balance_classes(X,y, user_order):
     for i in range(150):
         if Counter(y)[0] == Counter(y)[1]: break
         k_add = random.sample(list(np.where(y==0)[0]), 100)
 
         X = np.append(X, X[k_add])
         y = np.append(y, y[k_add])
+        user_order = np.append(user_order, user_order[k_add])
 
         k_del = random.sample(list(np.where(y==1)[0]), 100)
         np.delete(X,k_del,0)
         np.delete(y,k_del,0)
-    print(X[-1:])
-    return X,y
+        np.delete(user_order,k_del,0)
+    return X,y, user_order
 
 
 def lstm_pred(n = 0):
@@ -443,12 +444,12 @@ def lstm_pred(n = 0):
     #todo: train test split before chi2
 
     print(Counter(y))
-    X, y = balance_classes(X,y)
+    X, y, user_order = balance_classes(X,y,user_order)
     print(Counter(y))
 
     # X_train, X_test, y_train, y_test = train_test_split(X,y)
-    #X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
     print(Counter(y_train), Counter(y_test))
