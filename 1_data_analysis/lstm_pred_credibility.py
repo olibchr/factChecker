@@ -353,17 +353,21 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     def build_mask(testsize=0.2):
         f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=testsize)
         f_train_mask = []
-        fact_to_n = defaultdict(lambda: 0)
-        for user_fact in user_order_fact:
+
+        # Keep a map of rumor hash to list of user id's. To keep at most n users in training set, we add the users id in the corresponding list and check.
+        trainFact_to_n_user = defaultdict(lambda: [])
+
+        for user_id in user_order:
             # always true if in train set
-            if user_fact in f_train:
+            if user_to_fact[user_id] in f_train:
                 f_train_mask.append(True);
                 continue
-            # true to add n samples of rumor to train set
-            elif fact_to_n[user_fact] < n:
+            # if user was added before, all other user instances should be added
+            elif user_id in trainFact_to_n_user[user_to_fact[user_id]]:
                 f_train_mask.append(True)
-                fact_to_n[user_fact] += 1
-                continue
+            elif len(trainFact_to_n_user[user_to_fact[user_id]]) < n:
+                trainFact_to_n_user[user_to_fact[user_id]] = trainFact_to_n_user[user_to_fact[user_id]] + [user_id]
+                f_train_mask.append(True)
             # otherwise false if in test set
             else:
                 f_train_mask.append(False)
@@ -378,9 +382,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     facts_hsh = list(facts_df['hash'].as_matrix())
-
     user_to_fact = {user.user_id: user.fact for user in users}
-    user_order_fact = [user_to_fact[u_id] for u_id in user_order]
 
     ratio = 0
     i = 0
@@ -494,7 +496,7 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
-    for n in range(0,1000,100):
+    for n in range(0,10,1):
         lstm_pred(n)
 
 
