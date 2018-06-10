@@ -350,8 +350,8 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
-    def build_mask():
-        f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.2)
+    def build_mask(testsize=0.2):
+        f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=testsize)
         f_train_mask = []
         fact_to_n = defaultdict(lambda: 0)
         for user_fact in user_order_fact:
@@ -384,13 +384,16 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
     ratio = 0
     i = 0
-    while ratio < 0.9 or ratio > 1.1:
-        X_train, X_test, y_train, y_test = build_mask()
+    testsize = 0.2
+    actual_testsize = 0
+    while ratio < 0.9 or ratio > 1.1 or actual_testsize<0.15 or actual_testsize>0.4:
+        X_train, X_test, y_train, y_test = build_mask(testsize)
         ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
-        i+=1
-        if i>=25: print("Cant build even classes"); break
+        actual_testsize = len(y_train) / (1.0*len(y_test))
 
-    #print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
+        i+=1
+        if actual_testsize < 0.15: testsize *= 1.5
+        if i>=25: print("Cant build even classes"); break
 
     print("Shapes after splitting")
 
@@ -448,8 +451,8 @@ def lstm_pred(n = 0):
     print(Counter(y))
 
     # X_train, X_test, y_train, y_test = train_test_split(X,y)
-    X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
-    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
     print(Counter(y_train), Counter(y_test))
