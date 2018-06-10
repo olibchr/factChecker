@@ -266,13 +266,13 @@ def get_prebuilt_data():
     return X,y,user_order
 
 
-def keep_n_best_words(X, y, n = 5000):
+def keep_n_best_words(X_train, y_train, X_test, y_test, n = 5000):
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
 
-    X_words = [' '.join([idx_to_word[w] for w in x]) for x in X]
+    X_words = [' '.join([idx_to_word[w] for w in x]) for x in X_train]
     X_words = vectorizer.fit_transform(X_words)
     ch2 = SelectKBest(chi2, k=n)
-    ch2.fit(X_words, y)
+    ch2.fit(X_words, y_train)
     mask = ch2.get_support(indices=True)
     vocab = vectorizer.vocabulary_
     vocab = {k:v for k,v in vocab.items() if v in mask}
@@ -280,9 +280,10 @@ def keep_n_best_words(X, y, n = 5000):
     print("Vocabulary length: {}".format(len(vocab_new_indexed)))
 
     # only keep words that are selected by chi2
-    X = np.asarray([[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X])
-    print("Average words in tweet: {}".format(sum([len(x) for x in X])/len(X)))
-    return X, vocab_new_indexed
+    X_train = np.asarray([[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X_train])
+    X_test = np.asarray([[vocab_new_indexed[idx_to_word[w]] for w in x if idx_to_word[w] in vocab_new_indexed] for x in X_test])
+    print("Average words in tweet: {}".format(sum([len(x) for x in X_train]) / len(X_train)))
+    return X_train, X_test, vocab_new_indexed
 
 
 def train_test_split_on_users(X, y, user_order, users, n):
@@ -370,14 +371,14 @@ def lstm_pred(n = 0):
         X,y,user_order = get_prebuilt_data()
 
     #todo: train test split before chi2
-    X, new_word_to_idx = keep_n_best_words(X,y, top_words)
 
     print(Counter(y))
     X, y = balance_classes(X,y)
     print(Counter(y))
 
-    # X_train, X_test, y_train, y_test = train_test_split(X,y)
     X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split(X,y)
+    X, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
