@@ -44,7 +44,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
+NEW_LDA_MODEL = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -151,13 +152,19 @@ def lda_analysis(users):
     X_tf = tf.transform(X)
 
     print("Training LDA model")
-    lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
-                                    learning_method='online',
-                                    learning_offset=50.,
-                                    random_state=0)
-    lda.fit(X_tf)
+    if NEW_LDA_MODEL:
+        lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
+                                        learning_method='online',
+                                        learning_offset=50.,
+                                        random_state=0)
+        lda.fit(X_tf)
+        with open('model_data/lda_model','wb') as tmpfile:
+            pickle.dumps(lda, tmpfile)
+    else:
+        with open('model_data/lda_model','rb') as tmpfile:
+            lda = pickle.loads(tmpfile)
 
-    lda_text_to_id = {k:v for k, v in enumerate(X)}
+    lda_text_to_id = {txt:id for id, txt in enumerate(X)}
     lda_topics_per_text = lda.transform(X_tf)
 
     tf_feature_names = tf_vectorizer.get_feature_names()
