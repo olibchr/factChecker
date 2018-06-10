@@ -1,5 +1,4 @@
 from __future__ import print_function
-import datetime
 import glob
 import json
 import multiprocessing
@@ -7,38 +6,33 @@ import os
 import pickle
 import sys
 import warnings
-from collections import Counter, defaultdict
 from string import digits
 import re
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from dateutil import parser
 from gensim.models import KeyedVectors
 from joblib import Parallel, delayed
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.covariance import EllipticEnvelope
 
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.linear_model import SGDClassifier, RidgeClassifier, Perceptron, PassiveAggressiveClassifier
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import roc_curve, auc
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedShuffleSplit, GridSearchCV
 from sklearn import metrics
-from sklearn.naive_bayes import BernoulliNB
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC, NuSVC
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Imputer, normalize, StandardScaler
 from sklearn.preprocessing import Normalizer
-from imblearn.under_sampling import AllKNN
 from imblearn.over_sampling import RandomOverSampler
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, PCA
 import seaborn as sns
 
 sns.set(style="ticks")
@@ -46,7 +40,6 @@ sns.set(style="ticks")
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../5_models')
 from decoder import decoder
-from svm_rank import RankSVM
 from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -60,7 +53,7 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = 0# KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0  # KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def tokenize_text(text, only_retweets=False):
@@ -154,6 +147,19 @@ def build_features_for_user(user):
     avg_links = []
     avg_hashtags = []
     avg_mentions = []
+    avg_questionM = []
+    avg_exlamationM = []
+    avg_multiQueExlM = []
+    avg_upperCase = []
+    avg_sent_pos = []
+    avg_sent_neg = []
+    avg_count_distinct_hashtags = []
+    most_common_weekday = []
+    most_common_hour = []
+    avg_search_results = []
+    avg_search_r_is_news_page = []
+    avg_count_distinct_words = []
+
 
     emoji_pattern = re.compile(
         '^(:\(|:\))+$'
@@ -166,7 +172,7 @@ def build_features_for_user(user):
 
     link_pattern = re.compile('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 
-    relevant_tweets = get_relevant_tweets(user)
+    relevant_tweets = user.tweets  # get_relevant_tweets(user)
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
         avg_words.append(len(tokenize_text(t['text'])))
@@ -250,11 +256,9 @@ def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
         scores = cross_val_score(clf, X, y, cv=5)
-        if scores.mean() <= 0.54: return 0,0,0
 
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
-        # print(X_test_imp.shape, y_test.shape, pred.shape)
 
         score = metrics.accuracy_score(y_test, pred)
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
@@ -269,26 +273,10 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
             score2, precision2, recall2, fscore2))
 
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
-
-        fpr, tpr, thresholds = roc_curve(y_test2, pred2)
-        roc_auc = auc(fpr, tpr)
-        # plt.title('Receiver Operating Characteristic')
-        #
-        # plt.plot(fpr, tpr, 'b',
-        # label='AUC = %0.2f'% roc_auc)
-        # plt.legend(loc='lower right')
-        # plt.plot([0,1],[0,1],'r--')
-        # plt.xlim([-0.1,1.2])
-        # plt.ylim([-0.1,1.2])
-        # plt.ylabel('True Positive Rate')
-        # plt.xlabel('False Positive Rate')
-        # plt.show()
-        match = [1 if t == p else 0 for t, p in zip(y_test2, pred2)]
-
         return fscore, fscore2, scores.mean()
 
     print('&' * 80)
-    #print("Evaluation")
+    # print("Evaluation")
 
     if X_train is None:
         print("No pre-split data given")
@@ -307,30 +295,104 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     X_test_imp2 = imp.transform(X_test2)
     results = []
 
-    # for clf, name in (
-    #         (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
-    #         (Perceptron(n_iter=50), "Perceptron"),
-    #         (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
-    #         (KNeighborsClassifier(n_neighbors=10), "kNN"),
-    #         (RandomForestClassifier(n_estimators=100), "Random forest"),
-    #         (BernoulliNB(alpha=.01), "Bernoulli NB")):
-    #     print('=' * 80)
-    #     print(name)
-    #     results.append([benchmark(clf)])
-
-    # Train sparse SVM likes
+    # Train sparse SVM
     for penalty in ["l2", "l1"]:
+        svms = [
+            #(LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
+            #(SVC(kernel='rbf', degree=2), "RBF SVC"),
+            #(SVC(kernel='sigmoid', degree=2), "Sigm SVC"),
+            (SVC(C=1, gamma=1), "Best param SVC)"),
+            #(SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")
+        ]
         print("%s penalty" % penalty.upper())
-        for clf, name in (
-                (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
-                (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
-            #print('=' * 80)
+        for clf, name in svms:
+            # print('=' * 80)
             print(name)
             results.append([benchmark(clf)])
     return results
 
 
-def sourcef_pred(chi_k= 15, ldak=5):
+def reject_outliers(data, y, m=2.):
+    d = np.abs(data - np.median(data))
+    mdev = np.median(d)
+    s = d / mdev if mdev else 0.
+    return data[s < m], y[s < m]
+
+
+def model_param_grid_search(X, y):
+    from matplotlib.colors import Normalize
+    class MidpointNormalize(Normalize):
+
+        def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+            self.midpoint = midpoint
+            Normalize.__init__(self, vmin, vmax, clip)
+
+        def __call__(self, value, clip=None):
+            x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+            return np.ma.masked_array(np.interp(value, x, y))
+
+    svd = TruncatedSVD(2)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd, normalizer)
+    X_2d = lsa.fit_transform(X, y)
+
+    print("Do some magic")
+    C_range = np.logspace(-2, 10, 13)
+    gamma_range = np.logspace(-9, 3, 13)
+    param_grid = dict(gamma=gamma_range, C=C_range)
+    cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+    grid = GridSearchCV(SVC(), param_grid=param_grid, cv=cv)
+    grid.fit(X, y)
+
+    C_2d_range = [1e-2, 1, 1e2]
+    gamma_2d_range = [1e-1, 1, 1e1]
+    classifiers = []
+    for C in C_2d_range:
+        for gamma in gamma_2d_range:
+            clf = SVC(C=C, gamma=gamma)
+            clf.fit(X_2d, y)
+            classifiers.append((C, gamma, clf))
+    print("Do some more magic")
+    plt.figure(figsize=(8, 6))
+    xx, yy = np.meshgrid(np.linspace(-3, 3, 200), np.linspace(-3, 3, 200))
+    for (k, (C, gamma, clf)) in enumerate(classifiers):
+        # evaluate decision function in a grid
+        Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
+        Z = Z.reshape(xx.shape)
+
+        # visualize decision function for these parameters
+        plt.subplot(len(C_2d_range), len(gamma_2d_range), k + 1)
+        plt.title("gamma=10^%d, C=10^%d" % (np.log10(gamma), np.log10(C)),
+                  size='medium')
+
+        # visualize parameter's effect on decision function
+        plt.pcolormesh(xx, yy, -Z, cmap=plt.cm.RdBu)
+        plt.scatter(X_2d[:, 0], X_2d[:, 1], c=y, cmap=plt.cm.RdBu_r,
+                    edgecolors='k')
+        plt.xticks(())
+        plt.yticks(())
+        plt.axis('tight')
+
+    scores = grid.cv_results_['mean_test_score'].reshape(len(C_range),
+                                                         len(gamma_range))
+
+    plt.figure(figsize=(8, 6))
+    plt.subplots_adjust(left=.2, right=0.95, bottom=0.15, top=0.95)
+    plt.imshow(scores, interpolation='nearest', cmap=plt.cm.hot,
+               norm=MidpointNormalize(vmin=0.2, midpoint=0.92))
+    plt.xlabel('gamma')
+    plt.ylabel('C')
+    plt.colorbar()
+    plt.xticks(np.arange(len(gamma_range)), gamma_range, rotation=45)
+    plt.yticks(np.arange(len(C_range)), C_range)
+    plt.title('Validation accuracy')
+    plt.show()
+    pass
+
+
+def sourcef_pred(chi_k=15, ldak=5):
+    # Utility function to move the midpoint of a colormap to be around
+    # the values of interest.
     global bow_corpus
     global word_to_idx
     global fact_to_words
@@ -340,8 +402,7 @@ def sourcef_pred(chi_k= 15, ldak=5):
         users = get_users()
         print("Getting user features")
         fact_topics = build_fact_topics()
-        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in
-                         fact_topics[['hash', 'fact_terms']].iterrows()}
+        # fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
@@ -352,60 +413,62 @@ def sourcef_pred(chi_k= 15, ldak=5):
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-    #print(users_df.describe())
+    # print(users_df.describe())
 
-    features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
-                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_emoticons', 'avg_tweet_is_reply', 'avg_mentions',
-                'avg_links', 'followers', 'friends', 'verified', 'status_cnt', 'time_retweet', 'len_description',
-                'len_name']
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
                 'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
                 'len_name']
     X = users_df[features].values
     y = users_df['y'].values
-    #print(Counter(y))
 
-    #sns.pairplot(users_df[features+['y']], hue="y")
-    #  %%%%%% Plot %%%%%%
+    #  %%%%%% Correlation plot %%%%%%
     corr = users_df[features].corr()
     mask = np.zeros_like(corr, dtype=np.bool)
     mask[np.triu_indices_from(mask)] = True
-
     # Set up the matplotlib figure
     f, ax = plt.subplots(figsize=(11, 9))
-
-    # Generate a custom diverging colormap
-    cmap = sns.diverging_palette(220, 10, as_cmap=True)
-
     # Draw the heatmap with the mask and correct aspect ratio
-    sns.heatmap(corr, mask=mask, cmap=cmap, vmax=.3, center=0,
-                square=True, linewidths=.5, cbar_kws={"shrink": .5})
-    plt.show()
-    # %%%%%%%%
+    # sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    # plt.savefig('foo.png')
 
     ada = RandomOverSampler(random_state=42)
     X, y = ada.fit_sample(X, y)
 
+    # Remove outliers
+    # env = EllipticEnvelope().fit(X, y)
+    # outliers = env.predict(X)
+    # X = X[outliers != -1]
+    # y = y[outliers != -1]
 
-    ch2 = SelectKBest(chi2, k=chi_k)
+    svd = TruncatedSVD(2)
     normalizer = Normalizer(copy=False)
-    svd = TruncatedSVD(ldak)
-    lsa = make_pipeline(normalizer)
-    #X = ch2.fit_transform(X, y)
-    X = np.asarray(lsa.fit_transform(X, y))
+    lsa = make_pipeline(svd)
+    X_2d = lsa.fit_transform(X, y)
+    X_2d = normalize(X_2d, axis=0)
+
+    # 2d plot of X
+    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    # sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    # plt.show()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
-    print(Counter(y), Counter(y_train), Counter(y_test))
+
+    ch2 = SelectKBest(chi2, k=chi_k)
+    X = ch2.fit_transform(X, y)
+    X_train = ch2.transform(X_train)
+    X_test = ch2.transform(X_test)
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X, y)
+    X_train = scaler.transform(X_train)
+    X_test = scaler.transform(X_test)
+
     evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 def main():
+    sourcef_pred(15, 10)
 
-    #for chik in range(4,20):
-        #for ldak in range(2,chik):
-    #        print(chik, ldak)
-    sourcef_pred()
 
 
 if __name__ == "__main__":

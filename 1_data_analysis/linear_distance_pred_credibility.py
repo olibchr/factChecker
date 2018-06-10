@@ -12,7 +12,6 @@ from string import digits
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from dateutil import parser
 from gensim.models import KeyedVectors
 from joblib import Parallel, delayed
 from nltk.corpus import stopwords
@@ -20,19 +19,23 @@ from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from scipy.sparse import lil_matrix
-from sklearn import metrics
+from sklearn import metrics, preprocessing
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import roc_curve, auc
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedShuffleSplit, GridSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Imputer, normalize
 from sklearn.preprocessing import Normalizer
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC
+from yellowbrick.classifier import ROCAUC
+from yellowbrick.classifier import ClassificationReport
+from imblearn.over_sampling import RandomOverSampler
+from scipy.sparse import coo_matrix, vstack
+import seaborn as sns
+import random
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
@@ -56,7 +59,7 @@ fact_to_words = {}
 bow_corpus_cnt = {}
 #if BUILD_NEW_SPARSE:
 #word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0# KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def datetime_converter(o):
@@ -318,7 +321,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
     facts_df = pd.read_json(fact_file)
     facts_hsh = list(facts_df['hash'].as_matrix())
-    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=max(0.2 + n / 30, 0.8))
+    f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=min(0.15 + n / 30, 0.5))
 
     user_to_fact = {user.user_id: user.fact for user in users}
     user_order_fact = [user_to_fact[u_id] for u_id in user_order]
@@ -377,34 +380,19 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         pred2 = clf.predict(X_test_imp2)
         score2 = metrics.accuracy_score(y_test2, pred2)
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
-        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-            score2, precision2, recall2, fscore2))
+        #print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        #    score2, precision2, recall2, fscore2))
 
-        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+        #print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
-        fpr, tpr, thresholds = roc_curve(y_test2, pred2)
-        roc_auc = auc(fpr, tpr)
-        # plt.title('Receiver Operating Characteristic')
-        #
-        # plt.plot(fpr, tpr, 'b',
-        # label='AUC = %0.2f'% roc_auc)
-        # plt.legend(loc='lower right')
-        # plt.plot([0,1],[0,1],'r--')
-        # plt.xlim([-0.1,1.2])
-        # plt.ylim([-0.1,1.2])
-        # plt.ylabel('True Positive Rate')
-        # plt.xlabel('False Positive Rate')
-        # plt.show()
-        match = [1 if t == p else 0 for t, p in zip(y_test2, pred2)]
-
-        return fscore, fscore2, scores.mean()
+        #visualizer = ClassificationReport(clf)
+        #visualizer.fit(X_train, y_train)
+        #visualizer.score(X_test, y_test)
+        #visualizer.poof()
+        return [fscore, fscore2, scores.mean()]
 
     print('&' * 80)
     print("Evaluation")
-
-    if X_train is None:
-        print("No pre-split data given")
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
 
@@ -419,42 +407,112 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     X_test_imp2 = imp.transform(X_test2)
     results = []
 
-    # for clf, name in (
-    #         (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
-    #         (Perceptron(n_iter=50), "Perceptron"),
-    #         (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
-    #         (KNeighborsClassifier(n_neighbors=10), "kNN"),
-    #         (RandomForestClassifier(n_estimators=100), "Random forest"),
-    #         (BernoulliNB(alpha=.01), "Bernoulli NB")):
-    #     print('=' * 80)
-    #     print(name)
-    #     results.append([benchmark(clf)])
+    model = LinearSVC(penalty='l2', dual=False, tol=1e-3)
+    results.append(benchmark(model))
 
     # Train sparse SVM likes
-    for penalty in ["l2", "l1"]:
-        print("%s penalty" % penalty.upper())
-        for clf, name in (
-                (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
-                (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
-            print('=' * 80)
-            print(name)
-            results.append([benchmark(clf)])
+    # for penalty in ["l2", "l1"]:
+    #     print("%s penalty" % penalty.upper())
+    #     for clf, name in (
+    #             (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
+    #             (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
+    #         print('=' * 80)
+    #         print(name)
+    #         results.append([benchmark(clf)])
     return results
 
 
-def find_correlation_to_heuristic(X,y,user_order, users):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    user_df = pd.DataFrame(users).sort_values(by=['user_id'])
-    X_df = pd.DataFrame({'X': X, 'y':y, 'user_id': user_order})
-    user_df = user_df.join(X_df.set_index('user_id'), on='user_id')
+def visualizations(X,y):
 
-    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
-    facts_df = pd.read_json(fact_file)
+    svd = TruncatedSVD(2)
+    lsa = make_pipeline(svd)
+    X_2d = lsa.fit_transform(X,y)
+    X_2d = normalize(X_2d, axis=0)
 
-    user_df = user_df.join(facts_df.set_index('hash'), on='fact')
+    # 2d plot of X
+    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    plt.show()
 
-    user_df['tweets'] = user_df['user_id'].map(lambda uid: users[np.where(users.user_id==uid)].tweets)
+
+def model_param_grid_search(X,y):
+    from matplotlib.colors import Normalize
+    class MidpointNormalize(Normalize):
+
+        def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+            self.midpoint = midpoint
+            Normalize.__init__(self, vmin, vmax, clip)
+
+        def __call__(self, value, clip=None):
+            x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+            return np.ma.masked_array(np.interp(value, x, y))
+
+    svd = TruncatedSVD(2)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd, normalizer)
+    X_2d = lsa.fit_transform(X,y)
+
+    print("Do some magic")
+    C_range = np.logspace(-2, 10, 13)
+    gamma_range = np.logspace(-9, 3, 13)
+    param_grid = dict(gamma=gamma_range, C=C_range)
+    cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+    grid = GridSearchCV(SVC(), param_grid=param_grid, cv=cv)
+    grid.fit(X, y)
+
+    C_2d_range = [1e-2, 1, 1e2]
+    gamma_2d_range = [1e-1, 1, 1e1]
+    classifiers = []
+    for C in C_2d_range:
+        for gamma in gamma_2d_range:
+            clf = SVC(C=C, gamma=gamma)
+            clf.fit(X_2d, y)
+            classifiers.append((C, gamma, clf))
+    print("Do some more magic")
+    plt.figure(figsize=(8, 6))
+    xx, yy = np.meshgrid(np.linspace(-3, 3, 200), np.linspace(-3, 3, 200))
+    for (k, (C, gamma, clf)) in enumerate(classifiers):
+        # evaluate decision function in a grid
+        Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
+        Z = Z.reshape(xx.shape)
+
+        # visualize decision function for these parameters
+        plt.subplot(len(C_2d_range), len(gamma_2d_range), k + 1)
+        plt.title("gamma=10^%d, C=10^%d" % (np.log10(gamma), np.log10(C)),
+                  size='medium')
+
+        # visualize parameter's effect on decision function
+        plt.pcolormesh(xx, yy, -Z, cmap=plt.cm.RdBu)
+        plt.scatter(X_2d[:, 0], X_2d[:, 1], c=y, cmap=plt.cm.RdBu_r,
+                    edgecolors='k')
+        plt.xticks(())
+        plt.yticks(())
+        plt.axis('tight')
+
+    scores = grid.cv_results_['mean_test_score'].reshape(len(C_range),
+                                                         len(gamma_range))
+
+    plt.figure(figsize=(8, 6))
+    plt.subplots_adjust(left=.2, right=0.95, bottom=0.15, top=0.95)
+    plt.imshow(scores, interpolation='nearest', cmap=plt.cm.hot,
+               norm=MidpointNormalize(vmin=0.2, midpoint=0.92))
+    plt.xlabel('gamma')
+    plt.ylabel('C')
+    plt.colorbar()
+    plt.xticks(np.arange(len(gamma_range)), gamma_range, rotation=45)
+    plt.yticks(np.arange(len(C_range)), C_range)
+    plt.title('Validation accuracy')
+    plt.show()
     pass
+
+
+def balance_classes(X,y, user_order):
+    k_add = random.sample(list(np.where(y==1)[0]), 30)
+
+    X = vstack([X, X[k_add]])
+    y = np.append(y, y[k_add])
+    user_order = np.append(user_order, user_order[k_add])
+    return X,y, user_order
 
 
 def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
@@ -463,38 +521,38 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     print(chik, svdk, N)
 
     X, y, user_order = build_sparse_matrix_word2vec(users)
+    X,y,user_order = balance_classes(X,y,user_order)
 
     transformer = TfidfTransformer(smooth_idf=True)
-    ch2 = SelectKBest(chi2, k=chik)
+    std_scale = preprocessing.StandardScaler(with_mean=False)
+    X = SelectKBest(chi2, k=chik).fit_transform(X, y)
     svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
 
-    X = transformer.fit_transform(X)
-    X = ch2.fit_transform(X, y)
-    X = np.asarray(lsa.fit_transform(X, y))
+
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
+    #X_train, X_test, y_train, y_test = train_test_split(X, y)
+
+    X_train = transformer.fit_transform(X_train, y_train)
+    #X_train = ch2.fit_transform(X_train,y_train)
+    #X_train = std_scale.fit_transform(X_train, y_train)
+    X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+
+    X_test = transformer.transform(X_test)
+    #X_test = ch2.transform(X_test)
+    #X_test = std_scale.transform(X_test)
+    X_test = np.asarray(lsa.transform(X_test))
 
     # X_alt = build_alternative_features(users, user_order)
     # X_alt = np.asarray(transformer.fit_transform(X_alt))
-    # print(X_alt.shape)
-    # #X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
+    # X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
     #
-    # X_alt2, y_alt, user_order_alt = build_sparse_matrix_word2vec(users, retweets_only=True)
-    # ch2 = SelectKBest(chi2, k=50)
-    # svd = TruncatedSVD(5)
-    # normalizer = Normalizer(copy=False)
-    # lsa = make_pipeline(svd, normalizer)
-    # X_alt2 = transformer.fit_transform(X_alt2)
-    # X_alt2 = ch2.fit_transform(X_alt2, y_alt)
-    # X_alt2 = np.asarray(lsa.fit_transform(X_alt2, y_alt))
-    # X_alt2 = np.asarray([X_alt2[np.where(user_order_alt == uid_alt)][0] for uid_alt in user_order_alt for uid in user_order if uid == uid_alt])
-    #
-    # print(X.shape, X_alt.shape, X_alt2.shape)
-
+    # print(X.shape, X_alt.shape)
     # X = np.concatenate((X, X_alt2), axis=1)
     # X = np.concatenate((X, X_alt), axis=1)
 
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
+
     print(Counter(y), Counter(y_train), Counter(y_test))
     return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
 
@@ -524,9 +582,11 @@ def main():
     N = 0
     # for chik, svdk in exp:
     #    r= []
-    # for N in range(15):
-    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
-    #    results.append(np.average(np.asarray(r), axis=1))
+    for N in range(15):
+        r = []
+        for i in range(10):
+            r.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
+        results.append(np.average(np.asarray(r), axis=1))
     print(np.average(np.asarray(results), axis=1))
 
 

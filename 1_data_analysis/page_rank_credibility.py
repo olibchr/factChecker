@@ -11,6 +11,10 @@ from collections import Counter, defaultdict
 from string import digits
 import re
 
+import plotly.plotly as py
+from plotly.graph_objs import *
+from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
+
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,7 +47,9 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 
 fact_to_words = {}
-#word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+
+
+# word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 def datetime_converter(o):
     if isinstance(o, datetime.datetime):
@@ -54,15 +60,15 @@ def tokenize_text(text, only_retweets=False):
     tokenizer = RegexpTokenizer(r'\w+')
     if only_retweets:
         text = text
-        #if 'RT' not in text: return None
+        # if 'RT' not in text: return None
         mentions = []
         while True:
             if '@' not in text: break
             mention = text[text.find('@'):]
             if ' ' in mention: mention = mention[:mention.find(' ')]
             mentions.append(mention)
-            text = text.replace(mention,'')
-        retweeted_to = [rt.replace('@','').replace(':','').lower() for rt in mentions if '@' in rt]
+            text = text.replace(mention, '')
+        retweeted_to = [rt.replace('@', '').replace(':', '').lower() for rt in mentions if '@' in rt]
         return retweeted_to
     return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
             i.lower() not in NLTK_STOPWORDS]
@@ -90,7 +96,7 @@ def get_users():
 
 
 def get_relevant_tweets(user):
-    relevant_tweets= []
+    relevant_tweets = []
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -127,25 +133,27 @@ def get_user_edges(users):
     i = 0
     for user in users:
         user_links = []
-        #relevant_tweets = get_relevant_tweets(user)
+        # relevant_tweets = get_relevant_tweets(user)
         for tweet in user.tweets:
             mentions = tokenize_text(tweet['text'], only_retweets=True)
             for rt in mentions:
                 user_links.append(rt)
         if len(user_links) <= 1: continue
         user_to_links.append([user.user_id, user_links])
-        y.append([user.user_id, user.was_correct +0.01])
+        y.append([user.user_id, user.was_correct + 0.01])
         i += 1
     return user_to_links, np.asarray(y)
 
 
 def build_graph(user_to_links, user_to_weight):
-    G=nx.Graph()
-    all_nodes = [u[0] for u in user_to_links] + list(set([e for sublist in [u[1] for u in user_to_links] for e in sublist]))
+    G = nx.DiGraph()
+    all_nodes = [u[0] for u in user_to_links] + list(
+        set([e for sublist in [u[1] for u in user_to_links] for e in sublist]))
+    print(len(all_nodes))
     G.add_nodes_from(all_nodes)
-    G.add_edges_from([(userlinks[0],v) for i, userlinks in enumerate(user_to_links) if user_to_weight[i] == 1 for v in userlinks[1]])
-    #G.add_weighted_edges_from([(userlinks[0],v,user_to_weight[i]) for i, userlinks in enumerate(user_to_links) for v in userlinks[1]])
-    obsolete_nodes = [k for k,v in dict(nx.degree(G)).items() if v <= 1]
+    G.add_edges_from([(userlinks[0], v) for userlinks in user_to_links for v in userlinks[1]])
+    # G.add_weighted_edges_from([(userlinks[0],v,user_to_weight[i]) for i, userlinks in enumerate(user_to_links) for v in userlinks[1]])
+    obsolete_nodes = [k for k, v in dict(nx.degree(G)).items() if v <= 1]
     G.remove_nodes_from(obsolete_nodes)
     return G
 
@@ -153,25 +161,55 @@ def build_graph(user_to_links, user_to_weight):
 def get_ranks(user_to_links, G, pageRank, alpha=0.85):
     user_to_pr = []
     for user, links in user_to_links:
-        pr_sum = sum([pageRank[l]/G.degree(l) for l in links if l in pageRank])
-        pr_user = (1-alpha)/alpha + alpha*pr_sum
+        pr_sum = sum([pageRank[l] / G.degree(l) for l in links if l in pageRank])
+        pr_user = (1 - alpha) / alpha + alpha * pr_sum
         user_to_pr.append(pr_user)
     return user_to_pr
+
+
+def graph_plot(G):
+    print(len(G.nodes()))
+    obsolete_nodes = [k for k, v in dict(nx.degree(G)).items() if v <= 10]
+    G.remove_nodes_from(obsolete_nodes)
+    print(len(G.nodes()))
+
+    pos = nx.kamada_kawai_layout(G)
+    N = len(G.nodes())
+    Xv = [pos[k][0] for k in range(N)]
+    Yv = [pos[k][1] for k in range(N)]
+    Xed = []
+    Yed = []
+    for edge in G.edges():
+        Xed += [pos[edge[0]][0], pos[edge[1]][0], None]
+        Yed += [pos[edge[0]][1], pos[edge[1]][1], None]
+
+    trace3 = Scatter(x=Xed, y=Yed, mode='lines', line=Line(color='rgb(210,210,210)', width=1), hoverinfo='none')
+    trace4 = Scatter(x=Xv, y=Yv, mode='markers', name='net',
+                     marker=Marker(symbol='dot', size=5, color='#6959CD', line=Line(color='rgb(50,50,50)', width=0.5)),
+                     text=labels, hoverinfo='text')
+
+    annot = "This networkx.Graph has the Fruchterman-Reingold layout<br>Code:" + \
+            "<a href='http://nbviewer.ipython.org/gist/empet/07ea33b2e4e0b84193bd'> [2]</a>"
+
+    data1 = Data([trace3, trace4])
+    fig1 = Figure(data=data1, layout=layout)
+    fig1['layout']['annotations'][0]['text'] = annot
+    plot(py.iplot(fig1, filename='Coautorship-network-nx'))
 
 
 def rank_users(users):
     global fact_to_words
     print("Creating nodes")
-    #fact_topics = build_fact_topics()
-    #fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
     user_to_links, user_to_weight = get_user_edges(users)
-
     X_train, X_test, y_train, y_test = train_test_split(user_to_links, user_to_weight)
+
     print("Building graph..")
-    G = build_graph(X_train, y_train)
+    G = build_graph(user_to_links, user_to_weight)
+    graph_plot(G)
+
     pr = nx.pagerank(G)
 
-    pr_cred_users = {u:v for u,v in list(pr.items()) if u in user_to_links}
+    pr_cred_users = {u: v for u, v in list(pr.items()) if u in user_to_links}
     # print(sorted([(v,y[1]) for u,v in pr_cred_users.items() for y in user_to_weight if u == y[0]], reverse=True, key=lambda x: x[0]))
 
     pred = get_ranks(X_test, G, pr)
@@ -181,7 +219,5 @@ def rank_users(users):
     print("NDCG: {}".format(ndgc))
 
 
-
 users = get_users()
 rank_users(users)
-

@@ -139,7 +139,8 @@ def lda_analysis(users):
     X = [[tweet['text'] for tweet in user.tweets] for user in users]
     X = [tweet for sublist in X for tweet in sublist]
     fact_topics = build_fact_topics()
-    X.append([' '.join(f) for f in fact_topics['fact_terms'].values])
+    print(fact_topics['fact_terms'].values)
+    for t in [' '.join(f) for f in fact_topics['fact_terms'].values]: X.append(t)
 
     print(X[:5])
     print("TF fitting user docs")
@@ -368,6 +369,7 @@ def lstm_pred(n = 0):
     else:
         X,y,user_order = get_prebuilt_data()
 
+    #todo: train test split before chi2
     X, new_word_to_idx = keep_n_best_words(X,y, top_words)
 
     print(Counter(y))
@@ -379,6 +381,7 @@ def lstm_pred(n = 0):
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
+    # Sequence pedding not necessary for algo
     X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
