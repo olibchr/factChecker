@@ -342,6 +342,67 @@ def train_test_split_on_users(X, y, user_order, users, n):
     return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
 
 
+def train_test_split_on_facts(X, y, user_order, users, n):
+    def build_mask():
+        f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=0.2)
+        f_train_mask = []
+        fact_to_n = defaultdict(lambda: 0)
+        for user_fact in user_order_fact:
+            # always true if in train set
+            if user_fact in f_train:
+                f_train_mask.append(True);
+                continue
+            # true to add n samples of rumor to train set
+            elif fact_to_n[user_fact] < n:
+                f_train_mask.append(True)
+                fact_to_n[user_fact] += 1
+                continue
+            # otherwise false if in test set
+            else:
+                f_train_mask.append(False)
+        f_train_mask = np.asarray(f_train_mask)
+
+        X_train = [x for x,s in zip(X, f_train_mask) if s]
+        X_test = [x for x,s in zip(X, f_train_mask) if not s]
+        y_train = [ys for ys,s in zip(y, f_train_mask) if s]
+        y_test = [ys for ys,s in zip(y, f_train_mask) if not s]
+        return X_train, X_test, y_train, y_test
+
+    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    facts_df = pd.read_json(fact_file)
+    facts_hsh = list(facts_df['hash'].as_matrix())
+
+    user_to_fact = {user.user_id: user.fact for user in users}
+    user_order_fact = [user_to_fact[u_id] for u_id in user_order]
+
+    ratio = 0
+    i = 0
+    while ratio < 0.9 or ratio > 1.1:
+        X_train, X_test, y_train, y_test = build_mask()
+        ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
+        i+=1
+        if i>=25: print("Cant build even classes"); break
+
+    #print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
+
+    print("Shapes after splitting")
+
+    for user in users:
+        if user.user_id not in user_order: continue
+        i = np.where(user_order == user.user_id)[0][0]
+        assert int(user.user_id) == int(user_order[i])
+        assert int(user.was_correct) == int(y[i])
+
+    X_train = np.asarray(X_train)
+    X_test = np.asarray(X_test)
+    y_train = np.asarray(y_train)
+    y_test = np.asarray(y_test)
+
+    print("Training Set: {}, {}".format(X_train.shape, y_train.shape))
+    print("Testing Set: {}, {}".format(X_test.shape, y_test.shape))
+    return X_train, X_test, np.asarray(y_train), np.asarray(y_test)
+
+
 def balance_classes(X,y):
     for i in range(150):
         if Counter(y)[0] == Counter(y)[1]: break
@@ -378,8 +439,10 @@ def lstm_pred(n = 0):
     X, y = balance_classes(X,y)
     print(Counter(y))
 
-    X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
     # X_train, X_test, y_train, y_test = train_test_split(X,y)
+    #X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
     print(Counter(y_train), Counter(y_test))
 
