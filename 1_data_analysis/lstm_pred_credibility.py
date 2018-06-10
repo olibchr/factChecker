@@ -159,10 +159,10 @@ def lda_analysis(users):
                                         random_state=0)
         lda.fit(X_tf)
         with open('model_data/lda_model','wb') as tmpfile:
-            pickle.dumps(lda, tmpfile)
+            pickle.dump(lda, tmpfile)
     else:
         with open('model_data/lda_model','rb') as tmpfile:
-            lda = pickle.loads(tmpfile)
+            lda = pickle.load(tmpfile)
 
     lda_text_to_id = {txt:id for id, txt in enumerate(X)}
     lda_topics_per_text = lda.transform(X_tf)
