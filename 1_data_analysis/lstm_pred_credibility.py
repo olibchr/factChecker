@@ -388,10 +388,10 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     i = 0
     testsize = 0.2
     actual_testsize = 0
-    while ratio < 0.85 or ratio > 1.15 or actual_testsize<0.15 or actual_testsize>0.4:
+    while ratio < 0.8 or ratio > 1.2 or actual_testsize<0.15 or actual_testsize>0.4:
         X_train, X_test, y_train, y_test = build_mask(testsize)
         ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
-        actual_testsize = len(y_train) / (1.0*len(y_test))
+        actual_testsize = len(y_train) / (1.0*len(y_test)+1)
 
         i+=1
         if actual_testsize < 0.15: testsize *= 1.5
