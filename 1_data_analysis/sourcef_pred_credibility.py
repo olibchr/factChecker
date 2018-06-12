@@ -56,7 +56,7 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = 0 #KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -176,7 +176,7 @@ def build_features_for_user(user):
 
     link_pattern = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
 
-    relevant_tweets = user.tweets # get_relevant_tweets(user)
+    relevant_tweets = get_relevant_tweets(user)
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
         tokenized_text = tokenize_text(t['text'])
@@ -446,7 +446,7 @@ def sourcef_pred(chi_k=15, ldak=5):
         users = get_users()
         print("Getting user features")
         fact_topics = build_fact_topics()
-        # fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
