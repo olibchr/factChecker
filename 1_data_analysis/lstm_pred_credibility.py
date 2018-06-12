@@ -45,6 +45,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 np.random.seed(7)
 
 BUILD_NEW_DATA = True
+LDA_TOPIC = True
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -179,8 +180,9 @@ def lda_analysis(users):
 
 def get_series_from_user(user):
     def topic_overlap(t1, t2):
+        # todo: params to test
         n_topics = 5
-        threshold=1
+        threshold = 2
         t1_topics = lda_topics_per_text[lda_text_to_id[t1]]
         t2_topics = lda_topics_per_text[lda_text_to_id[t2]]
         t_topics1 = t1_topics.argsort()[-n_topics:][::-1]
@@ -197,26 +199,27 @@ def get_series_from_user(user):
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
-        if topic_overlap(tweet['text'], ' '.join(user_fact_words)):
-            relevant_tweets.append(tweet)
-            tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
-            relevant_tweet_vecs.append(tweet_vec)
-        continue
-
-        # print(tokens, user_fact_words)
-        distance_to_topic = []
-        for token in tokens:
-            if token not in word_to_idx: continue
-            if token not in word_vectors.vocab: continue
-            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
-            distance_to_topic.append(increment)
-        distance_to_topic = np.asarray(distance_to_topic)
-        distance_to_topic = np.average(distance_to_topic)
-        all_distances.append(float(distance_to_topic))
-        if distance_to_topic < 0.8:
-            relevant_tweets.append(tweet)
-            tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
-            relevant_tweet_vecs.append(tweet_vec)
+        if LDA_TOPIC:
+            if topic_overlap(tweet['text'], ' '.join(user_fact_words)):
+                relevant_tweets.append(tweet)
+                tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
+                relevant_tweet_vecs.append(tweet_vec)
+            continue
+        else:
+            # print(tokens, user_fact_words)
+            distance_to_topic = []
+            for token in tokens:
+                if token not in word_to_idx: continue
+                if token not in word_vectors.vocab: continue
+                increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+                distance_to_topic.append(increment)
+            distance_to_topic = np.asarray(distance_to_topic)
+            distance_to_topic = np.average(distance_to_topic)
+            all_distances.append(float(distance_to_topic))
+            if distance_to_topic < 0.8:
+                relevant_tweets.append(tweet)
+                tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
+                relevant_tweet_vecs.append(tweet_vec)
     print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
     user.features['relevant_tweet_vecs'] = relevant_tweet_vecs
@@ -415,18 +418,11 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
 
 def balance_classes(X,y, user_order):
-    for i in range(150):
-        if Counter(y)[0] == Counter(y)[1]: break
-        #k_add = random.sample(list(np.where(y==0)[0]), 100)
-
-        #X = np.append(X, X[k_add])
-        #y = np.append(y, y[k_add])
-        #user_order = np.append(user_order, user_order[k_add])
-
-        k_del = random.sample(list(np.where(y==1)[0]), 200)
-        np.delete(X,k_del,0)
-        np.delete(y,k_del,0)
-        np.delete(user_order,k_del,0)
+    bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
+    k_del = random.sample(list(np.where(y==bigger_class)[0]), abs(Counter(y[0])-Counter(y)[1]))
+    np.delete(X,k_del,0)
+    np.delete(y,k_del,0)
+    np.delete(user_order,k_del,0)
     return X,y, user_order
 
 
@@ -445,7 +441,6 @@ def lstm_pred(n = 0):
     else:
         X,y,user_order = get_prebuilt_data()
 
-    #todo: train test split before chi2
 
     print(Counter(y))
     X, y, user_order = balance_classes(X,y,user_order)

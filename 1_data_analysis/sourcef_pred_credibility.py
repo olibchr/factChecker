@@ -9,6 +9,7 @@ import warnings
 from string import digits
 import re
 
+import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -46,7 +47,7 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 num_cores = multiprocessing.cpu_count()
@@ -55,7 +56,7 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0 #KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -175,7 +176,7 @@ def build_features_for_user(user):
 
     link_pattern = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
 
-    relevant_tweets = get_relevant_tweets(user)
+    relevant_tweets = user.tweets # get_relevant_tweets(user)
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
         tokenized_text = tokenize_text(t['text'])
@@ -303,15 +304,15 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
         score = metrics.accuracy_score(y_test, pred)
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-            score, precision, recall, fscore))
+        #print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        #    score, precision, recall, fscore))
 
         clf.fit(X_train_imp2, y_train2)
         pred2 = clf.predict(X_test_imp2)
         score2 = metrics.accuracy_score(y_test2, pred2)
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
-        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-            score2, precision2, recall2, fscore2))
+        #print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        #    score2, precision2, recall2, fscore2))
 
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
         return fscore, fscore2, scores.mean()
@@ -445,7 +446,7 @@ def sourcef_pred(chi_k=15, ldak=5):
         users = get_users()
         print("Getting user features")
         fact_topics = build_fact_topics()
-        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        # fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
@@ -456,25 +457,26 @@ def sourcef_pred(chi_k=15, ldak=5):
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-
+    not_incl = ['avg_questionM', 'avg_exlamationM', 'avg_sent_pos',
+                'avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic', 'avg_emoticons', 'avg_multiQueExlM', 'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply']
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
-                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
-                'len_name', 'avg_questionM', 'avg_exlamationM', 'avg_multiQueExlM', 'avg_upperCase', 'avg_sent_pos',
-                'avg_sent_neg', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour',
-                'avg_count_distinct_words', 'avg_tweets_on_this_topic', 'avg_emoticons', 'avg_tweet_is_reply']
-    X = users_df[features].values
+                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet','len_description','len_name'
+                ]
+
+
+    X = users_df[list(features)].values
     y = users_df['y'].values
 
     #  %%%%%% Correlation plot %%%%%%
-    corr = users_df[features].corr()
+    corr = users_df[list(features)].corr()
     mask = np.zeros_like(corr, dtype=np.bool)
     mask[np.triu_indices_from(mask)] = True
     # Set up the matplotlib figure
-    f, ax = plt.subplots(figsize=(11, 9))
     # Draw the heatmap with the mask and correct aspect ratio
-    sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
-    plt.savefig('foo.png')
+    # f, ax = plt.subplots(figsize=(11, 9))
+    # sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    # plt.show()
 
     ada = RandomOverSampler(random_state=42)
     X, y = ada.fit_sample(X, y)
@@ -485,16 +487,16 @@ def sourcef_pred(chi_k=15, ldak=5):
     # X = X[outliers != -1]
     # y = y[outliers != -1]
 
-    svd = TruncatedSVD(2)
-    normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd)
-    X_2d = lsa.fit_transform(X, y)
-    X_2d = normalize(X_2d, axis=0)
+    #svd = TruncatedSVD(2)
+    #normalizer = Normalizer(copy=False)
+    #lsa = make_pipeline(svd)
+    #X_2d = lsa.fit_transform(X, y)
+    # X_2d = normalize(X_2d, axis=0)
 
     # 2d plot of X
-    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
-    # sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
-    # plt.show()
+    #X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    #sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    #plt.show()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
 
@@ -507,12 +509,11 @@ def sourcef_pred(chi_k=15, ldak=5):
     X_train = scaler.transform(X_train)
     X_test = scaler.transform(X_test)
 
-    evaluation(X, y, X_train, X_test, y_train, y_test)
+    return evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 def main():
-    for i in range(2,25,2):
-        sourcef_pred(i, 10)
+    sourcef_pred(15, 10)
 
 
 if __name__ == "__main__":
