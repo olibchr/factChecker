@@ -181,8 +181,8 @@ def store_result():
 
 def main():
     data_extraction()
-    store_result()
-    #stats()
+    #store_result()
+    stats()
 
 
 if __name__ == "__main__":
