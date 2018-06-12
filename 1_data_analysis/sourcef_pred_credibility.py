@@ -180,7 +180,7 @@ def build_features_for_user(user):
         avg_len.append(len(t['text']))
         tokenized_text = tokenize_text(t['text'])
         avg_words.append(len(tokenized_text))
-        avg_count_distinct_words.append(tokenized_text)
+        avg_count_distinct_words.extend(tokenized_text)
         chars = [c for c in t['text']]
         all_characters.extend(chars)
         avg_unique_char.append(len(set(chars)))
@@ -202,7 +202,7 @@ def build_features_for_user(user):
         timestamp = parser.parse(t['created_at'])
         most_common_weekday.append(timestamp.day)
         most_common_hour.append(timestamp.hour)
-        avg_emoticons.append(re.findall(emoji_pattern, t['text']))
+        avg_emoticons.append(len(re.findall(emoji_pattern, t['text'])))
         if 'reply' in t and t['reply_to'] is not None: tweets_that_are_reply.append(t)
         avg_links.append(len(re.findall(link_pattern, t['text'])))
     if len(relevant_tweets) == 0: relevant_tweets = [0]; retweets = [0]
@@ -230,7 +230,7 @@ def build_features_for_user(user):
     avg_count_distinct_hashtags = 1.0 * sum(avg_count_distinct_hashtags) / len(relevant_tweets)
     most_common_weekday = 1.0 * sum(most_common_weekday) / len(relevant_tweets)
     most_common_hour = 1.0 * sum(most_common_hour) / len(relevant_tweets)
-    avg_count_distinct_words = 1.0 * sum(avg_count_distinct_words) / len(relevant_tweets)
+    avg_count_distinct_words = 1.0 * len(set(avg_count_distinct_words)) / len(relevant_tweets)
     avg_tweets_on_this_topic = len(relevant_tweets) * 1.0 / len(user.tweets)
 
     # followers, friends, description, created_at, verified, statuses_count, lang}
@@ -439,11 +439,13 @@ def sourcef_pred(chi_k=15, ldak=5):
     global fact_to_words
     wn.ensure_loaded()
 
+    print(chi_k)
+
     if BUILD_NEW_DATA:
         users = get_users()
         print("Getting user features")
         fact_topics = build_fact_topics()
-        # fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
@@ -454,7 +456,6 @@ def sourcef_pred(chi_k=15, ldak=5):
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-    # print(users_df.describe())
 
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
@@ -510,7 +511,8 @@ def sourcef_pred(chi_k=15, ldak=5):
 
 
 def main():
-    sourcef_pred(20, 10)
+    for i in range(2,25,2):
+        sourcef_pred(i, 10)
 
 
 if __name__ == "__main__":

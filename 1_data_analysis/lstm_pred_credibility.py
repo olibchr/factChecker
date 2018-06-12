@@ -44,8 +44,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = False
-NEW_LDA_MODEL = True
+BUILD_NEW_DATA = True
+NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
@@ -151,8 +151,8 @@ def lda_analysis(users):
     tf = tf_vectorizer.fit(X)
     X_tf = tf.transform(X)
 
-    print("Training LDA model")
     if NEW_LDA_MODEL:
+        print("Training new LDA model")
         lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
                                         learning_method='online',
                                         learning_offset=50.,
@@ -178,13 +178,11 @@ def lda_analysis(users):
 
 
 def get_series_from_user(user):
-    def topic_overlap(lda, t1, t2):
+    def topic_overlap(t1, t2):
         n_topics = 5
         threshold=1
         t1_topics = lda_topics_per_text[lda_text_to_id[t1]]
         t2_topics = lda_topics_per_text[lda_text_to_id[t2]]
-        doc_topics = lda.transform((t1, t2))
-        print(doc_topics)
         t_topics1 = t1_topics.argsort()[-n_topics:][::-1]
         t_topics2 = t2_topics.argsort()[-n_topics:][::-1]
         overlap = [val for val in t_topics1 if val in t_topics2]
@@ -192,18 +190,19 @@ def get_series_from_user(user):
             return True
         return False
 
+    print(user.user_id)
     relevant_tweets= []
     relevant_tweet_vecs = []
     all_distances = []
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
-        if topic_overlap(lda, tweet['text'], ' '.join(user_fact_words)):
+        tokens = tokenize_text(tweet['text'], only_retweets=False)
+        if topic_overlap(tweet['text'], ' '.join(user_fact_words)):
             relevant_tweets.append(tweet)
             tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
             relevant_tweet_vecs.append(tweet_vec)
         continue
 
-        tokens = tokenize_text(tweet['text'], only_retweets=False)
         # print(tokens, user_fact_words)
         distance_to_topic = []
         for token in tokens:
@@ -227,7 +226,7 @@ def get_series_from_user(user):
 def build_dataset(users):
     global fact_to_words
     fact_topics = build_fact_topics()
-    fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+    fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
     #print(fact_to_words)
     users = Parallel(n_jobs=num_jobs)(
             delayed(get_series_from_user)(user) for i, user in enumerate(users))
