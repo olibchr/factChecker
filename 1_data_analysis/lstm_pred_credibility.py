@@ -204,7 +204,6 @@ def get_series_from_user(user):
                 relevant_tweets.append(tweet)
                 tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
                 relevant_tweet_vecs.append(tweet_vec)
-            continue
         else:
             # print(tokens, user_fact_words)
             distance_to_topic = []
@@ -432,7 +431,7 @@ def lstm_pred(n = 0):
     top_words = 50000
 
     if BUILD_NEW_DATA:
-        lda = lda_analysis(users)
+        if LDA_TOPIC: lda = lda_analysis(users)
         print("Retrieving data and shaping")
         users = [u for u in users if u.tweets]
         users_relevant_tweets = build_dataset(users)

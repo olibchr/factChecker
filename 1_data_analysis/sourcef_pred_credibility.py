@@ -457,10 +457,11 @@ def sourcef_pred(chi_k=15, ldak=5):
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-    not_incl = ['avg_questionM', 'avg_exlamationM', 'avg_sent_pos',
-                'avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic', 'avg_emoticons', 'avg_multiQueExlM', 'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply']
+    not_incl = ['avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM',
+                'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply']
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
-                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
+                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions', 'avg_emoticons',
+                'avg_questionM', 'avg_exlamationM', 'avg_sent_pos',
                 'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet','len_description','len_name'
                 ]
 
