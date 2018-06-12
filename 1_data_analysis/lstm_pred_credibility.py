@@ -141,7 +141,7 @@ def lda_analysis(users):
     X = [[tweet['text'] for tweet in user.tweets] for user in users]
     X = [tweet for sublist in X for tweet in sublist]
     fact_topics = build_fact_topics()
-    print(fact_topics['fact_terms'].values)
+
     for t in [' '.join(f) for f in fact_topics['fact_terms'].values]: X.append(t)
 
     print(X[:5])
