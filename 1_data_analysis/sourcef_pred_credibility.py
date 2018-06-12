@@ -12,10 +12,12 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from dateutil import parser
 from gensim.models import KeyedVectors
 from joblib import Parallel, delayed
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
+from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from sklearn.covariance import EllipticEnvelope
@@ -44,7 +46,7 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 num_cores = multiprocessing.cpu_count()
@@ -53,7 +55,8 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = 0  # KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+sid = SentimentIntensityAnalyzer()
 
 
 def tokenize_text(text, only_retweets=False):
@@ -159,10 +162,10 @@ def build_features_for_user(user):
     avg_search_results = []
     avg_search_r_is_news_page = []
     avg_count_distinct_words = []
-
+    avg_tweets_on_this_topic = []
 
     emoji_pattern = re.compile(
-        '^(:\(|:\))+$'
+        "(:\(|:\))|"
         u"(\ud83d[\ude00-\ude4f])|"  # emoticons
         u"(\ud83c[\udf00-\uffff])|"  # symbols & pictographs (1 of 2)
         u"(\ud83d[\u0000-\uddff])|"  # symbols & pictographs (2 of 2)
@@ -170,12 +173,14 @@ def build_features_for_user(user):
         u"(\ud83c[\udde0-\uddff])"  # flags (iOS)
         "+", flags=re.UNICODE)
 
-    link_pattern = re.compile('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+    link_pattern = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
 
-    relevant_tweets = user.tweets  # get_relevant_tweets(user)
+    relevant_tweets = get_relevant_tweets(user)
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
-        avg_words.append(len(tokenize_text(t['text'])))
+        tokenized_text = tokenize_text(t['text'])
+        avg_words.append(len(tokenized_text))
+        avg_count_distinct_words.append(tokenized_text)
         chars = [c for c in t['text']]
         all_characters.extend(chars)
         avg_unique_char.append(len(set(chars)))
@@ -184,9 +189,22 @@ def build_features_for_user(user):
         retweets.append(int(t['retweets']) if 'retweets' in t else 0)
         if 'quoted_status' in t and t['quoted_status'] is not None: tweets_that_are_retweet.append(t)
         avg_special_symbol.append(len(re.findall('[^0-9a-zA-Z *]', t['text'])))
-        avg_emoticons.append(1 if emoji_pattern.search(t['text']) is not None else 0)
-        if 'reply' in t and t['reply'] is not None: tweets_that_are_reply.append(t)
-        avg_links.append(1 if link_pattern.search(t['text']) is not None else 0)
+        avg_questionM.append(1 if '?' in t['text'] else 0)
+        avg_exlamationM.append(1 if '!' in t['text'] else 0)
+        avg_multiQueExlM.append(
+            1 if len(re.findall('/[?]/', t['text'])) + len(re.findall('/[!]/', t['text'])) > 1 else 0)
+        avg_upperCase.append(len(re.findall('/[A-Z]/', t['text'])))
+
+        avg_sent_pos.append(sid.polarity_scores(t['text'])['pos'])
+        avg_sent_neg.append(sid.polarity_scores(t['text'])['neg'])
+        avg_count_distinct_hashtags.append((len(re.findall('/[#]/', t['text']))))
+
+        timestamp = parser.parse(t['created_at'])
+        most_common_weekday.append(timestamp.day)
+        most_common_hour.append(timestamp.hour)
+        avg_emoticons.append(re.findall(emoji_pattern, t['text']))
+        if 'reply' in t and t['reply_to'] is not None: tweets_that_are_reply.append(t)
+        avg_links.append(len(re.findall(link_pattern, t['text'])))
     if len(relevant_tweets) == 0: relevant_tweets = [0]; retweets = [0]
 
     avg_len = 1.0 * sum(avg_len) / len(relevant_tweets)
@@ -202,6 +220,18 @@ def build_features_for_user(user):
     avg_tweet_is_reply = len(tweets_that_are_reply) / len(relevant_tweets)
     avg_mentions = sum(avg_mentions) / len(relevant_tweets)
     avg_links = 1.0 * sum(avg_links) / len(relevant_tweets)
+
+    avg_questionM = 1.0 * sum(avg_questionM) / len(relevant_tweets)
+    avg_exlamationM = 1.0 * sum(avg_exlamationM) / len(relevant_tweets)
+    avg_multiQueExlM = 1.0 * sum(avg_multiQueExlM) / len(relevant_tweets)
+    avg_upperCase = 1.0 * sum(avg_upperCase) / len(relevant_tweets)
+    avg_sent_pos = 1.0 * sum(avg_sent_pos) / len(relevant_tweets)
+    avg_sent_neg = 1.0 * sum(avg_sent_neg) / len(relevant_tweets)
+    avg_count_distinct_hashtags = 1.0 * sum(avg_count_distinct_hashtags) / len(relevant_tweets)
+    most_common_weekday = 1.0 * sum(most_common_weekday) / len(relevant_tweets)
+    most_common_hour = 1.0 * sum(most_common_hour) / len(relevant_tweets)
+    avg_count_distinct_words = 1.0 * sum(avg_count_distinct_words) / len(relevant_tweets)
+    avg_tweets_on_this_topic = len(relevant_tweets) * 1.0 / len(user.tweets)
 
     # followers, friends, description, created_at, verified, statuses_count, lang}
     followers = int(user.features['followers']) if 'followers' in user.features else 0
@@ -228,6 +258,17 @@ def build_features_for_user(user):
         'avg_tweet_is_reply': avg_tweet_is_reply,
         'avg_mentions': avg_mentions,
         'avg_links': avg_links,
+        'avg_questionM': avg_questionM,
+        'avg_exlamationM': avg_exlamationM,
+        'avg_multiQueExlM': avg_multiQueExlM,
+        'avg_upperCase': avg_upperCase,
+        'avg_sent_pos': avg_sent_pos,
+        'avg_sent_neg': avg_sent_neg,
+        'avg_count_distinct_hashtags': avg_count_distinct_hashtags,
+        'most_common_weekday': most_common_weekday,
+        'most_common_hour': most_common_hour,
+        'avg_count_distinct_words': avg_count_distinct_words,
+        'avg_tweets_on_this_topic': avg_tweets_on_this_topic,
         'followers': followers,
         'friends': friends,
         'verified': verified,
@@ -298,11 +339,11 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     # Train sparse SVM
     for penalty in ["l2", "l1"]:
         svms = [
-            #(LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
-            #(SVC(kernel='rbf', degree=2), "RBF SVC"),
-            #(SVC(kernel='sigmoid', degree=2), "Sigm SVC"),
+            # (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
+            # (SVC(kernel='rbf', degree=2), "RBF SVC"),
+            # (SVC(kernel='sigmoid', degree=2), "Sigm SVC"),
             (SVC(C=1, gamma=1), "Best param SVC)"),
-            #(SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")
+            # (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")
         ]
         print("%s penalty" % penalty.upper())
         for clf, name in svms:
@@ -418,7 +459,9 @@ def sourcef_pred(chi_k=15, ldak=5):
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
                 'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
-                'len_name']
+                'len_name', 'avg_questionM', 'avg_exlamationM', 'avg_multiQueExlM', 'avg_upperCase', 'avg_sent_pos',
+                'avg_sent_neg', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour',
+                'avg_count_distinct_words', 'avg_tweets_on_this_topic', 'avg_emoticons', 'avg_tweet_is_reply']
     X = users_df[features].values
     y = users_df['y'].values
 
@@ -429,8 +472,8 @@ def sourcef_pred(chi_k=15, ldak=5):
     # Set up the matplotlib figure
     f, ax = plt.subplots(figsize=(11, 9))
     # Draw the heatmap with the mask and correct aspect ratio
-    # sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
-    # plt.savefig('foo.png')
+    sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    plt.savefig('foo.png')
 
     ada = RandomOverSampler(random_state=42)
     X, y = ada.fit_sample(X, y)
@@ -467,8 +510,7 @@ def sourcef_pred(chi_k=15, ldak=5):
 
 
 def main():
-    sourcef_pred(15, 10)
-
+    sourcef_pred(20, 10)
 
 
 if __name__ == "__main__":
