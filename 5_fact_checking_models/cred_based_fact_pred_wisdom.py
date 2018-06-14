@@ -1,22 +1,12 @@
 from __future__ import print_function
-import datetime
-import glob
-import json
-import multiprocessing
 import os
-import pickle
-import random
 import sys
-import warnings
 from collections import Counter, defaultdict
-from string import digits
 import re
-
 import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from dateutil import parser
 from nltk.corpus import wordnet as wn
 from keras.preprocessing import sequence
 from nltk.sentiment import SentimentIntensityAnalyzer
@@ -26,9 +16,10 @@ sid = SentimentIntensityAnalyzer()
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
-from decoder import decoder
 import lstm_pred_credibility as lstm_cred
 import getters as gt
+
+DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
 def train_test_split_on_facts(X, y, user_order, facts_train):
@@ -40,6 +31,7 @@ def train_test_split_on_facts(X, y, user_order, facts_train):
     X_test = X[~train_indeces]
     y_test = y[~train_indeces]
     return X_train, X_test, y_train, y_test
+
 
 def cred_fact_prediction(model, hash, facts, transactions, users_df):
     def pred_times_sent(text):

@@ -1,4 +1,6 @@
 from __future__ import print_function
+
+import datetime
 import glob
 import json
 import multiprocessing
@@ -164,6 +166,7 @@ def build_features_for_user(user):
     avg_search_r_is_news_page = []
     avg_count_distinct_words = []
     avg_tweets_on_this_topic = []
+    avg_personal_pronoun_first = []
 
     emoji_pattern = re.compile(
         "(:\(|:\))|"
@@ -175,6 +178,7 @@ def build_features_for_user(user):
         "+", flags=re.UNICODE)
 
     link_pattern = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    pronouns = ['I', 'you', 'he', 'she', 'it', 'they', 'we','me','him','her','its','our','us','them','my','your','his','hers','yours','theirs','mine','ours']
 
     relevant_tweets = get_relevant_tweets(user)
     for t in relevant_tweets:
@@ -195,6 +199,7 @@ def build_features_for_user(user):
         avg_multiQueExlM.append(
             1 if len(re.findall('/[?]/', t['text'])) + len(re.findall('/[!]/', t['text'])) > 1 else 0)
         avg_upperCase.append(len(re.findall('/[A-Z]/', t['text'])))
+        avg_personal_pronoun_first.append(1 if tokenized_text[0] in pronouns else 0)
 
         avg_sent_pos.append(sid.polarity_scores(t['text'])['pos'])
         avg_sent_neg.append(sid.polarity_scores(t['text'])['neg'])
@@ -233,8 +238,10 @@ def build_features_for_user(user):
     most_common_hour = 1.0 * sum(most_common_hour) / len(relevant_tweets)
     avg_count_distinct_words = 1.0 * len(set(avg_count_distinct_words)) / len(relevant_tweets)
     avg_tweets_on_this_topic = len(relevant_tweets) * 1.0 / len(user.tweets)
+    avg_personal_pronoun_first = sum(avg_personal_pronoun_first)*1.0 / len(user.tweets)
 
     # followers, friends, description, created_at, verified, statuses_count, lang}
+    reg_age = int((datetime.datetime.now() - parser.parse(user.features['created_at'])).days if 'created_at' in user.features else 0)
     followers = int(user.features['followers']) if 'followers' in user.features else 0
     friends = int(user.features['friends']) if 'friends' in user.features else 0
     verified = 1 if 'verified' in user.features and user.features['verified'] == 'true' else 0
@@ -262,6 +269,7 @@ def build_features_for_user(user):
         'avg_questionM': avg_questionM,
         'avg_exlamationM': avg_exlamationM,
         'avg_multiQueExlM': avg_multiQueExlM,
+        'avg_personal_pronoun_first':avg_personal_pronoun_first,
         'avg_upperCase': avg_upperCase,
         'avg_sent_pos': avg_sent_pos,
         'avg_sent_neg': avg_sent_neg,
@@ -276,23 +284,9 @@ def build_features_for_user(user):
         'status_cnt': status_cnt,
         'time_retweet': time_retweet,
         'len_description': len_description,
-        'len_name': len_name
+        'len_name': len_name,
+        'reg_age':reg_age
     }
-
-
-def benchmark(clf, X_train, X_test, y_train, y_test, X, y):
-    scores = cross_val_score(clf, X, y, cv=5)
-    print("Cross validation: {}".format(np.average(scores)))
-
-    clf.fit(X=X_train, y=y_train)
-    pred = clf.predict(X_test)
-    score = metrics.accuracy_score(y_test, pred)
-    precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-    ndgc = ndcg_score(y_test, pred)
-    print("NDCG: {}".format(ndgc))
-    print("CLF score: {}".format(clf.score(X_test, y_test)))
-    print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score, precision, recall, fscore))
 
 
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
@@ -457,8 +451,8 @@ def sourcef_pred(chi_k=15, ldak=5):
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-    not_incl = ['avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM',
-                'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply']
+    not_incl = ['avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM', 'reg_age',
+                'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply', 'avg_personal_pronoun_first']
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions', 'avg_emoticons',
                 'avg_questionM', 'avg_exlamationM', 'avg_sent_pos',

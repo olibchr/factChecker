@@ -1,10 +1,15 @@
-import glob, json, datetime, os, digits
+import glob, json, datetime, os
 import pandas as pd
 import numpy as np
+from nltk.corpus import stopwords
+from nltk.corpus import wordnet as wn
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import RegexpTokenizer
 from string import digits
 from decoder import decoder
-DIR = os.path.dirname(__file__) + '../../3_Data/'
-
+DIR = os.path.dirname(__file__) + '/../../3_Data/'
+NLTK_STOPWORDS = set(stopwords.words('english'))
+WNL = WordNetLemmatizer()
 
 def datetime_converter(o):
     if isinstance(o, datetime.datetime):
