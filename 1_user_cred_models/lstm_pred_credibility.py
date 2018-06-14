@@ -426,7 +426,8 @@ def balance_classes(X,y, user_order):
 
 
 def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, top_words=50000):
-
+    print("Shapes:")
+    print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
     # create the model
     embedding_vecor_length = 32
     model = Sequential()
@@ -438,6 +439,7 @@ def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, t
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
+    return model
 
 
 def lstm_pred(n = 0):
