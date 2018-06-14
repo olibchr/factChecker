@@ -50,10 +50,11 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
     assertions = []
     this_fact = facts[facts['hash']==hash]
     this_transactions = transactions[transactions['fact']==hash]
-    assertions.append(pred_times_sent(this_fact['text']))
     this_transactions.sort_values('timestamp', inplace=True)
+
+    assertions.append(pred_times_sent(this_fact['text'].values[0]))
     for idx, tr in this_transactions.iterrows():
-        assertions.append(pred_times_sent(tr['text']))
+        assertions.append(pred_times_sent(tr['text'].values[0]))
     result = [np.average(assertions[:i] for i in range(len(assertions)))]
     return result
 
@@ -102,9 +103,9 @@ def main():
 
     pred = []
     y = []
-    for idx, fact in facts_test['hash'].values:
+    for idx, fact in enumerate(facts_test['hash'].values):
         pred.append(cred_fact_prediction(model, fact, facts, transactions, users_df))
-        y.append(facts_test['true'].iloc(idx))
+        y.append(int(facts_test['true'].iloc(idx)))
         print(pred, y)
 
 
