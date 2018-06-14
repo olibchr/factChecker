@@ -274,7 +274,7 @@ def get_prebuilt_data():
     return X,np.asarray(y),np.asarray(user_order)
 
 
-def keep_n_best_words(X_train, y_train, X_test, y_test, n = 5000):
+def keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, n = 5000):
     print(X_train.shape, X_test.shape)
     vectorizer = TfidfVectorizer(sublinear_tf=True, max_df=0.5)
 
@@ -464,7 +464,7 @@ def lstm_pred(n = 0):
     # X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
     # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
-    X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
+    X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, idx_to_word,top_words)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12

@@ -77,7 +77,7 @@ def main():
     X, y, user_order = lstm_cred.get_prebuilt_data()
     X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
     X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
-    X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, top_words)
+    X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
     max_tweet_length = 12
     X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
