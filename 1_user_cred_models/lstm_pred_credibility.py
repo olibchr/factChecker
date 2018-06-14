@@ -271,7 +271,7 @@ def get_prebuilt_data():
     X = construct['X']
     y = construct['y']
     user_order = construct['user_order']
-    return X,y,user_order
+    return X,np.asarray(y),np.asarray(user_order)
 
 
 def keep_n_best_words(X_train, y_train, X_test, y_test, n = 5000):
@@ -418,11 +418,26 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
 def balance_classes(X,y, user_order):
     bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
-    k_del = random.sample(list(np.where(y==bigger_class)[0]), abs(Counter(y[0])-Counter(y)[1]))
+    k_del = random.sample(list(np.where(y==bigger_class)[0]), abs(Counter(y)[0]-Counter(y)[1]))
     np.delete(X,k_del,0)
     np.delete(y,k_del,0)
     np.delete(user_order,k_del,0)
     return X,y, user_order
+
+
+def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, top_words=50000):
+
+    # create the model
+    embedding_vecor_length = 32
+    model = Sequential()
+    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
+    model.add(Dropout(0.2))
+    model.add(LSTM(100))
+    model.add(Dropout(0.2))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    print(model.summary())
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
 
 def lstm_pred(n = 0):
@@ -445,29 +460,18 @@ def lstm_pred(n = 0):
     X, y, user_order = balance_classes(X,y,user_order)
     print(Counter(y))
 
-    # X_train, X_test, y_train, y_test = train_test_split(X,y)
+    X_train, X_test, y_train, y_test = train_test_split(X,y)
     # X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, top_words)
     print(Counter(y_train), Counter(y_test))
 
     max_tweet_length = 12
-    # Sequence pedding not necessary for algo
     X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
-    # create the model
-    embedding_vecor_length = 32
-    model = Sequential()
-    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
-    model.add(Dropout(0.2))
-    model.add(LSTM(100))
-    model.add(Dropout(0.2))
-    model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
+    model = get_trained_model(X_train, X_test, y_train, y_test)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)

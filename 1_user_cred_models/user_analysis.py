@@ -40,6 +40,9 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC
+import seaborn as sns
+sns.set(style="ticks")
+
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
@@ -97,7 +100,8 @@ def get_users():
     users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        users.append(user)
+        if int(user.was_correct) != -1:
+            users.append(user)
     return users
 
 
@@ -312,48 +316,61 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
 
 def cluster_users_on_tweets(users, word_to_idx, idx_to_word):
+    def preprocessing(X,y):
+        print(X.shape, y.shape)
+        y_r = y == 1
+        y_r = y_r.nonzero()[0]
+        X_r = X[y_r, :]
+        X_r_s = X_r.sum(axis=1)
+        X_r_s = np.argsort(X_r_s)[-10:]
+        print('Common terms for users that are correct: {}'.format([idx_to_word[xrs] for xrs in X_r_s]))
+        X_r_r = X_r.sum() * 1.0 / len(y_r)
+        # print('# of terms for correct users on avg: {}'.format(X_r_r))
+
+        y_w = y == 0
+        y_w = y_w.nonzero()[0]
+        X_w = X[y_w, :]
+        X_w_s = X_w.sum(axis=1)
+        X_w_s = np.argsort(X_w_s)[-10:]
+        print('Common terms for users that are incorrect: {}'.format([idx_to_word[xws] for xws in X_w_s]))
+        Y_w_r = X_w.sum() * 1.0 / len(y_w)
+        # print('# of terms for incorrect users on avg: {}'.format(Y_w_r))
+
+        transformer = TfidfTransformer(smooth_idf=False)
+        X_weighted = transformer.fit_transform(X)
+
+        svd = TruncatedSVD(2)
+        normalizer = Normalizer(copy=False)
+        lsa = make_pipeline(svd, normalizer)
+        X_pca = lsa.fit_transform(X_weighted)
+
+        sns.pairplot(pd.DataFrame({'X1': X_pca[0], 'X2': X_pca[1], 'y':y}), hue='y')
+
     print("KMeans Clustering")
-    X, y, _ = build_sparse_matrix(users, word_to_idx)
-    print(X.shape, y.shape)
-    y_r = y == 1
-    y_r = y_r.nonzero()[0]
-    X_r = X.toarray()[y_r, :]
-    X_r_s = X_r.sum(axis=1)
-    X_r_s = np.argsort(X_r_s)[:10]
-    print('Common terms for users that are correct: {}'.format([idx_to_word[xrs] for xrs in X_r_s]))
-    X_r_r = X_r.sum() * 1.0 / len(y_r)
-    # print('# of terms for correct users on avg: {}'.format(X_r_r))
+    X, y, user_order = build_sparse_matrix(users, word_to_idx)
+    users_df = pd.DataFrame([vars(s) for s in users])
+    X = X.toarray()
 
-    y_w = y == 0
-    y_w = y_w.nonzero()[0]
-    X_w = X.toarray()[y_w, :]
-    X_w_s = X_w.sum(axis=1)
-    X_w_s = np.argsort(X_w_s)[:10]
-    print('Common terms for users that are incorrect: {}'.format([idx_to_word[xws] for xws in X_w_s]))
-    Y_w_r = X_w.sum() * 1.0 / len(y_w)
-    # print('# of terms for incorrect users on avg: {}'.format(Y_w_r))
 
-    transformer = TfidfTransformer(smooth_idf=False)
-    X_weighted = transformer.fit_transform(X)
+    users_df['X'] = users_df['user_id'].map(lambda uid: X[np.where(user_order==int(uid))[0]])
+    users_df['y'] = users_df['user_id'].map(lambda uid: y[np.where(user_order==int(uid))[0]])
+    print(users_df['y'])
+    for f in set(users_df['fact'].values):
+        this_f_users = users_df[users_df['fact'] == f]
+        this_X = preprocessing(this_f_users['X'].values, this_f_users['y'].values)
+        print("Training KMEans")
+        kmeans = KMeans(n_clusters=4)
+        kmeans.fit(this_X)
 
-    svd = TruncatedSVD(20)
-    normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd, normalizer)
-    X_pca = lsa.fit_transform(X_weighted)
+        for cl in set(kmeans.labels_):
+            this_cl = kmeans.labels_ == cl
+            X_cl = X.toarray()[this_cl, :]
+            X_cl = X_cl.sum(axis=1)
+            X_cl = np.argsort(X_cl)[:10]
 
-    print("Training KMEans")
-    kmeans = KMeans(n_clusters=20)
-    kmeans.fit(X_pca)
-
-    for cl in set(kmeans.labels_):
-        this_cl = kmeans.labels_ == cl
-        X_cl = X.toarray()[this_cl, :]
-        X_cl = X_cl.sum(axis=1)
-        X_cl = np.argsort(X_cl)[:10]
-
-        print("# in this cluster: {}".format(len([cl for cl in this_cl if cl == True])))
-        print("% of correct users in class: {}".format(sum(y[this_cl]) * 1.0 / len(y[this_cl])))
-        print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
+            print("# in this cluster: {}".format(len([cl for cl in this_cl if cl == True])))
+            print("% of correct users in class: {}".format(sum(y[this_cl]) * 1.0 / len(y[this_cl])))
+            print('Common terms for users in this cluster: {}'.format([idx_to_word[xcl] for xcl in X_cl]))
 
 
 def lda_analysis(users):
@@ -438,9 +455,10 @@ def main():
 
     users = get_users()
 
-    # corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
+    corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())
-    # cluster_users_on_tweets(get_users(), word_to_idx, idx_to_word)
+
+    cluster_users_on_tweets(users, word_to_idx, idx_to_word)
     # lda_analysis(get_users())
 
 

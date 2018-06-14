@@ -54,6 +54,7 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 
 # global Vars
+user_order, users = [],[]
 word_to_idx = {}
 fact_to_words = {}
 bow_corpus_cnt = {}
@@ -142,7 +143,7 @@ def build_user_vector(user, i):
         return
 
     # Extend topic description for text that is similar to topic
-    # for token in tokenize_text(user.fact_text):
+    # for token in get_tokenize_text(user.fact_text):
     #     if token not in word_vectors.vocab: continue
     #     user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
     #     # todo: test value
@@ -389,6 +390,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         #visualizer.fit(X_train, y_train)
         #visualizer.score(X_test, y_test)
         #visualizer.poof()
+
+        classification_analysis(X,y, clf.predict(X))
         return [fscore, fscore2, scores.mean()]
 
     print('&' * 80)
@@ -506,8 +509,20 @@ def model_param_grid_search(X,y):
     pass
 
 
-def classification_analysis(y,pred, user_order, users):
-    pass
+def classification_analysis(X,y,pred):
+    idx_to_word = {idx: k for k, idx in word_to_idx.items()}
+    print(metrics.accuracy_score(y, pred))
+    match = y==pred
+    users_df = pd.DataFrame([vars(s) for s in users])
+    mismatched_users = user_order[~match]
+    mismatched_users_df = users_df[users_df['user_id'].isin(mismatched_users)]
+    print(mismatched_users_df.describe())
+    print(mismatched_users_df)
+    missed_X = X[~match].toarray()
+    missed_X_sum = missed_X.sum(axis=1)
+    missed_X_sum = np.argsort(missed_X_sum)[-50:]
+    print('Common terms for users that were incorrect: {}'.format([idx_to_word[xrs] for xrs in missed_X_sum]))
+
 
 def balance_classes(X,y, user_order):
     k_add = random.sample(list(np.where(y==1)[0]), 30)
@@ -519,6 +534,7 @@ def balance_classes(X,y, user_order):
 
 
 def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
+    global y, user_order
     print('%' * 100)
     print('Credibility (Was user correct) Prediction using BOWs')
     print(chik, svdk, N)
@@ -563,6 +579,7 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 def main():
     global bow_corpus
     global word_to_idx
+    global users
     wn.ensure_loaded()
     if NEW_CORPUS:
         bow_corpus = build_bow_corpus(get_users())
@@ -576,11 +593,6 @@ def main():
 
     users = get_users()
 
-    exp = [(1000, 5), (5000, 5), (10000, 5), (20000, 5), (50000, 5),
-           (1000, 10), (5000, 10), (10000, 10), (20000, 10), (50000, 10),
-           (1000, 20), (5000, 20), (10000, 20), (20000, 20), (50000, 20),
-           (1000, 50), (5000, 50), (10000, 50), (20000, 50), (50000, 50),
-           (1000, 100), (5000, 100), (10000, 100), (20000, 100), (50000, 100)]
     results = []
     N = 0
     # for chik, svdk in exp:

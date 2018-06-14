@@ -41,7 +41,7 @@ import seaborn as sns
 sns.set(style="ticks")
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
-sys.path.insert(0, os.path.dirname(__file__) + '../5_models')
+sys.path.insert(0, os.path.dirname(__file__) + '../5_fact_checking_models')
 from decoder import decoder
 from metrics import ndcg_score
 
