@@ -425,7 +425,7 @@ def balance_classes(X,y, user_order):
     return X,y, user_order
 
 
-def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, top_words=50000):
+def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, top_words=50000, activation='sigmoid'):
     print("Shapes:")
     print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
     # create the model
@@ -435,7 +435,7 @@ def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, t
     model.add(Dropout(0.2))
     model.add(LSTM(100))
     model.add(Dropout(0.2))
-    model.add(Dense(1, activation='sigmoid'))
+    model.add(Dense(1, activation=activation))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
