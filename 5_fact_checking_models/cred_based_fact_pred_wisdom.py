@@ -9,6 +9,12 @@ import numpy as np
 import pandas as pd
 from nltk.corpus import wordnet as wn
 from keras.preprocessing import sequence
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import LSTM
+from keras.layers import Dropout
+from keras.layers.embeddings import Embedding
+from keras.preprocessing import sequence
 from nltk.sentiment import SentimentIntensityAnalyzer
 
 from sklearn.model_selection import train_test_split
@@ -82,7 +88,17 @@ def main():
     X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
     # Training lstm model
-    model = lstm_cred.get_trained_model(X_train, X_test, y_train, y_test)
+
+    embedding_vecor_length = 32
+    model = Sequential()
+    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
+    model.add(Dropout(0.2))
+    model.add(LSTM(100))
+    model.add(Dropout(0.2))
+    model.add(Dense(1))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    print(model.summary())
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
     pred = []
     y = []
