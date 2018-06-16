@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from nltk.corpus import wordnet as wn
+from sklearn import metrics
 from keras.preprocessing import sequence
 from keras.models import Sequential
 from keras.layers import Dense
@@ -55,7 +56,7 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
     assertions.append(pred_times_sent(this_fact['text'].values[0]))
     for idx, tr in this_transactions.iterrows():
         assertions.append(pred_times_sent(tr['text']))
-    result = [np.average(assertions[:i+1] for i in range(len(assertions)))]
+    result = [np.average(assertions[:i+1]) for i in range(len(assertions))]
     return result
 
 
@@ -105,8 +106,9 @@ def main():
     y = []
     for idx, fact in enumerate(facts_test['hash'].values):
         pred.append(cred_fact_prediction(model, fact, facts, transactions, users_df))
-        y.append(int(facts_test['true'].iloc(idx)))
+        y.append(-1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx])
         print(pred, y)
+    print(metrics.accuracy_score, metrics.precision_recall_fscore_support)
 
 
 
