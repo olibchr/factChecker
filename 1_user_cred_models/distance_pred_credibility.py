@@ -571,6 +571,17 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     # X = np.concatenate((X, X_alt2), axis=1)
     # X = np.concatenate((X, X_alt), axis=1)
 
+    svd = TruncatedSVD(2)
+    normalizer = Normalizer(copy=False)
+    lsa = make_pipeline(svd)
+    X_2d = lsa.fit_transform(X, y)
+    X_2d = normalize(X_2d, axis=0)
+
+    # 2d plot of X
+    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    plt.show()
+
 
     print(Counter(y), Counter(y_train), Counter(y_test))
     return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)

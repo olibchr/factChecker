@@ -24,6 +24,7 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from sklearn.covariance import EllipticEnvelope
+from sklearn.feature_extraction.text import CountVectorizer
 
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.linear_model import SGDClassifier
@@ -37,7 +38,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Imputer, normalize, StandardScaler
 from sklearn.preprocessing import Normalizer
 from imblearn.over_sampling import RandomOverSampler
-from sklearn.decomposition import TruncatedSVD, PCA
+from sklearn.decomposition import TruncatedSVD, PCA, LatentDirichletAllocation
 import seaborn as sns
 
 sns.set(style="ticks")
@@ -49,7 +50,9 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
+LDA_TOPIC = False
+NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 num_cores = multiprocessing.cpu_count()
@@ -58,7 +61,11 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = 0 # KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+lda = ()
+users = ()
+lda_text_to_id = {}
+lda_topics_per_text =[]
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -104,21 +111,85 @@ def get_corpus():
     return bow_corpus
 
 
-def get_relevant_tweets(user):
+def get_relevant_tweets(user, i = 0.8):
+    def topic_overlap(t1, t2):
+        # todo: params to test
+        n_topics = 5
+        threshold = 2
+        t1_topics = lda_topics_per_text[lda_text_to_id[t1]]
+        t2_topics = lda_topics_per_text[lda_text_to_id[t2]]
+        t_topics1 = t1_topics.argsort()[-n_topics:][::-1]
+        t_topics2 = t2_topics.argsort()[-n_topics:][::-1]
+        overlap = [val for val in t_topics1 if val in t_topics2]
+        if len(overlap)>=threshold:
+            return True
+        return False
+
     relevant_tweets = []
     print(user.user_id)
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
         distance_to_topic = []
         tokens = tokenize_text(tweet['text'], only_retweets=False)
+        if LDA_TOPIC:
+            if topic_overlap(tweet['text'], ' '.join(user_fact_words)):
+                relevant_tweets.append(tweet)
+            continue
         for token in tokens:
             if token not in word_vectors.vocab: continue
             increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
             distance_to_topic.append(increment)
-        if np.average(np.asarray(distance_to_topic)) < 0.8:
+        if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
 
     return relevant_tweets
+
+
+def lda_analysis(users):
+    global lda_text_to_id, lda_topics_per_text
+
+    n_features = 1000
+    n_components = 50
+    n_top_words = 20
+    print("Constructing user docs")
+    X = [[tweet['text'] for tweet in user.tweets] for user in users]
+    X = [tweet for sublist in X for tweet in sublist]
+    fact_topics = build_fact_topics()
+
+    for t in [' '.join(f) for f in fact_topics['fact_terms'].values]: X.append(t)
+
+    print(X[:5])
+    print("TF fitting user docs")
+    tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
+                                    max_features=n_features,
+                                    stop_words='english')
+    tf = tf_vectorizer.fit(X)
+    X_tf = tf.transform(X)
+
+    if NEW_LDA_MODEL:
+        print("Training new LDA model")
+        lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
+                                        learning_method='online',
+                                        learning_offset=50.,
+                                        random_state=0)
+        lda.fit(X_tf)
+        with open('model_data/lda_model','wb') as tmpfile:
+            pickle.dump(lda, tmpfile)
+    else:
+        with open('model_data/lda_model','rb') as tmpfile:
+            lda = pickle.load(tmpfile)
+
+    lda_text_to_id = {txt:id for id, txt in enumerate(X)}
+    lda_topics_per_text = lda.transform(X_tf)
+
+    tf_feature_names = tf_vectorizer.get_feature_names()
+    for topic_idx, topic in enumerate(lda.components_):
+        message = "Topic #%d: " % topic_idx
+        message += " ".join([tf_feature_names[i]
+                             for i in topic.argsort()[:-n_top_words - 1:-1]])
+        print(message)
+    print()
+    return lda
 
 
 def build_fact_topics():
@@ -137,7 +208,7 @@ def build_fact_topics():
     return facts_df
 
 
-def build_features_for_user(user):
+def build_features_for_user(user, i= 0.8):
     # Message based features: number of swear language words
     # Source based features length of screen name, has URL, ratio of followers to followees
 
@@ -180,7 +251,7 @@ def build_features_for_user(user):
     link_pattern = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     pronouns = ['I', 'you', 'he', 'she', 'it', 'they', 'we','me','him','her','its','our','us','them','my','your','his','hers','yours','theirs','mine','ours']
 
-    relevant_tweets = get_relevant_tweets(user)
+    relevant_tweets = get_relevant_tweets(user, i)
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
         tokenized_text = tokenize_text(t['text'])
@@ -241,7 +312,7 @@ def build_features_for_user(user):
     avg_personal_pronoun_first = sum(avg_personal_pronoun_first)*1.0 / len(user.tweets)
 
     # followers, friends, description, created_at, verified, statuses_count, lang}
-    reg_age = int((datetime.datetime.now() - parser.parse(user.features['created_at'])).days if 'created_at' in user.features else 0)
+    reg_age = int((datetime.datetime.now().replace(tzinfo=None) - parser.parse(user.features['created_at']).replace(tzinfo=None)).days if 'created_at' in user.features else 0)
     followers = int(user.features['followers']) if 'followers' in user.features else 0
     friends = int(user.features['friends']) if 'friends' in user.features else 0
     verified = 1 if 'verified' in user.features and user.features['verified'] == 'true' else 0
@@ -426,28 +497,30 @@ def model_param_grid_search(X, y):
     pass
 
 
-def sourcef_pred(chi_k=15, ldak=5):
+def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
     # Utility function to move the midpoint of a colormap to be around
     # the values of interest.
     global bow_corpus
     global word_to_idx
     global fact_to_words
+    global lda
     wn.ensure_loaded()
 
     print(chi_k)
 
     if BUILD_NEW_DATA:
         users = get_users()
+        lda = lda_analysis(users)
         print("Getting user features")
         fact_topics = build_fact_topics()
         fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
-            delayed(build_features_for_user)(user) for i, user in enumerate(users_with_tweets))
-        with open('model_data/user_featues', 'wb') as tmpfile:
+            delayed(build_features_for_user)(user, proximity) for i, user in enumerate(users_with_tweets))
+        with open('model_data/user_features.pkl', 'wb') as tmpfile:
             pickle.dump(users_with_features, tmpfile)
     else:
-        with open('model_data/user_featues', 'rb') as tmpfile:
+        with open('model_data/user_features.pkl', 'rb') as tmpfile:
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
@@ -510,7 +583,8 @@ def sourcef_pred(chi_k=15, ldak=5):
 
 
 def main():
-    sourcef_pred(15, 10)
+    for i in range(0.0,1.0, 0.1):
+        sourcef_pred(7, 10, i)
 
 
 if __name__ == "__main__":

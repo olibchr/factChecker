@@ -44,7 +44,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
 LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
