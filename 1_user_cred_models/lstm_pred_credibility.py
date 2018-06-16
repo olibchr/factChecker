@@ -9,6 +9,7 @@ import random
 import sys
 import warnings
 from collections import Counter, defaultdict
+from sklearn import metrics
 from string import digits
 import re
 
@@ -481,7 +482,7 @@ def lstm_pred(n = 0):
     model.add(LSTM(100))
     model.add(Dropout(0.2))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', metrics.precision_score, metrics.recall_score, metrics.f1_score])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 

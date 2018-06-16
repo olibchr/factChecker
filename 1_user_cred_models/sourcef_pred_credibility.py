@@ -583,7 +583,7 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
 
 
 def main():
-    for i in range(0.0,1.0, 0.1):
+    for i in np.arange(0.0,1.0, 0.1):
         sourcef_pred(7, 10, i)
 
 
