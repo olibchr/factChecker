@@ -69,6 +69,21 @@ lda_topics_per_text =[]
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
+def as_keras_metric(method):
+    import functools
+    from keras import backend as K
+    import tensorflow as tf
+    @functools.wraps(method)
+    def wrapper(self, args, **kwargs):
+        """ Wrapper for turning tensorflow metrics into keras metrics """
+        value, update_op = method(self, args, **kwargs)
+        K.get_session().run(tf.local_variables_initializer())
+        with tf.control_dependencies([update_op]):
+            value = tf.identity(value)
+        return value
+    return wrapper
+
+
 def datetime_converter(o):
     if isinstance(o, datetime.datetime):
         return o.__str__()
@@ -475,6 +490,8 @@ def lstm_pred(n = 0):
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
     # create the model
+    precision = as_keras_metric(tf.metrics.precision)
+    recall = as_keras_metric(tf.metrics.recall)
     embedding_vecor_length = 32
     model = Sequential()
     model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
@@ -482,7 +499,7 @@ def lstm_pred(n = 0):
     model.add(LSTM(100))
     model.add(Dropout(0.2))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', metrics.precision_score, metrics.recall_score, metrics.f1_score])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', precision, recall])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
