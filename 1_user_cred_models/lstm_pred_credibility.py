@@ -243,7 +243,7 @@ def get_series_from_user(user):
     relevant_tweets= []
     relevant_tweet_vecs = []
     all_distances = []
-    user_fact_words = fact_to_words[user.fact]
+    user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
         if LDA_TOPIC:
@@ -465,7 +465,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
 def balance_classes(X,y, user_order):
     bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
-    k_del = random.sample(list(np.where(y==bigger_class)[0]), abs(Counter(y)[0]-Counter(y)[1]))
+    k_del = random.sample(list(np.where(y==bigger_class)[0]), 2*abs(Counter(y)[0]-Counter(y)[1]))
     np.delete(X,k_del,0)
     np.delete(y,k_del,0)
     np.delete(user_order,k_del,0)

@@ -47,7 +47,7 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
         pred = model.predict(text)
-        return sent*pred
+        return ((sent*pred)+1)/2
     assertions = []
     this_fact = facts[facts['hash']==hash]
     this_transactions = transactions[transactions['fact']==hash]
@@ -105,10 +105,13 @@ def main():
     pred = []
     y = []
     for idx, fact in enumerate(facts_test['hash'].values):
-        pred.append(cred_fact_prediction(model, fact, facts, transactions, users_df))
-        y.append(-1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx])
-        print(pred, y)
-    print(metrics.accuracy_score, metrics.precision_recall_fscore_support)
+        pred_n = cred_fact_prediction(model, fact, facts, transactions, users_df)
+        this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
+
+        print(pred_n, this_y)
+        pred.append(pred_n)
+        y.append(this_y)
+    #print(metrics.accuracy_score, metrics.precision_recall_fscore_support)
 
 
 
