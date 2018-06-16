@@ -43,7 +43,7 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
     def pred_times_sent(text):
         sent = sid.polarity_scores(text)['compound']
         text = gt.get_tokenize_text(text)
-        text = [w for w in text if w in word_to_idx]
+        text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
         pred = model.predict(text)
         return sent*pred
@@ -54,8 +54,8 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
 
     assertions.append(pred_times_sent(this_fact['text'].values[0]))
     for idx, tr in this_transactions.iterrows():
-        assertions.append(pred_times_sent(tr['text'].values[0]))
-    result = [np.average(assertions[:i] for i in range(len(assertions)))]
+        assertions.append(pred_times_sent(tr['text']))
+    result = [np.average(assertions[:i+1] for i in range(len(assertions)))]
     return result
 
 

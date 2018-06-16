@@ -49,7 +49,7 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 num_cores = multiprocessing.cpu_count()
@@ -58,7 +58,7 @@ num_jobs = round(num_cores * 3 / 4)
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
 fact_to_words = {}
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0 # KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -456,7 +456,9 @@ def sourcef_pred(chi_k=15, ldak=5):
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions', 'avg_emoticons',
                 'avg_questionM', 'avg_exlamationM', 'avg_sent_pos',
-                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet','len_description','len_name'
+                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet','len_description','len_name',
+                'avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM', 'reg_age',
+                'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply', 'avg_personal_pronoun_first'
                 ]
 
 
