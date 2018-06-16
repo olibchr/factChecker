@@ -31,6 +31,8 @@ from keras.layers import LSTM
 from keras.layers import Dropout
 from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
+import tensorflow as tf
+from keras import backend as K
 from imblearn.over_sampling import RandomOverSampler
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -83,6 +85,35 @@ def as_keras_metric(method):
         return value
     return wrapper
 
+def f1(y_true, y_pred):
+    def recall(y_true, y_pred):
+        """Recall metric.
+
+        Only computes a batch-wise average of recall.
+
+        Computes the recall, a metric for multi-label classification of
+        how many relevant items are selected.
+        """
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+        recall = true_positives / (possible_positives + K.epsilon())
+        return recall
+
+    def precision(y_true, y_pred):
+        """Precision metric.
+
+        Only computes a batch-wise average of precision.
+
+        Computes the precision, a metric for multi-label classification of
+        how many selected items are relevant.
+        """
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + K.epsilon())
+        return precision
+    precision = precision(y_true, y_pred)
+    recall = recall(y_true, y_pred)
+    return 2*((precision*recall)/(precision+recall+K.epsilon()))
 
 def datetime_converter(o):
     if isinstance(o, datetime.datetime):
@@ -499,7 +530,7 @@ def lstm_pred(n = 0):
     model.add(LSTM(100))
     model.add(Dropout(0.2))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', precision, recall])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', precision, recall, f1])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 

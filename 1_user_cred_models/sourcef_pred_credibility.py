@@ -50,7 +50,7 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
@@ -126,7 +126,7 @@ def get_relevant_tweets(user, i = 0.8):
         return False
 
     relevant_tweets = []
-    print(user.user_id)
+    # print(user.user_id)
     user_fact_words = fact_to_words[user.fact]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -150,7 +150,7 @@ def lda_analysis(users):
 
     n_features = 1000
     n_components = 50
-    n_top_words = 20
+    n_top_words = 10
     print("Constructing user docs")
     X = [[tweet['text'] for tweet in user.tweets] for user in users]
     X = [tweet for sublist in X for tweet in sublist]
@@ -510,7 +510,7 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
 
     if BUILD_NEW_DATA:
         users = get_users()
-        lda = lda_analysis(users)
+        # lda = lda_analysis(users)
         print("Getting user features")
         fact_topics = build_fact_topics()
         fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
