@@ -106,19 +106,14 @@ def datetime_converter(o):
         return o.__str__()
 
 
-def tokenize_text(text, only_retweets=False):
+def tokenize_text(text, no_stopw=False):
     tokenizer = RegexpTokenizer(r'\w+')
     links = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)
-    for l in links: text = text.replace(l,' evidence ')
-    if only_retweets:
-        text = text.lower()
-        if 'rt' not in text: return []
-        text = text[text.find('rt'):]
-        text = text[text.find('@'):text.find(':')]
+    for l in links: text = text.replace(l,'evidence')
+    if no_stopw:
         return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
                 i.lower() not in NLTK_STOPWORDS]
-    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
-            i.lower() not in NLTK_STOPWORDS]
+    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text)]
 
 
 def get_data():
@@ -231,7 +226,7 @@ def get_series_from_user(user):
     all_distances = []
     user_fact_words = [fw for fw in fact_to_words[user.fact]]
     for tweet in user.tweets:
-        tokens = tokenize_text(tweet['text'], only_retweets=False)
+        tokens = tokenize_text(tweet['text'])
         if LDA_TOPIC:
             if topic_overlap(tweet['text'], ' '.join(user_fact_words)):
                 relevant_tweets.append(tweet)
@@ -468,7 +463,7 @@ def balance_classes(X,y, user_order):
 def lstm_pred(n = 0):
     global lda, users
     print(n)
-    top_words = 70000
+    top_words = 80000
 
     if BUILD_NEW_DATA:
         if LDA_TOPIC: lda = lda_analysis(users)
