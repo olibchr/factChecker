@@ -451,7 +451,14 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
 def balance_classes(X,y, user_order):
     bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
-    k_del = random.sample(list(np.where(y==bigger_class)[0]), abs(Counter(y)[0]-Counter(y)[1]))
+    diff = abs(Counter(y)[0]-Counter(y)[1])
+
+    k_add = random.sample(list(np.where(y==0)[0]), diff/2)
+    X = np.append(X, X[k_add])
+    y = np.append(y, y[k_add])
+    user_order = np.append(user_order, user_order[k_add])
+
+    k_del = random.sample(list(np.where(y==bigger_class)[0]), diff/2)
     X = np.delete(X,k_del,0)
     y = np.delete(y,k_del,0)
     user_order = np.delete(user_order,k_del,0)
