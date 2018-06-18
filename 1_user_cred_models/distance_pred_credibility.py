@@ -142,14 +142,6 @@ def build_user_vector(user, i):
         print(user_fact_words)
         return
 
-    # Extend topic description for text that is similar to topic
-    # for token in get_tokenize_text(user.fact_text):
-    #     if token not in word_vectors.vocab: continue
-    #     user_to_fact_dist = np.average(word_vectors.distances(token, other_words=user_fact_words))
-    #     # todo: test value
-    #     if user_to_fact_dist < 0.5:
-    #         fact_to_words[user.fact] += [token]
-
     user_fact_words = fact_to_words[user.fact]
     # If X doesnt need to be rebuild, comment out
     for tweet in user.tweets:
@@ -233,7 +225,7 @@ def build_sparse_matrix_word2vec(users, retweets_only=False):
             if user.fact is None: print(user.user_id)
         if retweets_only:
             classification_data = Parallel(n_jobs=num_jobs)(
-            delayed(build_user_vector_retweets_topic_independent)(user, i) for i, user in enumerate(users))
+            delayed(build_user_vector)(user, i) for i, user in enumerate(users))
             return sorted([x for x in classification_data if x != None], key=lambda x: x['index'])
 
         classification_data = Parallel(n_jobs=num_jobs)(
@@ -253,14 +245,6 @@ def build_sparse_matrix_word2vec(users, retweets_only=False):
     if not BUILD_NEW_SPARSE and not retweets_only:
         with open('model_data/classification_data_w2v', 'rb') as f:
             classification_data = pickle.load(f)
-            # with open('model_data/positions_w2v', 'rb') as f:
-            #     positions = pickle.load(f)
-            # with open('model_data/data_w2v', 'rb') as f:
-            #     data = pickle.load(f)
-            # with open('model_data/user_w2v', 'rb') as f:
-            #     y = pickle.load(f)
-            # with open('model_data/order_w2v', 'rb') as f:
-            #     user_order = pickle.load(f)
     else:
         classification_data = rebuild_sparse(users)
 
