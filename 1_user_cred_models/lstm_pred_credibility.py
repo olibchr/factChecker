@@ -517,7 +517,7 @@ def lstm_pred(n = 0):
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
-    perf_metrics = metrics.precision_recall_fscore_support(y_train, model.predict(X_train))
+    perf_metrics = metrics.precision_recall_fscore_support(y_train, model.predict_proba(X_train))
     print(perf_metrics)
 
     # Final evaluation of the model

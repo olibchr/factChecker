@@ -46,7 +46,7 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
-        pred = model.predict(text)
+        pred = model.predict_proba(text)
         return ((sent*pred)+1)/2
     assertions = []
     this_fact = facts[facts['hash']==hash]
@@ -56,7 +56,7 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
     assertions.append(pred_times_sent(this_fact['text'].values[0]))
     for idx, tr in this_transactions.iterrows():
         assertions.append(pred_times_sent(tr['text']))
-    result = [np.average(assertions[:i+1]) for i in range(len(assertions))]
+    result = [round(np.average(assertions[:i+1])) for i in range(len(assertions))]
     return result
 
 
@@ -97,7 +97,7 @@ def main():
     model.add(Dropout(0.2))
     model.add(LSTM(100))
     model.add(Dropout(0.2))
-    model.add(Dense(1))
+    model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
