@@ -71,42 +71,27 @@ lda_topics_per_text =[]
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
-def as_keras_metric(method):
-    import functools
-    from keras import backend as K
-    import tensorflow as tf
-    @functools.wraps(method)
-    def wrapper(self, args, **kwargs):
-        """ Wrapper for turning tensorflow metrics into keras metrics """
-        value, update_op = method(self, args, **kwargs)
-        K.get_session().run(tf.local_variables_initializer())
-        with tf.control_dependencies([update_op]):
-            value = tf.identity(value)
-        return value
-    return wrapper
+def recall(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+
+def precision(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    return precision
+
 
 def f1(y_true, y_pred):
     def recall(y_true, y_pred):
-        """Recall metric.
-
-        Only computes a batch-wise average of recall.
-
-        Computes the recall, a metric for multi-label classification of
-        how many relevant items are selected.
-        """
         true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
         possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
         recall = true_positives / (possible_positives + K.epsilon())
         return recall
-
     def precision(y_true, y_pred):
-        """Precision metric.
-
-        Only computes a batch-wise average of precision.
-
-        Computes the precision, a metric for multi-label classification of
-        how many selected items are relevant.
-        """
         true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
         predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
         precision = true_positives / (predicted_positives + K.epsilon())
@@ -114,6 +99,7 @@ def f1(y_true, y_pred):
     precision = precision(y_true, y_pred)
     recall = recall(y_true, y_pred)
     return 2*((precision*recall)/(precision+recall+K.epsilon()))
+
 
 def datetime_converter(o):
     if isinstance(o, datetime.datetime):
@@ -504,8 +490,6 @@ def lstm_pred(n = 0):
     X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
     # create the model
-    precision = as_keras_metric(tf.metrics.precision)
-    recall = as_keras_metric(tf.metrics.recall)
     embedding_vecor_length = 32
     model = Sequential()
     model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
@@ -517,7 +501,8 @@ def lstm_pred(n = 0):
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
-    perf_metrics = metrics.precision_recall_fscore_support(y_train, model.predict_proba(X_train))
+    preds = [i[0] for i in model.predict_classes(X_test)]
+    perf_metrics = metrics.precision_recall_fscore_support(y_test, preds)
     print(perf_metrics)
 
     # Final evaluation of the model
