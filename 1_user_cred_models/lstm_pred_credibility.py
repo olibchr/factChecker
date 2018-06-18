@@ -465,28 +465,11 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
 def balance_classes(X,y, user_order):
     bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
-    k_del = random.sample(list(np.where(y==bigger_class)[0]), 2*abs(Counter(y)[0]-Counter(y)[1]))
-    np.delete(X,k_del,0)
-    np.delete(y,k_del,0)
-    np.delete(user_order,k_del,0)
+    k_del = random.sample(list(np.where(y==bigger_class)[0]), abs(Counter(y)[0]-Counter(y)[1]))
+    X = np.delete(X,k_del,0)
+    y = np.delete(y,k_del,0)
+    user_order = np.delete(user_order,k_del,0)
     return X,y, user_order
-
-
-def get_trained_model(X_train, y_train, X_test, y_test, max_tweet_length = 12, top_words=50000, activation='sigmoid'):
-    print("Shapes:")
-    print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
-    # create the model
-    embedding_vecor_length = 32
-    model = Sequential()
-    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
-    model.add(Dropout(0.2))
-    model.add(LSTM(100))
-    model.add(Dropout(0.2))
-    model.add(Dense(1, activation=activation))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
-    return model
 
 
 def lstm_pred(n = 0):
@@ -534,7 +517,8 @@ def lstm_pred(n = 0):
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
-    #model = get_trained_model(X_train, X_test, y_train, y_test)
+    perf_metrics = metrics.precision_recall_fscore_support(y_train, model.predict(X_train))
+    print(perf_metrics)
 
     # Final evaluation of the model
     scores = model.evaluate(X_test, y_test, verbose=0)
