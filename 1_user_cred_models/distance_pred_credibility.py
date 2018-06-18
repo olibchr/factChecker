@@ -413,15 +413,6 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     model = LinearSVC(penalty='l2', dual=False, tol=1e-3)
     results.append(benchmark(model))
 
-    # Train sparse SVM likes
-    # for penalty in ["l2", "l1"]:
-    #     print("%s penalty" % penalty.upper())
-    #     for clf, name in (
-    #             (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
-    #             (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")):
-    #         print('=' * 80)
-    #         print(name)
-    #         results.append([benchmark(clf)])
     return results
 
 
@@ -563,26 +554,27 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     transformer = TfidfTransformer(smooth_idf=True)
     std_scale = preprocessing.StandardScaler(with_mean=False)
-    X = SelectKBest(chi2, k=chik).fit_transform(X, y)
     svd = TruncatedSVD(svdk)
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
 
 
+    X = SelectKBest(chi2, k=chik).fit_transform(X, y)
+    X = transformer.fit_transform(X, y)
+    X = np.asarray(lsa.fit_transform(X, y))
+
     # X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     X_train, X_test, y_train, y_test = train_test_split(X, y)
 
-    X = transformer.fit_transform(X, y)
-    X = np.asarray(lsa.fit_transform(X, y))
     #X_train = ch2.fit_transform(X_train,y_train)
     #X_train = std_scale.fit_transform(X_train, y_train)
-    X_train = transformer.fit_transform(X_train, y_train)
-    X_train = np.asarray(lsa.fit_transform(X_train, y_train))
+    #X_train = transformer.fit_transform(X_train, y_train)
+    #X_train = np.asarray(lsa.fit_transform(X_train, y_train))
 
     #X_test = ch2.transform(X_test)
     #X_test = std_scale.transform(X_test)
-    X_test = transformer.transform(X_test)
-    X_test = np.asarray(lsa.transform(X_test))
+    #X_test = transformer.transform(X_test)
+    #X_test = np.asarray(lsa.transform(X_test))
 
     # X_alt = build_alternative_features(users, user_order)
     # X_alt = np.asarray(transformer.fit_transform(X_alt))
@@ -599,9 +591,9 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     X_2d = normalize(X_2d, axis=0)
 
     # 2d plot of X
-    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
-    sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
-    plt.show()
+    # X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    # sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    # plt.show()
 
 
     print(Counter(y), Counter(y_train), Counter(y_test))

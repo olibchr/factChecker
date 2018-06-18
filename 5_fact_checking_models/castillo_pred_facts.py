@@ -77,10 +77,11 @@ def get_features(fact, transactions, users):
         avg_mentions.append(len([c for c in chars if c == '@']))
         lvl_size = idx
 
-        # print(tr['user_id'])
-        user = users[users['user_id'] == tr['user_id']]
-        # print(user)
-        # if len(user) == 0 or user.shape[0] < 1: continue
+        # if tr['user_id'] in users['user_id'].values: print(tr['user_id'])
+        user = [u for u in users if u.user_id == tr['user_id']]
+        if len(user) <1: continue
+        user = user[0]
+        print(user.user_id)
         matched_users += 1
         avg_friends.append(int(user.features['friends']) if 'friends' in user.features else 0)
         avg_followers.append(int(user.features['followers']) if 'followers' in user.features else 0)
@@ -163,10 +164,8 @@ def main():
     global users
     wn.ensure_loaded()
     users = gt.get_users()
-    users = pd.DataFrame([vars(u) for u in users])
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
-    #print(users)
     facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows() if fact['true'] != 'unknown'])
     print(facts.describe())
 
@@ -174,6 +173,7 @@ def main():
     features = ['avg_mentions', 'avg_emoticons', 'avg_links', 'avg_questionM', 'avg_personal_pronoun_first',
                 'avg_sent_pos', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'share_most_freq_author', 'lvl_size',
                 'avg_followers', 'avg_friends', 'avg_status_cnt', 'avg_reg_age']
+
     X = facts[list(features)].values
     y = facts['y'].values
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
@@ -181,7 +181,7 @@ def main():
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
-    print(X_train.shape)
+    print(Counter(y_train), Counter(y_test), X_train.shape)
 
     evaluation(X_train, X_test, y_train, y_test)
 
