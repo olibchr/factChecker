@@ -12,13 +12,6 @@ import numpy as np
 import pandas as pd
 from nltk.corpus import wordnet as wn
 from sklearn import metrics
-from keras.preprocessing import sequence
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
-from keras.layers import Dropout
-from keras.layers.embeddings import Embedding
-from keras.preprocessing import sequence
 from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.metrics import precision_recall_fscore_support
 
@@ -69,7 +62,7 @@ def get_features(fact, transactions, users):
                 'your', 'his', 'hers', 'yours', 'theirs', 'mine', 'ours']
 
     for idx, tr in this_transactions.iterrows():
-        tokenized_text = gt.tokenize_text(tr['text'])
+        tokenized_text = gt.get_tokenize_text(tr['text'])
         chars = [c for c in tr['text']]
         avg_questionM.append(1 if '?' in tr['text'] else 0)
         avg_personal_pronoun_first.append(1 if tokenized_text[0] in pronouns else 0)
@@ -164,20 +157,12 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
 
 def main():
-    global bow_corpus
-    global word_to_idx, idx_to_word
-    global bow_corpus_top_n
     global users
     wn.ensure_loaded()
-    bow_corpus = gt.get_corpus()
     users = gt.get_users()
-    users_df = pd.DataFrame([vars(u) for u in users])
+    users = pd.DataFrame([vars(u) for u in users])
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
-
-    bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
-    word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
-    idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
     facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows()])
     print(facts.describe())
@@ -194,3 +179,7 @@ def main():
     X_test = scaler.transform(X_test)
 
     evaluation(X_train, X_test, y_train, y_test)
+
+
+if __name__ == "__main__":
+    main()
