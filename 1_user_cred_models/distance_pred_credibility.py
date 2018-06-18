@@ -18,7 +18,7 @@ from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
-from scipy.sparse import lil_matrix
+from scipy.sparse import lil_matrix, csr_matrix
 from sklearn import metrics, preprocessing
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -381,17 +381,17 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         pred2 = clf.predict(X_test_imp2)
         score2 = metrics.accuracy_score(y_test2, pred2)
         precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
-        #print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        #    score2, precision2, recall2, fscore2))
+        print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+            score2, precision2, recall2, fscore2))
 
-        #print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
         #visualizer = ClassificationReport(clf)
         #visualizer.fit(X_train, y_train)
         #visualizer.score(X_test, y_test)
         #visualizer.poof()
 
-        classification_analysis(X,y, clf.predict(X))
+        # classification_analysis(X,y, clf.predict(X))
         return [fscore, fscore2, scores.mean()]
 
     print('&' * 80)
@@ -524,12 +524,31 @@ def classification_analysis(X,y,pred):
     print('Common terms for users that were incorrect: {}'.format([idx_to_word[xrs] for xrs in missed_X_sum]))
 
 
-def balance_classes(X,y, user_order):
-    k_add = random.sample(list(np.where(y==1)[0]), 30)
+def delete_rows_csr(mat, indices):
+    """
+    Remove the rows denoted by ``indices`` form the CSR sparse matrix ``mat``.
+    """
+    if not isinstance(mat, csr_matrix):
+        raise ValueError("works only for CSR format -- use .tocsr() first")
+    indices = list(indices)
+    mask = np.ones(mat.shape[0], dtype=bool)
+    mask[indices] = False
+    return mat[mask]
 
+
+def balance_classes(X,y, user_order):
+    bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
+    diff = abs(Counter(y)[0]-Counter(y)[1])
+
+    k_add = random.sample(list(np.where(y==1-bigger_class)[0]), int(diff))
     X = vstack([X, X[k_add]])
     y = np.append(y, y[k_add])
     user_order = np.append(user_order, user_order[k_add])
+
+    # k_del = random.sample(list(np.where(y==bigger_class)[0]), int(diff/2))
+    # X = delete_rows_csr(X, k_del)
+    # y = np.delete(y,k_del,0)
+    # user_order = np.delete(user_order,k_del,0)
     return X,y, user_order
 
 
@@ -550,17 +569,19 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     lsa = make_pipeline(svd, normalizer)
 
 
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
-    #X_train, X_test, y_train, y_test = train_test_split(X, y)
+    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
+    X_train, X_test, y_train, y_test = train_test_split(X, y)
 
-    X_train = transformer.fit_transform(X_train, y_train)
+    X = transformer.fit_transform(X, y)
+    X = np.asarray(lsa.fit_transform(X, y))
     #X_train = ch2.fit_transform(X_train,y_train)
     #X_train = std_scale.fit_transform(X_train, y_train)
+    X_train = transformer.fit_transform(X_train, y_train)
     X_train = np.asarray(lsa.fit_transform(X_train, y_train))
 
-    X_test = transformer.transform(X_test)
     #X_test = ch2.transform(X_test)
     #X_test = std_scale.transform(X_test)
+    X_test = transformer.transform(X_test)
     X_test = np.asarray(lsa.transform(X_test))
 
     # X_alt = build_alternative_features(users, user_order)
@@ -609,10 +630,7 @@ def main():
     # for chik, svdk in exp:
     #    r= []
     for N in range(15):
-        r = []
-        for i in range(10):
-            r.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
-        results.append(np.average(np.asarray(r), axis=1))
+        results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
     print(np.average(np.asarray(results), axis=1))
 
 

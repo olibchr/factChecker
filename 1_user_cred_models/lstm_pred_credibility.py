@@ -229,7 +229,7 @@ def get_series_from_user(user):
     relevant_tweets= []
     relevant_tweet_vecs = []
     all_distances = []
-    user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
+    user_fact_words = [fw for fw in fact_to_words[user.fact]]
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'], only_retweets=False)
         if LDA_TOPIC:
@@ -239,11 +239,12 @@ def get_series_from_user(user):
                 relevant_tweet_vecs.append(tweet_vec)
         else:
             # print(tokens, user_fact_words)
+            ufw = [fw for fw in user_fact_words if fw in word_vectors.vocab]
             distance_to_topic = []
             for token in tokens:
                 if token not in word_to_idx: continue
                 if token not in word_vectors.vocab: continue
-                increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+                increment = np.average(word_vectors.distances(token, other_words=ufw))
                 distance_to_topic.append(increment)
             distance_to_topic = np.asarray(distance_to_topic)
             distance_to_topic = np.average(distance_to_topic)
@@ -452,13 +453,12 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 def balance_classes(X,y, user_order):
     bigger_class = 0 if (Counter(y)[0]-Counter(y)[1]) > 0 else 1
     diff = abs(Counter(y)[0]-Counter(y)[1])
+    # k_add = random.sample(list(np.where(y==1-bigger_class)[0]), int(diff/2))
+    # X = np.append(X, X[k_add])
+    # y = np.append(y, y[k_add])
+    # user_order = np.append(user_order, user_order[k_add])
 
-    k_add = random.sample(list(np.where(y==0)[0]), diff/2)
-    X = np.append(X, X[k_add])
-    y = np.append(y, y[k_add])
-    user_order = np.append(user_order, user_order[k_add])
-
-    k_del = random.sample(list(np.where(y==bigger_class)[0]), diff/2)
+    k_del = random.sample(list(np.where(y==bigger_class)[0]), int(diff/2))
     X = np.delete(X,k_del,0)
     y = np.delete(y,k_del,0)
     user_order = np.delete(user_order,k_del,0)
@@ -468,7 +468,7 @@ def balance_classes(X,y, user_order):
 def lstm_pred(n = 0):
     global lda, users
     print(n)
-    top_words = 50000
+    top_words = 70000
 
     if BUILD_NEW_DATA:
         if LDA_TOPIC: lda = lda_analysis(users)
@@ -479,7 +479,6 @@ def lstm_pred(n = 0):
         X, y, user_order = format_training_data(users_relevant_tweets)
     else:
         X,y,user_order = get_prebuilt_data()
-
 
     print(Counter(y))
     X, y, user_order = balance_classes(X,y,user_order)

@@ -16,7 +16,7 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.metrics import precision_recall_fscore_support
 
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import StandardScaler, Imputer
+from sklearn.preprocessing import Imputer, normalize, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
 sid = SentimentIntensityAnalyzer()
@@ -29,6 +29,7 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
 def get_features(fact, transactions, users):
+    if fact['true'] == 'unknown': print(fact); return
     this_transactions = transactions[transactions['fact'] == fact['hash']]
 
     avg_friends = []
@@ -76,8 +77,10 @@ def get_features(fact, transactions, users):
         avg_mentions.append(len([c for c in chars if c == '@']))
         lvl_size = idx
 
-        user = users[users['user_id'] == tr['id']]
-        if len(user) == 0 or user.shape[0] < 1: continue
+        # print(tr['user_id'])
+        user = users[users['user_id'] == tr['user_id']]
+        # print(user)
+        # if len(user) == 0 or user.shape[0] < 1: continue
         matched_users += 1
         avg_friends.append(int(user.features['friends']) if 'friends' in user.features else 0)
         avg_followers.append(int(user.features['followers']) if 'followers' in user.features else 0)
@@ -88,15 +91,15 @@ def get_features(fact, transactions, users):
     if matched_users == 0: matched_users = 1
     num_transactions = this_transactions.shape[0]
 
-    avg_emoticons = 1.0 * sum(avg_emoticons) / len(num_transactions)
-    avg_mentions = sum(avg_mentions) / len(num_transactions)
-    avg_links = 1.0 * sum(avg_links) / len(num_transactions)
-    avg_questionM = 1.0 * sum(avg_questionM) / len(num_transactions)
-    avg_sent_pos = 1.0 * sum(avg_sent_pos) / len(num_transactions)
-    avg_sent_neg = 1.0 * sum(avg_sent_neg) / len(num_transactions)
-    avg_sentiment = 1.0 * sum(avg_sentiment) / len(num_transactions)
-    avg_personal_pronoun_first = sum(avg_personal_pronoun_first) * 1.0 / len(num_transactions)
-    fr_has_url = 1.0 * sum(fr_has_url) / len(num_transactions)
+    avg_emoticons = 1.0 * sum(avg_emoticons) / (num_transactions)
+    avg_mentions = sum(avg_mentions) / (num_transactions)
+    avg_links = 1.0 * sum(avg_links) / (num_transactions)
+    avg_questionM = 1.0 * sum(avg_questionM) / (num_transactions)
+    avg_sent_pos = 1.0 * sum(avg_sent_pos) / (num_transactions)
+    avg_sent_neg = 1.0 * sum(avg_sent_neg) / (num_transactions)
+    avg_sentiment = 1.0 * sum(avg_sentiment) / (num_transactions)
+    avg_personal_pronoun_first = sum(avg_personal_pronoun_first) * 1.0 / (num_transactions)
+    fr_has_url = 1.0 * sum(fr_has_url) / (num_transactions)
     share_most_freq_author = 1 / num_transactions
     lvl_size = lvl_size
 
@@ -110,7 +113,7 @@ def get_features(fact, transactions, users):
         'topic': fact['topic'],
         'source_tweet': fact['source_tweet'],
         'text': fact['text'],
-        'y': fact['true'],
+        'y': int(fact['true']),
         'avg_mentions': avg_mentions,
         'avg_emoticons': avg_emoticons,
         'avg_links': avg_links,
@@ -129,9 +132,9 @@ def get_features(fact, transactions, users):
     }
 
 
-def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
+def evaluation(X_train, X_test, y_train, y_test):
     def benchmark(clf):
-        scores = cross_val_score(clf, X, y, cv=5)
+        scores = cross_val_score(clf, np.concatenate((X_train, X_test)), np.concatenate((y_train, y_test)), cv=5)
 
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
@@ -163,9 +166,10 @@ def main():
     users = pd.DataFrame([vars(u) for u in users])
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
-
-    facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows()])
+    #print(users)
+    facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows() if fact['true'] != 'unknown'])
     print(facts.describe())
+
 
     features = ['avg_mentions', 'avg_emoticons', 'avg_links', 'avg_questionM', 'avg_personal_pronoun_first',
                 'avg_sent_pos', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'share_most_freq_author', 'lvl_size',
@@ -177,6 +181,7 @@ def main():
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
+    print(X_train.shape)
 
     evaluation(X_train, X_test, y_train, y_test)
 
