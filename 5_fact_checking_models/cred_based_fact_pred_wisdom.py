@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import lstm_pred_credibility as lstm_cred
 import getters as gt
 
-NEW_MODEL = True
+NEW_MODEL = False
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
@@ -63,7 +63,7 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
     print(this_users['fact_text_ts'].iloc[-1])
 
     assertions = []
-    
+
     assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
@@ -101,16 +101,16 @@ def main():
 
     # Prepping lstm model
     top_words = 50000
-    if NEW_MODEL:
-        X, y, user_order = lstm_cred.get_prebuilt_data()
-        X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-        X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
-        X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
-        X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
-        max_tweet_length = 12
-        X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
-        X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
+    X, y, user_order = lstm_cred.get_prebuilt_data()
+    X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
+    X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+    X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
+    max_tweet_length = 12
+    X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
+    X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
+    if NEW_MODEL:
         # Training lstm model
         embedding_vecor_length = 32
         model = Sequential()
