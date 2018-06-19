@@ -30,8 +30,6 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
 def train_test_split_on_facts(X, y, user_order, facts_train):
-
-
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
     train_indeces = np.asarray([True if f in facts_train else False for idx,f in enumerate(fact_order)])
@@ -43,21 +41,35 @@ def train_test_split_on_facts(X, y, user_order, facts_train):
 
 
 def cred_fact_prediction(model, hash, facts, transactions, users_df):
-    def pred_times_sent(text):
-        sent = sid.polarity_scores(text)['compound']
+    def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
-        pred = model.predict_proba(text)
-        return ((sent*pred)+1)/2
+        return model.predict_proba(text)
+
+    def get_support(text, cred):
+        sent = sid.polarity_scores(text)['compound']
+        return ((sent*cred)+1)/2
+
     assertions = []
     this_fact = facts[facts['hash']==hash]
     this_transactions = transactions[transactions['fact']==hash]
     this_transactions.sort_values('timestamp', inplace=True)
+    this_users = users_df[users_df['fact']==hash]
+    this_users.sort_values('fact_text_ts', inplace=True)
+    print(this_users['fact_text_ts'].iloc[0])
+    print(this_users['fact_text_ts'].iloc[-1])
 
-    assertions.append(pred_times_sent(this_fact['text'].values[0]))
-    for idx, tr in this_transactions.iterrows():
-        assertions.append(pred_times_sent(tr['text']))
+    assertions.append(get_support(this_fact['text'].values[0], get_credibility(this_fact['text'].values[0])))
+
+    for idx, u in this_users.iterrows():
+        user_cred = []
+        user_cred.append(get_credibility(u['fact_text']))
+        for tweet in u.tweets:
+            user_cred.append(get_credibility(tweet['text']))
+        user_cred = np.average(user_cred)
+        assertions.append(get_support(u['fact_text'],np.average(user_cred)))
+
     result = [round(np.average(assertions[:i+1])) for i in range(len(assertions))]
     return result
 
@@ -118,7 +130,11 @@ def main():
         #print(pred_n[-1], this_y)
         pred.append(pred_n[-1])
         y.append(this_y)
-    print(metrics.accuracy_score(y, pred), metrics.precision_recall_fscore_support(y, pred))
+
+    score = metrics.accuracy_score(y_test, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
+    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+            score, precision, recall, fscore))
 
 
 
