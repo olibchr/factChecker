@@ -52,9 +52,8 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
 
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
-        return ((sent*cred)+1)/2
+        return float(((sent*cred)+1)/2)
 
-    assertions = []
     this_fact = facts[facts['hash']==hash]
     this_transactions = transactions[transactions['fact']==hash]
     this_transactions.sort_values('timestamp', inplace=True)
@@ -63,7 +62,9 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
     print(this_users['fact_text_ts'].iloc[0])
     print(this_users['fact_text_ts'].iloc[-1])
 
-    assertions.append(get_support(this_fact['text'].values[0], get_credibility(this_fact['text'].values[0])))
+    assertions = []
+    
+    assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = []
@@ -121,11 +122,11 @@ def main():
         model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
         print(model.summary())
         model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
-        model.save('cred_model.h5')
+        model.save('model_data/cred_model.h5')
         scores = model.evaluate(X_test, y_test, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1]*100))
     else:
-        model = load_model('cred_model.h5')
+        model = load_model('model_data/cred_model.h5')
 
     pred = []
     y = []
