@@ -29,10 +29,8 @@ import getters as gt
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
-def train_test_split_on_facts(X, y, user_order, facts):
-    facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
-    facts_train = facts[facts['hash'].isin(facts_train)]
-    facts_test = facts[facts['hash'].isin(facts_test)]
+def train_test_split_on_facts(X, y, user_order, facts_train):
+
 
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
@@ -75,7 +73,11 @@ def main():
     users_df = pd.DataFrame([vars(u) for u in users])
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
+
     facts = facts[facts['true'] != 'unknown']
+    facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
+    facts_train = facts[facts['hash'].isin(facts_train)]
+    facts_test = facts[facts['hash'].isin(facts_test)]
 
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
@@ -85,7 +87,7 @@ def main():
     top_words = 50000
     X, y, user_order = lstm_cred.get_prebuilt_data()
     X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
     X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
     X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
     max_tweet_length = 12
@@ -100,7 +102,7 @@ def main():
     model.add(LSTM(100))
     model.add(Dropout(0.2))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', precision, recall, f1])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
 
