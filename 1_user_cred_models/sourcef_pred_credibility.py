@@ -50,8 +50,8 @@ from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = True
-LDA_TOPIC = False
+BUILD_NEW_DATA = False
+LDA_TOPIC = True
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -65,7 +65,7 @@ lda = ()
 users = ()
 lda_text_to_id = {}
 lda_topics_per_text =[]
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0#KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -137,7 +137,7 @@ def get_relevant_tweets(user, i = 0.8):
             continue
         for token in tokens:
             if token not in word_vectors.vocab: continue
-            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+            increment = np.average(word_vectors.distances(token, other_words=[ufw for ufw in user_fact_words if ufw in word_vectors.vocab]))
             distance_to_topic.append(increment)
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
@@ -419,13 +419,6 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     return results
 
 
-def reject_outliers(data, y, m=2.):
-    d = np.abs(data - np.median(data))
-    mdev = np.median(d)
-    s = d / mdev if mdev else 0.
-    return data[s < m], y[s < m]
-
-
 def model_param_grid_search(X, y):
     from matplotlib.colors import Normalize
     class MidpointNormalize(Normalize):
@@ -510,10 +503,10 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
 
     if BUILD_NEW_DATA:
         users = get_users()
-        # lda = lda_analysis(users)
+        if LDA_TOPIC: lda = lda_analysis(users)
         print("Getting user features")
         fact_topics = build_fact_topics()
-        fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user, proximity) for i, user in enumerate(users_with_tweets))
@@ -533,6 +526,11 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
                 'avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM', 'reg_age',
                 'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply', 'avg_personal_pronoun_first'
                 ]
+
+    features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
+                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
+                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
+                'len_name']
 
 
     X = users_df[list(features)].values
@@ -583,8 +581,8 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
 
 
 def main():
-    for i in np.arange(0.0,1.0, 0.1):
-        sourcef_pred(7, 10, i)
+    #for i in np.arange(0.0,1.0, 0.1):
+    sourcef_pred(15, 10)
 
 
 if __name__ == "__main__":

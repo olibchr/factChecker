@@ -101,6 +101,8 @@ def main():
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
+    scores = model.evaluate(X_test, y_test, verbose=0)
+    print("Accuracy: %.2f%%" % (scores[1]*100))
 
     pred = []
     y = []
@@ -108,10 +110,10 @@ def main():
         pred_n = cred_fact_prediction(model, fact, facts, transactions, users_df)
         this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
 
-        print(pred_n, this_y)
-        pred.append(pred_n)
+        #print(pred_n[-1], this_y)
+        pred.append(pred_n[-1])
         y.append(this_y)
-    #print(metrics.accuracy_score, metrics.precision_recall_fscore_support)
+    print(metrics.accuracy_score(y, pred), metrics.precision_recall_fscore_support(y, pred))
 
 
 
