@@ -19,6 +19,8 @@ from keras.preprocessing import sequence
 from nltk.sentiment import SentimentIntensityAnalyzer
 
 from sklearn.model_selection import train_test_split
+from keras.models import load_model
+
 sid = SentimentIntensityAnalyzer()
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
@@ -26,6 +28,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import lstm_pred_credibility as lstm_cred
 import getters as gt
 
+NEW_MODEL = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 
 
@@ -68,8 +71,8 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
         for tweet in u.tweets:
             user_cred.append(get_credibility(tweet['text']))
         user_cred = np.average(user_cred)
-        assertions.append(get_support(u['fact_text'],np.average(user_cred)))
-
+        assertions.append(get_support(u['fact_text'],user_cred))
+    print(assertions)
     result = [round(np.average(assertions[:i+1])) for i in range(len(assertions))]
     return result
 
@@ -97,29 +100,32 @@ def main():
 
     # Prepping lstm model
     top_words = 50000
-    X, y, user_order = lstm_cred.get_prebuilt_data()
-    X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
-    X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
-    X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
-    max_tweet_length = 12
-    X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
-    X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
+    if NEW_MODEL:
+        X, y, user_order = lstm_cred.get_prebuilt_data()
+        X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
+        X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
+        X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+        X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
+        max_tweet_length = 12
+        X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
+        X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
-    # Training lstm model
-    embedding_vecor_length = 32
-    model = Sequential()
-    model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
-    model.add(Dropout(0.2))
-    model.add(LSTM(100))
-    model.add(Dropout(0.2))
-    model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    print(model.summary())
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
-
-    scores = model.evaluate(X_test, y_test, verbose=0)
-    print("Accuracy: %.2f%%" % (scores[1]*100))
+        # Training lstm model
+        embedding_vecor_length = 32
+        model = Sequential()
+        model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
+        model.add(Dropout(0.2))
+        model.add(LSTM(100))
+        model.add(Dropout(0.2))
+        model.add(Dense(1, activation='sigmoid'))
+        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        print(model.summary())
+        model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
+        model.save('cred_model.h5')
+        scores = model.evaluate(X_test, y_test, verbose=0)
+        print("Accuracy: %.2f%%" % (scores[1]*100))
+    else:
+        model = load_model('cred_model.h5')
 
     pred = []
     y = []
@@ -127,7 +133,6 @@ def main():
         pred_n = cred_fact_prediction(model, fact, facts, transactions, users_df)
         this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
 
-        #print(pred_n[-1], this_y)
         pred.append(pred_n[-1])
         y.append(this_y)
 

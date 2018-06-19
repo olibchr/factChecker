@@ -25,12 +25,13 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../5_Data/'
 
 
 def get_features(fact, transactions, users):
     if fact['true'] == 'unknown': print(fact); return
     this_transactions = transactions[transactions['fact'] == fact['hash']]
+    if this_transactions.shape[0] == 0: print(fact.hash); return
 
     avg_friends = []
     avg_followers = []
@@ -64,6 +65,7 @@ def get_features(fact, transactions, users):
 
     for idx, tr in this_transactions.iterrows():
         tokenized_text = gt.get_tokenize_text(tr['text'])
+        if len(tokenized_text) == 0: tokenized_text = [0]
         chars = [c for c in tr['text']]
         avg_questionM.append(1 if '?' in tr['text'] else 0)
         avg_personal_pronoun_first.append(1 if tokenized_text[0] in pronouns else 0)
@@ -81,7 +83,8 @@ def get_features(fact, transactions, users):
         user = [u for u in users if u.user_id == tr['user_id']]
         if len(user) <1: continue
         user = user[0]
-        print(user.user_id)
+        if user.features == None: continue
+
         matched_users += 1
         avg_friends.append(int(user.features['friends']) if 'friends' in user.features else 0)
         avg_followers.append(int(user.features['followers']) if 'followers' in user.features else 0)
@@ -166,8 +169,12 @@ def main():
     users = gt.get_users()
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
+    #print(facts.describe())
+    #print(transactions.describe())
+
+    facts = facts[facts['true'] != 'unknown']
+    facts = facts.filter(lambda x: x['hash'].isin(transactions['fact'].values))
     facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows() if fact['true'] != 'unknown'])
-    print(facts.describe())
 
 
     features = ['avg_mentions', 'avg_emoticons', 'avg_links', 'avg_questionM', 'avg_personal_pronoun_first',
