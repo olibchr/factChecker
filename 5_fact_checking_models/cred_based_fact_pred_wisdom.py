@@ -55,6 +55,7 @@ def get_relevant_tweets(user, i=0.8):
     relevant_tweets = []
     if user.fact not in fact_to_words: return user
     if user.tweets is None: return user
+    if user.features is None: user.features = {}
     user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -70,7 +71,7 @@ def get_relevant_tweets(user, i=0.8):
     return user
 
 
-def cred_fact_prediction(model, hash):
+def cred_fact_prediction(model, this_fact, this_users):
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
@@ -81,10 +82,6 @@ def cred_fact_prediction(model, hash):
         sent = sid.polarity_scores(text)['compound']
         return float(((sent * cred) + 1) / 2)
 
-    this_fact = facts[facts['hash'] == hash]
-    this_transactions = transactions[transactions['fact'] == hash]
-    this_transactions.sort_values('timestamp', inplace=True)
-    this_users = users_df[users_df['fact'] == hash]
     this_users.sort_values('fact_text_ts', inplace=True)
 
     assertions = []
@@ -108,10 +105,8 @@ def main():
     global bow_corpus
     global word_to_idx, idx_to_word, fact_to_words
     global bow_corpus_top_n
-    global users, users_df
-    global transactions
-    global facts
     wn.ensure_loaded()
+    print('Grabbing Data')
     bow_corpus = gt.get_corpus()
     users = gt.get_users()
     facts = gt.get_fact_topics()
@@ -128,6 +123,7 @@ def main():
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
     print(len(fact_to_words))
 
+    print('Annotating users')
     users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
     users_df = pd.DataFrame([vars(u) for u in users])
 
@@ -160,10 +156,14 @@ def main():
     else:
         model = load_model('model_data/cred_model.h5')
 
+    print('Making predictions')
     pred = []
     y = []
-    for idx, fact in enumerate(facts_test['hash'].values):
-        pred_n = cred_fact_prediction(model, fact)
+    for idx, hsh in enumerate(facts_test['hash'].values):
+        this_fact = facts[facts['hash'] == hsh]
+        this_users = users_df[users_df['fact'] == hsh]
+        pred_n = cred_fact_prediction(model, this_fact, this_users)
+
         this_y = facts_test['true'].iloc[idx]
         pred.append(pred_n[-1])
         y.append(this_y)
