@@ -225,6 +225,7 @@ def get_series_from_user(user):
     relevant_tweet_vecs = []
     all_distances = []
     user_fact_words = [fw for fw in fact_to_words[user.fact]]
+    user.tweets = [{'text': user.fact_text}] + user.tweets
     for tweet in user.tweets:
         tokens = tokenize_text(tweet['text'])
         if LDA_TOPIC:
@@ -359,8 +360,6 @@ def train_test_split_on_users(X, y, user_order, users, n):
         i+=1
         if i>=25: print("Cant build even classes"); break
 
-    #print(u_train_mask.shape, np.asarray(X).shape, np.asarray(y).shape, u_train_mask[:5])
-
     print("Shapes after splitting")
 
     for user in users:
@@ -380,12 +379,13 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
-    def build_mask(testsize=0.2):
+    def build_mask(testsize=0.4):
         f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=testsize)
         f_train_mask = []
 
         # Keep a map of rumor hash to list of user id's. To keep at most n users in training set, we add the users id in the corresponding list and check.
         trainFact_to_n_user = defaultdict(lambda: [])
+        test_set_to_user = defaultdict(lambda: 0)
 
         for user_id in user_order:
             # always true if in train set
@@ -395,12 +395,19 @@ def train_test_split_on_facts(X, y, user_order, users, n):
             # if user was added before, all other user instances should be added
             elif user_id in trainFact_to_n_user[user_to_fact[user_id]]:
                 f_train_mask.append(True)
+            # if there are less than n users in training set, add him
             elif len(trainFact_to_n_user[user_to_fact[user_id]]) < n:
                 trainFact_to_n_user[user_to_fact[user_id]] = trainFact_to_n_user[user_to_fact[user_id]] + [user_id]
                 f_train_mask.append(True)
-            # otherwise false if in test set
+            # otherwise put user in test set
+            elif test_set_to_user[user_id] > 0:
+                if random.random() > 0.8:
+                    f_train_mask.append(True)
+                else:
+                    f_train_mask.append(False)
             else:
                 f_train_mask.append(False)
+                test_set_to_user[user_id] = 1
         f_train_mask = np.asarray(f_train_mask)
 
         X_train = [x for x,s in zip(X, f_train_mask) if s]
@@ -418,7 +425,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
     i = 0
     testsize = 0.2
     actual_testsize = 0
-    while ratio < 0.8 or ratio > 1.2 or actual_testsize<0.15 or actual_testsize>0.4:
+    while ratio < 0.8 or ratio > 1.2: # or actual_testsize<0.15 or actual_testsize>0.4:
         X_train, X_test, y_train, y_test = build_mask(testsize)
         ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
         actual_testsize = len(y_train) / (1.0*len(y_test)+1)
@@ -463,7 +470,7 @@ def balance_classes(X,y, user_order):
 def lstm_pred(n = 0):
     global lda, users
     print(n)
-    top_words = 80000
+    top_words = 50000
 
     if BUILD_NEW_DATA:
         if LDA_TOPIC: lda = lda_analysis(users)

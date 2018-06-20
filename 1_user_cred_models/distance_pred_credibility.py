@@ -7,6 +7,7 @@ import pickle
 import sys, re
 import warnings
 from collections import Counter, defaultdict
+from itertools import cycle
 from string import digits
 
 import matplotlib.pyplot as plt
@@ -18,16 +19,17 @@ from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
+from numpy.core.multiarray import interp
 from scipy.sparse import lil_matrix, csr_matrix
 from sklearn import metrics, preprocessing
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, roc_curve, auc
 from sklearn.model_selection import cross_val_score, StratifiedShuffleSplit, GridSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import Imputer, normalize
+from sklearn.preprocessing import Imputer, normalize, LabelBinarizer
 from sklearn.preprocessing import Normalizer
 from sklearn.svm import LinearSVC, SVC
 from yellowbrick.classifier import ROCAUC
@@ -36,6 +38,7 @@ from imblearn.over_sampling import RandomOverSampler
 from scipy.sparse import coo_matrix, vstack
 import seaborn as sns
 import random
+import scikitplot as skplt
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
@@ -60,7 +63,7 @@ fact_to_words = {}
 bow_corpus_cnt = {}
 #if BUILD_NEW_SPARSE:
 #word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = 0#KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def datetime_converter(o):
@@ -370,10 +373,9 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
-        #visualizer = ClassificationReport(clf)
-        #visualizer.fit(X_train, y_train)
-        #visualizer.score(X_test, y_test)
-        #visualizer.poof()
+        probas = clf.pred
+        skplt.metrics.plot_roc_curve(y_train, pred)
+        plt.show()
 
         # classification_analysis(X,y, clf.predict(X))
         return [fscore, fscore2, scores.mean()]

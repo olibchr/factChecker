@@ -10,8 +10,6 @@ import sys
 import warnings
 from string import digits
 import re
-
-import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -23,13 +21,9 @@ from nltk.corpus import wordnet as wn
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
-from sklearn.covariance import EllipticEnvelope
 from sklearn.feature_extraction.text import CountVectorizer
-
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import cross_val_score, StratifiedShuffleSplit, GridSearchCV
 from sklearn import metrics
 from sklearn.svm import LinearSVC, SVC, NuSVC
@@ -65,7 +59,7 @@ lda = ()
 users = ()
 lda_text_to_id = {}
 lda_topics_per_text =[]
-word_vectors = 0#KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -113,7 +107,6 @@ def get_corpus():
 
 def get_relevant_tweets(user, i = 0.8):
     def topic_overlap(t1, t2):
-        # todo: params to test
         n_topics = 5
         threshold = 2
         t1_topics = lda_topics_per_text[lda_text_to_id[t1]]
@@ -141,7 +134,6 @@ def get_relevant_tweets(user, i = 0.8):
             distance_to_topic.append(increment)
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
-
     return relevant_tweets
 
 
@@ -255,6 +247,7 @@ def build_features_for_user(user, i= 0.8):
     for t in relevant_tweets:
         avg_len.append(len(t['text']))
         tokenized_text = tokenize_text(t['text'])
+        if len(tokenized_text) == 0: tokenized_text = [0]
         avg_words.append(len(tokenized_text))
         avg_count_distinct_words.extend(tokenized_text)
         chars = [c for c in t['text']]
@@ -369,8 +362,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
         score = metrics.accuracy_score(y_test, pred)
         precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-        #print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        #    score, precision, recall, fscore))
+        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
 
         clf.fit(X_train_imp2, y_train2)
         pred2 = clf.predict(X_test_imp2)
@@ -527,10 +520,10 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
                 'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply', 'avg_personal_pronoun_first'
                 ]
 
-    features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
-                'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
-                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
-                'len_name']
+    # features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
+    #             'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
+    #             'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
+    #             'len_name']
 
 
     X = users_df[list(features)].values
