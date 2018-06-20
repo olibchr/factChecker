@@ -53,14 +53,14 @@ def train_test_split_on_facts(X, y, user_order, facts_train):
 
 def get_relevant_tweets(user, i=0.8):
     relevant_tweets = []
-    user_fact_words = fact_to_words[user.fact]
+    if user.fact not in fact_to_words: return user
+    user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
     for tweet in user.tweets:
         distance_to_topic = []
         tokens = gt.get_tokenize_text(tweet['text'])
         for token in tokens:
             if token not in word_vectors.vocab: continue
-            increment = np.average(word_vectors.distances(token, other_words=[ufw for ufw in user_fact_words if
-                                                                              ufw in word_vectors.vocab]))
+            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
             distance_to_topic.append(increment)
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
@@ -91,7 +91,7 @@ def cred_fact_prediction(model, hash):
     for idx, u in this_users.iterrows():
         user_cred = []
         user_cred.append(get_credibility(u['fact_text']))
-        relevant_tweets = get_relevant_tweets(u)
+        relevant_tweets = u.features['relevant_tweets']
         for idx,tweet in enumerate(relevant_tweets):
             if idx < 200: break
             user_cred.append(get_credibility(tweet['text']))
@@ -125,6 +125,7 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
+    print(len(fact_to_words))
 
     users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
     users_df = pd.DataFrame([vars(u) for u in users])
