@@ -166,7 +166,7 @@ def main():
     pred, hashes = Parallel(n_jobs=num_jobs)(
         delayed(cred_fact_prediction)(model, fact) for idx, fact in
         enumerate(facts_test['hash'].values))
-    y = [int(facts['hash' == hsh].values[0]) for hsh in hashes]
+    y = [int(facts[facts['hash'] == hsh]['true'].values[0]) for hsh in hashes]
 
     score = metrics.accuracy_score(y, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
