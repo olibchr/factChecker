@@ -54,6 +54,7 @@ def train_test_split_on_facts(X, y, user_order, facts_train):
 def get_relevant_tweets(user, i=0.8):
     relevant_tweets = []
     if user.fact not in fact_to_words: return user
+    if user.tweets is None: return user
     user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -65,6 +66,7 @@ def get_relevant_tweets(user, i=0.8):
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
     user.features['relevant_tweets'] = relevant_tweets
+    print(user.user_id, len(user.features['relevant_tweets']))
     return user
 
 
@@ -93,13 +95,12 @@ def cred_fact_prediction(model, hash):
         user_cred.append(get_credibility(u['fact_text']))
         relevant_tweets = u.features['relevant_tweets']
         for idx,tweet in enumerate(relevant_tweets):
-            if idx < 200: break
+            if idx > 200: break
             user_cred.append(get_credibility(tweet['text']))
 
         user_cred = np.average(user_cred)
         assertions.append(get_support(u['fact_text'], user_cred))
-    #print(assertions)
-    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))][-1]
+    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
     return result, hash
 
 
@@ -163,7 +164,7 @@ def main():
     y = []
     for idx, fact in enumerate(facts_test['hash'].values):
         pred_n = cred_fact_prediction(model, fact)
-        this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
+        this_y = facts_test['true'].iloc[idx]
         pred.append(pred_n[-1])
         y.append(this_y)
 
