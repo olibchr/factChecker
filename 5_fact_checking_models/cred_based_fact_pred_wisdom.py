@@ -40,7 +40,6 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
 
-
 def train_test_split_on_facts(X, y, user_order, facts_train):
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
@@ -65,7 +64,8 @@ def get_relevant_tweets(user, i=0.8):
             distance_to_topic.append(increment)
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
-    return relevant_tweets
+    user.features['relevant_tweets'] = relevant_tweets
+    return user
 
 
 def cred_fact_prediction(model, hash):
@@ -92,7 +92,8 @@ def cred_fact_prediction(model, hash):
         user_cred = []
         user_cred.append(get_credibility(u['fact_text']))
         relevant_tweets = get_relevant_tweets(u)
-        for tweet in relevant_tweets:
+        for idx,tweet in enumerate(relevant_tweets):
+            if idx < 200: break
             user_cred.append(get_credibility(tweet['text']))
 
         user_cred = np.average(user_cred)
@@ -112,6 +113,7 @@ def main():
     wn.ensure_loaded()
     bow_corpus = gt.get_corpus()
     users = gt.get_users()
+    users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
     users_df = pd.DataFrame([vars(u) for u in users])
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
@@ -157,17 +159,11 @@ def main():
 
     pred = []
     y = []
-
-    # for idx, fact in enumerate(facts_test['hash'].values):
-    #     pred_n = cred_fact_prediction(model, fact, facts, transactions, users_df)
-    #     this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
-    #     pred.append(pred_n[-1])
-    #     y.append(this_y)
-    fact_hashes = facts_test['hash'].values
-
-    pred, hashes = Parallel(n_jobs=num_jobs)(delayed(cred_fact_prediction)(model, fact) for fact in fact_hashes)
-
-    y = [int(facts[facts['hash'] == hsh]['true'].values[0]) for hsh in hashes]
+    for idx, fact in enumerate(facts_test['hash'].values):
+        pred_n = cred_fact_prediction(model, fact)
+        this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
+        pred.append(pred_n[-1])
+        y.append(this_y)
 
     score = metrics.accuracy_score(y, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
