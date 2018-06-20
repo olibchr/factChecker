@@ -113,12 +113,10 @@ def main():
     wn.ensure_loaded()
     bow_corpus = gt.get_corpus()
     users = gt.get_users()
-    users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-    users_df = pd.DataFrame([vars(u) for u in users])
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
-
     facts = facts[facts['true'] != 'unknown']
+
     facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
     facts_train = facts[facts['hash'].isin(facts_train)]
     facts_test = facts[facts['hash'].isin(facts_test)]
@@ -127,6 +125,9 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
+
+    users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+    users_df = pd.DataFrame([vars(u) for u in users])
 
     # Prepping lstm model
     top_words = 50000
