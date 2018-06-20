@@ -36,7 +36,7 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 
-NEW_MODEL = True
+NEW_MODEL = False
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -129,8 +129,6 @@ def main():
         users = gt.get_users()
         users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
         users_df = pd.DataFrame([vars(u) for u in users])
-        with open('model_data/cred_pred_user_data','wb') as tmpfile:
-            pickle.dump(users_df, tmpfile)
 
         # Prepping lstm model
         top_words = 50000
@@ -157,11 +155,16 @@ def main():
         model.save('model_data/cred_model.h5')
         scores = model.evaluate(X_test, y_test, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
+
+        with open('model_data/cred_pred_data','wb') as tmpfile:
+            pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
     else:
         print('Loading users & model')
         model = load_model('model_data/cred_model.h5')
-        with open('model_data/cred_pred_user_data','rb') as tmpfile:
-            users_df = pickle.load(tmpfile)
+        with open('model_data/cred_pred_data','rb') as tmpfile:
+            construct = pickle.load(tmpfile)
+        users_df = construct['users']
+        word_to_idx = construct['map']
 
     print('Making predictions')
     pred = []
@@ -172,8 +175,8 @@ def main():
         pred_n = cred_fact_prediction(model, this_fact, this_users)
 
         this_y = facts_test['true'].iloc[idx]
-        pred.append(pred_n[-1])
-        y.append(this_y)
+        pred.append(int(pred_n[-1]))
+        y.append(int(this_y))
 
     score = metrics.accuracy_score(y, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
