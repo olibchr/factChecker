@@ -163,9 +163,10 @@ def main():
     #     this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
     #     pred.append(pred_n[-1])
     #     y.append(this_y)
-    pred, hashes = Parallel(n_jobs=num_jobs)(
-        delayed(cred_fact_prediction)(model, fact) for idx, fact in
-        enumerate(facts_test['hash'].values))
+    fact_hashes = facts_test['hash'].values
+
+    pred, hashes = Parallel(n_jobs=num_jobs)(delayed(cred_fact_prediction)(model, fact) for fact in fact_hashes)
+
     y = [int(facts[facts['hash'] == hsh]['true'].values[0]) for hsh in hashes]
 
     score = metrics.accuracy_score(y, pred)
