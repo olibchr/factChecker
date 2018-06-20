@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import multiprocessing
 import os
+import pickle
 import sys
 from collections import Counter, defaultdict
 import re
@@ -35,12 +36,12 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 
-NEW_MODEL = False
+NEW_MODEL = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
 
-def train_test_split_on_facts(X, y, user_order, facts_train):
+def train_test_split_on_facts(X, y, user_order, facts_train, users):
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
     train_indeces = np.asarray([True if f in facts_train else False for idx, f in enumerate(fact_order)])
@@ -108,7 +109,6 @@ def main():
     wn.ensure_loaded()
     print('Grabbing Data')
     bow_corpus = gt.get_corpus()
-    users = gt.get_users()
     facts = gt.get_fact_topics()
     transactions = gt.get_transactions()
     facts = facts[facts['true'] != 'unknown']
@@ -123,22 +123,26 @@ def main():
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
     print(len(fact_to_words))
 
-    print('Annotating users')
-    users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-    users_df = pd.DataFrame([vars(u) for u in users])
-
-    # Prepping lstm model
-    top_words = 50000
-    X, y, user_order = lstm_cred.get_prebuilt_data()
-    X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values)
-    X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
-    X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
-    max_tweet_length = 12
-    X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
-    X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
 
     if NEW_MODEL:
+        print('Building new users & model')
+        users = gt.get_users()
+        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+        users_df = pd.DataFrame([vars(u) for u in users])
+        with open('model_data/cred_pred_user_data','wb') as tmpfile:
+            pickle.dump(users_df, tmpfile)
+
+        # Prepping lstm model
+        top_words = 50000
+        X, y, user_order = lstm_cred.get_prebuilt_data()
+        X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
+        X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
+        X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+        X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
+        max_tweet_length = 12
+        X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
+        X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
+
         # Training lstm model
         embedding_vecor_length = 32
         model = Sequential()
@@ -154,7 +158,10 @@ def main():
         scores = model.evaluate(X_test, y_test, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
     else:
+        print('Loading users & model')
         model = load_model('model_data/cred_model.h5')
+        with open('model_data/cred_pred_user_data','rb') as tmpfile:
+            users_df = pickle.load(tmpfile)
 
     print('Making predictions')
     pred = []
