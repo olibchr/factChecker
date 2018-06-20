@@ -134,8 +134,6 @@ def was_user_correct(user, facts, transactions):
 
 
 def store_result(user):
-    # TODO: was previosuly append, need to scan files and make sure we dont have duplicates
-    # Todo: can just check if files have more than one line and omit other lines
     with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
         out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
 

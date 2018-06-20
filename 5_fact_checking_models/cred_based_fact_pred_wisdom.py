@@ -1,4 +1,6 @@
 from __future__ import print_function
+
+import multiprocessing
 import os
 import sys
 from collections import Counter, defaultdict
@@ -7,6 +9,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from nltk.corpus import wordnet as wn
 from sklearn import metrics
 from keras.preprocessing import sequence
@@ -20,6 +23,7 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 
 from sklearn.model_selection import train_test_split
 from keras.models import load_model
+from gensim.models import KeyedVectors
 
 sid = SentimentIntensityAnalyzer()
 
@@ -28,14 +32,19 @@ sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import lstm_pred_credibility as lstm_cred
 import getters as gt
 
+num_cores = multiprocessing.cpu_count()
+num_jobs = round(num_cores * 3 / 4)
+
 NEW_MODEL = False
 DIR = os.path.dirname(__file__) + '../../3_Data/'
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
+                                                 binary=True, unicode_errors='ignore')
 
 
 def train_test_split_on_facts(X, y, user_order, facts_train):
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
-    train_indeces = np.asarray([True if f in facts_train else False for idx,f in enumerate(fact_order)])
+    train_indeces = np.asarray([True if f in facts_train else False for idx, f in enumerate(fact_order)])
     X_train = X[train_indeces]
     y_train = y[train_indeces]
     X_test = X[~train_indeces]
@@ -43,7 +52,23 @@ def train_test_split_on_facts(X, y, user_order, facts_train):
     return X_train, X_test, y_train, y_test
 
 
-def cred_fact_prediction(model, hash, facts, transactions, users_df):
+def get_relevant_tweets(user, i=0.8):
+    relevant_tweets = []
+    user_fact_words = fact_to_words[user.fact]
+    for tweet in user.tweets:
+        distance_to_topic = []
+        tokens = gt.get_tokenize_text(tweet['text'])
+        for token in tokens:
+            if token not in word_vectors.vocab: continue
+            increment = np.average(word_vectors.distances(token, other_words=[ufw for ufw in user_fact_words if
+                                                                              ufw in word_vectors.vocab]))
+            distance_to_topic.append(increment)
+        if np.average(np.asarray(distance_to_topic)) < i:
+            relevant_tweets.append(tweet)
+    return relevant_tweets
+
+
+def cred_fact_prediction(model, hash):
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
@@ -52,37 +77,38 @@ def cred_fact_prediction(model, hash, facts, transactions, users_df):
 
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
-        return float(((sent*cred)+1)/2)
+        return float(((sent * cred) + 1) / 2)
 
-    this_fact = facts[facts['hash']==hash]
-    this_transactions = transactions[transactions['fact']==hash]
+    this_fact = facts[facts['hash'] == hash]
+    this_transactions = transactions[transactions['fact'] == hash]
     this_transactions.sort_values('timestamp', inplace=True)
-    this_users = users_df[users_df['fact']==hash]
+    this_users = users_df[users_df['fact'] == hash]
     this_users.sort_values('fact_text_ts', inplace=True)
-    print(this_users['fact_text_ts'].iloc[0])
-    print(this_users['fact_text_ts'].iloc[-1])
 
     assertions = []
-
     assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = []
         user_cred.append(get_credibility(u['fact_text']))
-        for tweet in u.tweets:
+        relevant_tweets = get_relevant_tweets(u)
+        for tweet in relevant_tweets:
             user_cred.append(get_credibility(tweet['text']))
+
         user_cred = np.average(user_cred)
-        assertions.append(get_support(u['fact_text'],user_cred))
-    print(assertions)
-    result = [round(np.average(assertions[:i+1])) for i in range(len(assertions))]
-    return result
+        assertions.append(get_support(u['fact_text'], user_cred))
+    #print(assertions)
+    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))][-1]
+    return result, hash
 
 
 def main():
     global bow_corpus
-    global word_to_idx, idx_to_word
+    global word_to_idx, idx_to_word, fact_to_words
     global bow_corpus_top_n
-    global users
+    global users, users_df
+    global transactions
+    global facts
     wn.ensure_loaded()
     bow_corpus = gt.get_corpus()
     users = gt.get_users()
@@ -98,6 +124,7 @@ def main():
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
+    fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
 
     # Prepping lstm model
     top_words = 50000
@@ -124,25 +151,27 @@ def main():
         model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
         model.save('model_data/cred_model.h5')
         scores = model.evaluate(X_test, y_test, verbose=0)
-        print("Accuracy: %.2f%%" % (scores[1]*100))
+        print("Accuracy: %.2f%%" % (scores[1] * 100))
     else:
         model = load_model('model_data/cred_model.h5')
 
     pred = []
     y = []
-    for idx, fact in enumerate(facts_test['hash'].values):
-        pred_n = cred_fact_prediction(model, fact, facts, transactions, users_df)
-        this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
 
-        pred.append(pred_n[-1])
-        y.append(this_y)
+    # for idx, fact in enumerate(facts_test['hash'].values):
+    #     pred_n = cred_fact_prediction(model, fact, facts, transactions, users_df)
+    #     this_y = -1 if (facts_test['true'].iloc[idx]) == 'unknown' else facts_test['true'].iloc[idx]
+    #     pred.append(pred_n[-1])
+    #     y.append(this_y)
+    pred, hashes = Parallel(n_jobs=num_jobs)(
+        delayed(cred_fact_prediction)(model, fact) for idx, fact in
+        enumerate(facts_test['hash'].values))
+    y = [int(facts['hash' == hsh].values[0]) for hsh in hashes]
 
-    score = metrics.accuracy_score(y_test, pred)
-    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
+    score = metrics.accuracy_score(y, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-            score, precision, recall, fscore))
-
-
+        score, precision, recall, fscore))
 
 
 if __name__ == "__main__":

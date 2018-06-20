@@ -80,10 +80,10 @@ def get_features(fact, transactions, users):
         lvl_size = idx
 
         # if tr['user_id'] in users['user_id'].values: print(tr['user_id'])
-        user = [u for u in users if u.user_id == tr['user_id']]
-        if len(user) <1: continue
+        user = [u for u in users if int(u.user_id) == int(tr['user_id'])]
+        if len(user) <1: print(tr['user_id']); continue
         user = user[0]
-        if user.features == None: continue
+        if user.features == None: print(user.user_id); continue
 
         matched_users += 1
         avg_friends.append(int(user.features['friends']) if 'friends' in user.features else 0)
@@ -166,16 +166,16 @@ def evaluation(X_train, X_test, y_train, y_test):
 def main():
     global users
     wn.ensure_loaded()
-    users = gt.get_users()
-    facts = gt.get_fact_topics()
-    transactions = gt.get_transactions()
-    #print(facts.describe())
-    #print(transactions.describe())
+    users = gt.get_users(DIR)
+    facts = gt.get_fact_topics(DIR)
+    transactions = gt.get_transactions(DIR)
+    print(transactions.describe())
 
-    facts = facts[facts['true'] != 'unknown']
-    facts = facts.filter(lambda x: x['hash'].isin(transactions['fact'].values))
+    tr_hsh = transactions['fact'].values
+    cond = facts['hash'].isin(tr_hsh )
+    facts = facts[cond]
     facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows() if fact['true'] != 'unknown'])
-
+    print(facts.describe())
 
     features = ['avg_mentions', 'avg_emoticons', 'avg_links', 'avg_questionM', 'avg_personal_pronoun_first',
                 'avg_sent_pos', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'share_most_freq_author', 'lvl_size',

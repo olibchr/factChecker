@@ -7,7 +7,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from string import digits
 from decoder import decoder
-DIR = os.path.dirname(__file__) + '/../../3_Data/'
+STAND_DIR = os.path.dirname(__file__) + '/../../3_Data/'
 NLTK_STOPWORDS = set(stopwords.words('english'))
 WNL = WordNetLemmatizer()
 
@@ -25,11 +25,10 @@ def get_tokenize_text(text, only_retweets=False):
         text = text[text.find('@'):text.find(':')]
         return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
                 i.lower() not in NLTK_STOPWORDS]
-    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text) if
-            i.lower() not in NLTK_STOPWORDS]
+    return [WNL.lemmatize(i.lower()) for i in tokenizer.tokenize(text)]
 
 
-def get_data():
+def get_data(DIR = STAND_DIR):
     fact_file = glob.glob(DIR + 'facts.json')[0]
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
     facts = json.load(open(fact_file), object_hook=decoder)
@@ -37,12 +36,12 @@ def get_data():
     return facts, transactions
 
 
-def get_transactions():
+def get_transactions(DIR = STAND_DIR):
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
     return pd.read_json(transactions_file)
 
 
-def get_data_df():
+def get_data_df(DIR = STAND_DIR):
     fact_file = glob.glob(DIR + 'facts.json')[0]
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
     facts = pd.read_json(open(fact_file))
@@ -50,7 +49,7 @@ def get_data_df():
     return facts, transactions
 
 
-def get_users():
+def get_users(DIR = STAND_DIR):
     user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
@@ -67,9 +66,9 @@ def get_corpus():
     return bow_corpus
 
 
-def get_fact_topics():
+def get_fact_topics(DIR = STAND_DIR):
     print("Build fact topics")
-    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    fact_file = glob.glob(DIR + 'facts.json')[0]
     facts_df = pd.read_json(fact_file)
     remove_digits = str.maketrans('', '', digits)
     facts_df['text_parsed'] = facts_df['text'].map(lambda t: get_tokenize_text(t.translate(remove_digits)))

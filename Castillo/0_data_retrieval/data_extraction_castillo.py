@@ -1,4 +1,7 @@
 import sys, json, glob, os, hashlib, pandas
+
+from nltk.sentiment import SentimentIntensityAnalyzer
+
 sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from Transaction import Transaction
 from Fact import Fact
@@ -11,7 +14,7 @@ import csv
 import tweepy
 
 DIR = os.path.dirname(__file__) + '../../../4_RawData/Castillo/'
-OUT = os.path.dirname(__file__) + '../../../5_DataCastillo/'
+OUT = os.path.dirname(__file__) + '../../../5_Data/'
 
 ALT_ACCOUNT = False
 
@@ -26,6 +29,7 @@ if ALT_ACCOUNT:
     OAUTH_TOKEN = '978935525464858624-uBlhj4nIUr2eEJghiNkSzFO25hcHW2I'
     OAUTH_TOKEN_SECRET = 'eqgP2jzCzJVqcWxaqwTbFeHWKjDvMEKD6YR78UNhse6qp'
 
+sid = SentimentIntensityAnalyzer()
 # Objectives:
 # Build Users + Facts
 
@@ -79,7 +83,11 @@ def build_transactions(tweet_to_fact, fact_to_cred):
         tweets = api.statuses_lookup(tweets_for_fact)
 
         for status in tweets: # tweepy.Cursor(api.statuses_lookup, id=tweets_for_fact).items():
-            tr = Transaction(tweets_for_fact[0], status._json['id_str'], status._json['user']['id_str'], fact, status._json['created_at'], -1, -1, status._json['text'])
+            sentiment = sid.polarity_scores(status._json['text'])['compound']
+            if sentiment > 0: stance = 1
+            else: stance = 0
+            certainty = (sentiment + 1) /2
+            tr = Transaction(tweets_for_fact[0], status._json['id_str'], status._json['user']['id_str'], fact, status._json['created_at'], stance, certainty, status._json['text'])
             transactions.append(tr)
 
     return transactions
