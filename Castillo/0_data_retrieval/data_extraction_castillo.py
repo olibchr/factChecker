@@ -84,8 +84,9 @@ def build_transactions(tweet_to_fact, fact_to_cred):
 
         for status in tweets: # tweepy.Cursor(api.statuses_lookup, id=tweets_for_fact).items():
             sentiment = sid.polarity_scores(status._json['text'])['compound']
-            if sentiment > 0: stance = 1
-            else: stance = 0
+            if sentiment > 0.5: stance = 1
+            elif sentiment < -0.5: stance = 0
+            else: stance = -1
             certainty = (sentiment + 1) /2
             tr = Transaction(tweets_for_fact[0], status._json['id_str'], status._json['user']['id_str'], fact, status._json['created_at'], stance, certainty, status._json['text'])
             transactions.append(tr)
