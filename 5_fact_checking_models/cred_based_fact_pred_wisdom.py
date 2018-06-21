@@ -22,7 +22,7 @@ from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
 from nltk.sentiment import SentimentIntensityAnalyzer
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from keras.models import load_model
 from gensim.models import KeyedVectors
 from sklearn.pipeline import make_pipeline
@@ -231,16 +231,18 @@ def main():
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
+    scores = cross_val_score(std_clf, X, y, cv=3)
+    print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
     print('Making cred*stance predictions')
-    pred = []
+    X = []
     y = []
     for idx, hsh in enumerate(facts_test['hash'].values):
         this_fact = facts[facts['hash'] == hsh]
         this_users = users_df[users_df['fact'] == hsh]
         this_x = only_cred_support_deny_pred(model, this_fact, this_users)
         this_y = facts_test['true'].iloc[idx]
-        X.append(int(this_x[-1]))
+        X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
@@ -251,6 +253,8 @@ def main():
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
+    scores = cross_val_score(std_clf, X, y, cv=3)
+    print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
 
 if __name__ == "__main__":
