@@ -99,18 +99,6 @@ def linguistic_f(user):
     user.features['neg_words'] = user_neg_words
     return user
 
-    # bias
-    assertives = ['think', 'believe', 'suppose', 'expect', 'imagine']
-    factives = ['know', 'realize', 'regret', 'forget', 'find out']
-    hedges = ['postulates', 'felt', 'likely', 'mainly', 'guess']
-    implicatives = ['manage', 'remember', 'bother', 'get', 'dare']
-    # subjectivity
-    wiki_Bias_Lexicon = ['apologetic', 'summer', 'advance', 'cornerstone']
-    negative = ['hypocricy', 'swindle', 'unacceptable', 'worse']
-    positive = ['steadiest', 'enjoyed', 'prominence', 'lucky']
-    subj_clues = ['better', 'heckle', 'grisly', 'defeat', 'peevish']
-    affective = ['disgust', 'anxious', 'revolt', 'guilt', 'confident']
-
 
 def feature_user_tweet_sentiment(user):
     if not user.tweets: return user
@@ -141,6 +129,13 @@ def time_til_retweet(user):
     user.avg_time_to_retweet = average_timedelta
     return user
 
+def get_data():
+    fact_file = glob.glob(DIR + 'facts.json')[0]
+    transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
+    facts = json.load(open(fact_file), object_hook=decoder)
+    transactions = json.load(open(transactions_file), object_hook=decoder)
+    transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
+    return facts, transactions
 
 def store_result(user):
     with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
@@ -155,8 +150,8 @@ def datetime_converter(o):
 def main():
     wn.ensure_loaded()
     users = get_users()
-
-    users = [was_user_correct(user) for user in users]
+    facts, transactions = get_data()
+    users = [was_user_correct(user, facts, transactions) for user in users]
     print("Linguistic features..")
     users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
     print("Calculating tweet sentiment for each user")
