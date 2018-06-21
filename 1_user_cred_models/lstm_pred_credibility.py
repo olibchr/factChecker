@@ -220,7 +220,7 @@ def get_series_from_user(user):
             return True
         return False
 
-    print(user.user_id)
+    # print(user.user_id)
     relevant_tweets= []
     relevant_tweet_vecs = []
     all_distances = []
@@ -249,7 +249,7 @@ def get_series_from_user(user):
                 relevant_tweets.append(tweet)
                 tweet_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
                 relevant_tweet_vecs.append(tweet_vec)
-    print(len(relevant_tweets))
+    #print(len(relevant_tweets))
     user.features['relevant_tweets'] = relevant_tweets
     user.features['relevant_tweet_vecs'] = relevant_tweet_vecs
     return user
@@ -379,7 +379,7 @@ def train_test_split_on_users(X, y, user_order, users, n):
 
 
 def train_test_split_on_facts(X, y, user_order, users, n):
-    def build_mask(testsize=0.4):
+    def build_mask(testsize=0.5):
         f_train, f_test, _, _ = train_test_split(facts_hsh, [0] * len(facts_hsh), test_size=testsize)
         f_train_mask = []
 
@@ -423,8 +423,7 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
     ratio = 0
     i = 0
-    testsize = 0.2
-    actual_testsize = 0
+    testsize = 0.4
     while ratio < 0.8 or ratio > 1.2: # or actual_testsize<0.15 or actual_testsize>0.4:
         X_train, X_test, y_train, y_test = build_mask(testsize)
         ratio=Counter(y_test )[0] / (Counter(y_test)[1]+1)
@@ -486,9 +485,9 @@ def lstm_pred(n = 0):
     X, y, user_order = balance_classes(X,y,user_order)
     print(Counter(y))
 
-    X_train, X_test, y_train, y_test = train_test_split(X,y)
+    # X_train, X_test, y_train, y_test = train_test_split(X,y)
     # X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
-    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, idx_to_word,top_words)
     print(Counter(y_train), Counter(y_test))

@@ -41,6 +41,7 @@ DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
 
+
 def train_test_split_on_facts(X, y, user_order, facts_train, users):
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
@@ -72,18 +73,20 @@ def get_relevant_tweets(user, i=0.8):
     return user
 
 
-def cred_fact_prediction(model, this_fact, this_users):
+def cred_stance_prediction(model, this_fact, this_users):
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
-        return model.predict_proba(text)
+        probs = model.predict_proba(text)
+        print('probability: {}'.format(probs))
+        return probs
 
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
         return float(((sent * cred) + 1) / 2)
 
-    this_users.sort_values('fact_text_ts', inplace=True)
+    this_users = this_users.sort_values('fact_text_ts')
 
     assertions = []
     assertions.append(float(get_credibility(this_fact['text'].values[0])))
@@ -99,7 +102,45 @@ def cred_fact_prediction(model, this_fact, this_users):
         user_cred = np.average(user_cred)
         assertions.append(get_support(u['fact_text'], user_cred))
     result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
-    return result, hash
+    return result
+
+
+def only_cred_support_deny_pred(model, this_fact, this_users):
+    def get_credibility(text):
+        text = gt.get_tokenize_text(text)
+        text = [word_to_idx[w] for w in text if w in word_to_idx]
+        text = sequence.pad_sequences([text], maxlen=12)
+        probs = model.predict_proba(text)
+        print('probability: {}'.format(probs))
+        return probs
+
+    def get_support(user, cred):
+        if user.stance == 1:
+            return cred
+        if user.stance == 0:
+            return 1 - cred
+        else:
+            sent = sid.polarity_scores(u['fact_text'])['compound']
+            return float(((sent * cred) + 1) / 2)
+
+    this_users = this_users.sort_values('fact_text_ts')
+    assertions = []
+    assertions.append(float(get_credibility(this_fact['text'].values[0])))
+
+    for idx, u in this_users.iterrows():
+        user_cred = []
+        user_cred.append(get_credibility(u['fact_text']))
+        relevant_tweets = u.features['relevant_tweets']
+        for idx,tweet in enumerate(relevant_tweets):
+            if idx > 200: break
+            user_cred.append(get_credibility(tweet['text']))
+        user_cred = np.average(user_cred)
+        user_pred = get_support(u, user_cred)
+        if u.stance != -1:
+            assertions.append(user_pred)
+        assertions.append(user_pred)
+    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+    return result
 
 
 def main():
@@ -110,7 +151,6 @@ def main():
     print('Grabbing Data')
     bow_corpus = gt.get_corpus()
     facts = gt.get_fact_topics()
-    transactions = gt.get_transactions()
     facts = facts[facts['true'] != 'unknown']
 
     facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
@@ -121,12 +161,10 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
-    print(len(fact_to_words))
-
 
     if NEW_MODEL:
-        print('Building new users & model')
         users = gt.get_users()
+        print('Building new users & model')
         users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
         users_df = pd.DataFrame([vars(u) for u in users])
 
@@ -166,18 +204,31 @@ def main():
         users_df = construct['users']
         word_to_idx = construct['map']
 
-    print('Making predictions')
+    print('Making cred*stance predictions')
     pred = []
     y = []
     for idx, hsh in enumerate(facts_test['hash'].values):
         this_fact = facts[facts['hash'] == hsh]
         this_users = users_df[users_df['fact'] == hsh]
-        pred_n = cred_fact_prediction(model, this_fact, this_users)
-
+        pred_n = cred_stance_prediction(model, this_fact, this_users)
         this_y = facts_test['true'].iloc[idx]
         pred.append(int(pred_n[-1]))
         y.append(int(this_y))
+    score = metrics.accuracy_score(y, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
+    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
 
+    print('Making cred*stance predictions')
+    pred = []
+    y = []
+    for idx, hsh in enumerate(facts_test['hash'].values):
+        this_fact = facts[facts['hash'] == hsh]
+        this_users = users_df[users_df['fact'] == hsh]
+        pred_n = only_cred_support_deny_pred(model, this_fact, this_users)
+        this_y = int(this_fact['true'])
+        pred.append(int(pred_n[-1]))
+        y.append(int(this_y))
     score = metrics.accuracy_score(y, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (

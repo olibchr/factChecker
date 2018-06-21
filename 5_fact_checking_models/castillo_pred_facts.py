@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import datetime
 import os
+import pickle
 import sys
 from dateutil import parser
 from collections import Counter, defaultdict
@@ -16,8 +17,11 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.metrics import precision_recall_fscore_support
 
 from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Imputer, normalize, StandardScaler
+from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeClassifier
+import seaborn as sns
 
 sid = SentimentIntensityAnalyzer()
 
@@ -25,8 +29,8 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
-DIR = os.path.dirname(__file__) + '../../5_Data/'
-
+DIR = os.path.dirname(__file__) + '../../3_Data/'
+NEW_DATA = True
 
 def get_features(fact, transactions, users):
     if fact['true'] == 'unknown': print(fact); return
@@ -74,7 +78,7 @@ def get_features(fact, transactions, users):
         avg_sent_pos.append(1 if sent_score > 0.5 else 0)
         avg_sent_neg.append(1 if sent_score < 0.5 else 0)
         avg_emoticons.append(len(re.findall(emoji_pattern, tr['text'])))
-        avg_links.append(len(re.findall(link_pattern, tr['text'])))
+        avg_links.extend(re.findall(link_pattern, tr['text']))
         fr_has_url.append(1 if len(re.findall(link_pattern, tr['text'])) != 0 else 0)
         avg_mentions.append(len([c for c in chars if c == '@']))
         lvl_size = idx
@@ -97,7 +101,7 @@ def get_features(fact, transactions, users):
 
     avg_emoticons = 1.0 * sum(avg_emoticons) / (num_transactions)
     avg_mentions = sum(avg_mentions) / (num_transactions)
-    avg_links = 1.0 * sum(avg_links) / (num_transactions)
+    avg_links = 1.0 * len(set(avg_links)) / (num_transactions)
     avg_questionM = 1.0 * sum(avg_questionM) / (num_transactions)
     avg_sent_pos = 1.0 * sum(avg_sent_pos) / (num_transactions)
     avg_sent_neg = 1.0 * sum(avg_sent_neg) / (num_transactions)
@@ -166,31 +170,48 @@ def evaluation(X_train, X_test, y_train, y_test):
 def main():
     global users
     wn.ensure_loaded()
-    users = gt.get_users(DIR)
     facts = gt.get_fact_topics(DIR)
-    transactions = gt.get_transactions(DIR)
-    print(transactions.describe())
-
-    tr_hsh = transactions['fact'].values
-    cond = facts['hash'].isin(tr_hsh )
-    facts = facts[cond]
-    facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows() if fact['true'] != 'unknown'])
-    print(facts.describe())
-
     features = ['avg_mentions', 'avg_emoticons', 'avg_links', 'avg_questionM', 'avg_personal_pronoun_first',
                 'avg_sent_pos', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'share_most_freq_author', 'lvl_size',
                 'avg_followers', 'avg_friends', 'avg_status_cnt', 'avg_reg_age']
+    if NEW_DATA:
+        users = gt.get_users(DIR)
+        transactions = gt.get_transactions(DIR)
+        print(transactions.describe())
 
+        tr_hsh = transactions['fact'].values
+        cond = facts['hash'].isin(tr_hsh )
+        facts = facts[cond]
+        facts = pd.DataFrame([get_features(fact, transactions, users) for idx, fact in facts.iterrows() if fact['true'] != 'unknown'])
+        with open('model_data/castillo_data','wb') as tmpfile:
+            pickle.dump(facts, tmpfile)
+    else:
+        with open('model_data/castillo_data','rb') as tmpfile:
+            facts = pickle.load(tmpfile)
+    print(facts.describe())
     X = facts[list(features)].values
     y = facts['y'].values
+
+    fig = plt.figure()
+    fig.subplots_adjust(hspace=0.4, wspace=0.4)
+    for i in range(1,len(features)+1):
+        ax = fig.add_subplot(3, 5, i)
+        sns.boxplot(x="y", y=features[i-1], data=facts, palette="Set3")
+    #plt.show()
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+    std_clf = make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=0))
+    std_clf.fit(X_train, y_train)
+    pred_test_std = std_clf.predict(X_test)
+    precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred_test_std, average='macro')
+    score = metrics.accuracy_score(y_test, pred_test_std)
+    print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+            score, precision, recall, fscore))
+    scores = cross_val_score(std_clf, X, y, cv=5)
+    print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-    print(Counter(y_train), Counter(y_test), X_train.shape)
 
-    evaluation(X_train, X_test, y_train, y_test)
+    # evaluation(X_train, X_test, y_train, y_test)
 
 
 if __name__ == "__main__":

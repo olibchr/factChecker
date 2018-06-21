@@ -241,7 +241,10 @@ def feature_pred(features, ldak):
         cond2 = facts['true'] != 'unknown'
         facts = facts[cond & cond2]
         facts = Parallel(n_jobs=num_jobs)(
-            delayed(get_features)(fact, transactions, users) for fact in enumerate(facts.iterrows()))
+            delayed(get_features)
+            (fact, transactions[transactions['fact'] == fact['hash']],[u for u in users if int(u.user_id) in
+                                                                       list(transactions[transactions['fact'] == fact['hash']]['user_id'].values)])
+            for idx, fact in facts.iterrows())
         facts = pd.DataFrame(facts)
         with open('model_data/feature_data', 'wb') as tmpfile:
             pickle.dump(facts, tmpfile)

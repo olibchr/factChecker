@@ -373,7 +373,6 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
 
         print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
-        probas = clf.pred
         skplt.metrics.plot_roc_curve(y_train, pred)
         plt.show()
 
@@ -544,7 +543,6 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
 
-
     X = SelectKBest(chi2, k=chik).fit_transform(X, y)
     X = transformer.fit_transform(X, y)
     X = np.asarray(lsa.fit_transform(X, y))
@@ -561,14 +559,6 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     #X_test = std_scale.transform(X_test)
     #X_test = transformer.transform(X_test)
     #X_test = np.asarray(lsa.transform(X_test))
-
-    # X_alt = build_alternative_features(users, user_order)
-    # X_alt = np.asarray(transformer.fit_transform(X_alt))
-    # X_alt = np.concatenate((X_alt[:,1], X_alt[:,5], X_alt[:,7]))
-    #
-    # print(X.shape, X_alt.shape)
-    # X = np.concatenate((X, X_alt2), axis=1)
-    # X = np.concatenate((X, X_alt), axis=1)
 
     svd = TruncatedSVD(2)
     normalizer = Normalizer(copy=False)

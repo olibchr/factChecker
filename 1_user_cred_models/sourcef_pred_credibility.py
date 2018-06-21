@@ -21,6 +21,7 @@ from nltk.corpus import wordnet as wn
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
+from sklearn.covariance import EllipticEnvelope
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.metrics import precision_recall_fscore_support
@@ -45,7 +46,7 @@ from metrics import ndcg_score
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 BUILD_NEW_DATA = False
-LDA_TOPIC = True
+LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -58,7 +59,7 @@ fact_to_words = {}
 lda = ()
 users = ()
 lda_text_to_id = {}
-lda_topics_per_text =[]
+lda_topics_per_text = []
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
@@ -105,7 +106,7 @@ def get_corpus():
     return bow_corpus
 
 
-def get_relevant_tweets(user, i = 0.8):
+def get_relevant_tweets(user, i=0.8):
     def topic_overlap(t1, t2):
         n_topics = 5
         threshold = 2
@@ -114,7 +115,7 @@ def get_relevant_tweets(user, i = 0.8):
         t_topics1 = t1_topics.argsort()[-n_topics:][::-1]
         t_topics2 = t2_topics.argsort()[-n_topics:][::-1]
         overlap = [val for val in t_topics1 if val in t_topics2]
-        if len(overlap)>=threshold:
+        if len(overlap) >= threshold:
             return True
         return False
 
@@ -130,7 +131,8 @@ def get_relevant_tweets(user, i = 0.8):
             continue
         for token in tokens:
             if token not in word_vectors.vocab: continue
-            increment = np.average(word_vectors.distances(token, other_words=[ufw for ufw in user_fact_words if ufw in word_vectors.vocab]))
+            increment = np.average(word_vectors.distances(token, other_words=[ufw for ufw in user_fact_words if
+                                                                              ufw in word_vectors.vocab]))
             distance_to_topic.append(increment)
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
@@ -165,13 +167,13 @@ def lda_analysis(users):
                                         learning_offset=50.,
                                         random_state=0)
         lda.fit(X_tf)
-        with open('model_data/lda_model','wb') as tmpfile:
+        with open('model_data/lda_model', 'wb') as tmpfile:
             pickle.dump(lda, tmpfile)
     else:
-        with open('model_data/lda_model','rb') as tmpfile:
+        with open('model_data/lda_model', 'rb') as tmpfile:
             lda = pickle.load(tmpfile)
 
-    lda_text_to_id = {txt:id for id, txt in enumerate(X)}
+    lda_text_to_id = {txt: id for id, txt in enumerate(X)}
     lda_topics_per_text = lda.transform(X_tf)
 
     tf_feature_names = tf_vectorizer.get_feature_names()
@@ -200,7 +202,7 @@ def build_fact_topics():
     return facts_df
 
 
-def build_features_for_user(user, i= 0.8):
+def build_features_for_user(user, i=0.8):
     # Message based features: number of swear language words
     # Source based features length of screen name, has URL, ratio of followers to followees
 
@@ -241,7 +243,8 @@ def build_features_for_user(user, i= 0.8):
         "+", flags=re.UNICODE)
 
     link_pattern = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-    pronouns = ['I', 'you', 'he', 'she', 'it', 'they', 'we','me','him','her','its','our','us','them','my','your','his','hers','yours','theirs','mine','ours']
+    pronouns = ['I', 'you', 'he', 'she', 'it', 'they', 'we', 'me', 'him', 'her', 'its', 'our', 'us', 'them', 'my',
+                'your', 'his', 'hers', 'yours', 'theirs', 'mine', 'ours']
 
     relevant_tweets = get_relevant_tweets(user, i)
     for t in relevant_tweets:
@@ -302,10 +305,11 @@ def build_features_for_user(user, i= 0.8):
     most_common_hour = 1.0 * sum(most_common_hour) / len(relevant_tweets)
     avg_count_distinct_words = 1.0 * len(set(avg_count_distinct_words)) / len(relevant_tweets)
     avg_tweets_on_this_topic = len(relevant_tweets) * 1.0 / len(user.tweets)
-    avg_personal_pronoun_first = sum(avg_personal_pronoun_first)*1.0 / len(user.tweets)
+    avg_personal_pronoun_first = sum(avg_personal_pronoun_first) * 1.0 / len(user.tweets)
 
     # followers, friends, description, created_at, verified, statuses_count, lang}
-    reg_age = int((datetime.datetime.now().replace(tzinfo=None) - parser.parse(user.features['created_at']).replace(tzinfo=None)).days if 'created_at' in user.features else 0)
+    reg_age = int((datetime.datetime.now().replace(tzinfo=None) - parser.parse(user.features['created_at']).replace(
+        tzinfo=None)).days if 'created_at' in user.features else 0)
     followers = int(user.features['followers']) if 'followers' in user.features else 0
     friends = int(user.features['friends']) if 'friends' in user.features else 0
     verified = 1 if 'verified' in user.features and user.features['verified'] == 'true' else 0
@@ -333,7 +337,7 @@ def build_features_for_user(user, i= 0.8):
         'avg_questionM': avg_questionM,
         'avg_exlamationM': avg_exlamationM,
         'avg_multiQueExlM': avg_multiQueExlM,
-        'avg_personal_pronoun_first':avg_personal_pronoun_first,
+        'avg_personal_pronoun_first': avg_personal_pronoun_first,
         'avg_upperCase': avg_upperCase,
         'avg_sent_pos': avg_sent_pos,
         'avg_sent_neg': avg_sent_neg,
@@ -349,67 +353,8 @@ def build_features_for_user(user, i= 0.8):
         'time_retweet': time_retweet,
         'len_description': len_description,
         'len_name': len_name,
-        'reg_age':reg_age
+        'reg_age': reg_age
     }
-
-
-def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
-    def benchmark(clf):
-        scores = cross_val_score(clf, X, y, cv=5)
-
-        clf.fit(X_train_imp, y_train)
-        pred = clf.predict(X_test_imp)
-
-        score = metrics.accuracy_score(y_test, pred)
-        precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred, average='macro')
-        print("Unknown rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score, precision, recall, fscore))
-
-        clf.fit(X_train_imp2, y_train2)
-        pred2 = clf.predict(X_test_imp2)
-        score2 = metrics.accuracy_score(y_test2, pred2)
-        precision2, recall2, fscore2, sup2 = precision_recall_fscore_support(y_test2, pred2, average='macro')
-        #print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        #    score2, precision2, recall2, fscore2))
-
-        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
-        return fscore, fscore2, scores.mean()
-
-    print('&' * 80)
-    # print("Evaluation")
-
-    if X_train is None:
-        print("No pre-split data given")
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-
-    X_train2, X_test2, y_train2, y_test2 = train_test_split(X, y, test_size=0.2)
-
-    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-    imp = imp.fit(X_train)
-    X_train_imp = imp.transform(X_train)
-    X_test_imp = imp.transform(X_test)
-
-    imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-    imp = imp.fit(X_train2)
-    X_train_imp2 = imp.transform(X_train2)
-    X_test_imp2 = imp.transform(X_test2)
-    results = []
-
-    # Train sparse SVM
-    for penalty in ["l2", "l1"]:
-        svms = [
-            # (LinearSVC(penalty=penalty, dual=False, tol=1e-3), "Linear SVM"),
-            # (SVC(kernel='rbf', degree=2), "RBF SVC"),
-            # (SVC(kernel='sigmoid', degree=2), "Sigm SVC"),
-            (SVC(C=1, gamma=1), "Best param SVC)"),
-            # (SGDClassifier(alpha=.0001, n_iter=50, penalty=penalty), "SGDC")
-        ]
-        print("%s penalty" % penalty.upper())
-        for clf, name in svms:
-            # print('=' * 80)
-            print(name)
-            results.append([benchmark(clf)])
-    return results
 
 
 def model_param_grid_search(X, y):
@@ -483,7 +428,7 @@ def model_param_grid_search(X, y):
     pass
 
 
-def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
+def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
     # Utility function to move the midpoint of a colormap to be around
     # the values of interest.
     global bow_corpus
@@ -492,14 +437,15 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
     global lda
     wn.ensure_loaded()
 
-    print(chi_k)
+    print(chi_k, ldak)
 
     if BUILD_NEW_DATA:
         users = get_users()
         if LDA_TOPIC: lda = lda_analysis(users)
         print("Getting user features")
         fact_topics = build_fact_topics()
-        fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
+        fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in
+                         fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user, proximity) for i, user in enumerate(users_with_tweets))
@@ -510,24 +456,13 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
             users_with_features = pickle.load(tmpfile)
     users_df = pd.DataFrame(users_with_features)
 
-    not_incl = ['avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM', 'reg_age',
-                'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply', 'avg_personal_pronoun_first']
     features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
                 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions', 'avg_emoticons',
                 'avg_questionM', 'avg_exlamationM', 'avg_sent_pos',
-                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet','len_description','len_name',
-                'avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic',  'avg_multiQueExlM', 'reg_age',
-                'avg_upperCase', 'avg_count_distinct_hashtags', 'most_common_weekday', 'most_common_hour', 'avg_tweet_is_reply', 'avg_personal_pronoun_first'
+                'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description', 'len_name',
+                'avg_sent_neg', 'avg_count_distinct_words', 'avg_tweets_on_this_topic', 'avg_multiQueExlM', 'reg_age',
+                'avg_upperCase', 'avg_count_distinct_hashtags', 'avg_tweet_is_reply', 'avg_personal_pronoun_first'
                 ]
-
-    # features = ['avg_len', 'avg_words', 'avg_unique_char', 'avg_hashtags', 'avg_retweets', 'pos_words', 'neg_words',
-    #             'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_mentions',
-    #             'avg_links', 'followers', 'friends', 'status_cnt', 'time_retweet', 'len_description',
-    #             'len_name']
-
-
-    X = users_df[list(features)].values
-    y = users_df['y'].values
 
     #  %%%%%% Correlation plot %%%%%%
     corr = users_df[list(features)].corr()
@@ -535,47 +470,53 @@ def sourcef_pred(chi_k=15, ldak=5, proximity = 0.8):
     mask[np.triu_indices_from(mask)] = True
     # Set up the matplotlib figure
     # Draw the heatmap with the mask and correct aspect ratio
-    # f, ax = plt.subplots(figsize=(11, 9))
-    # sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    f, ax = plt.subplots(figsize=(11, 9))
+    sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
     # plt.show()
+
+    features = ['avg_words', 'avg_retweets', 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_emoticons', 'avg_links',
+                'friends', 'time_retweet', 'len_description', 'avg_sent_neg', 'avg_count_distinct_words',
+                'avg_personal_pronoun_first', 'followers', 'len_name',
+                ]
+
+    X = users_df[list(features)].values
+    y = users_df['y'].values
 
     ada = RandomOverSampler(random_state=42)
     X, y = ada.fit_sample(X, y)
 
-    # Remove outliers
-    # env = EllipticEnvelope().fit(X, y)
-    # outliers = env.predict(X)
-    # X = X[outliers != -1]
-    # y = y[outliers != -1]
-
-    #svd = TruncatedSVD(2)
-    #normalizer = Normalizer(copy=False)
-    #lsa = make_pipeline(svd)
-    #X_2d = lsa.fit_transform(X, y)
-    # X_2d = normalize(X_2d, axis=0)
-
+    lsa = make_pipeline(StandardScaler(), TruncatedSVD(2))
+    X_2d = lsa.fit_transform(X, y)
+    X_2d = normalize(X_2d, axis=0)
     # 2d plot of X
-    #X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
-    #sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
-    #plt.show()
+    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    # plt.show()
+
+    fig = plt.figure()
+    fig.subplots_adjust(hspace=0.5, wspace=0.5)
+    for i in range(1, len(features) + 1):
+        ax = fig.add_subplot(3, 5, i)
+        sns.boxplot(x="y", y=features[i - 1], data=users_df, palette="Set3")
+    # plt.show()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
+    std_clf = make_pipeline(StandardScaler(), PCA(n_components=ldak), SVC(C=1, gamma=1))
+    std_clf.fit(X_train, y_train)
+    pred_test_std = std_clf.predict(X_test)
+    precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred_test_std, average='macro')
+    score = metrics.accuracy_score(y_test, pred_test_std)
+    print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
+    scores = cross_val_score(std_clf, X, y, cv=5)
+    print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
-    ch2 = SelectKBest(chi2, k=chi_k)
-    X = ch2.fit_transform(X, y)
-    X_train = ch2.transform(X_train)
-    X_test = ch2.transform(X_test)
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X, y)
-    X_train = scaler.transform(X_train)
-    X_test = scaler.transform(X_test)
-
-    return evaluation(X, y, X_train, X_test, y_train, y_test)
+    # return evaluation(X, y, X_train, X_test, y_train, y_test)
 
 
 def main():
-    #for i in np.arange(0.0,1.0, 0.1):
-    sourcef_pred(15, 10)
+    # for i in np.arange(10, 25):
+    sourcef_pred(-1, 10)
 
 
 if __name__ == "__main__":
