@@ -19,7 +19,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from decoder import decoder
 
 

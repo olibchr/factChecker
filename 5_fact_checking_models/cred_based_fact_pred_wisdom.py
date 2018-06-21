@@ -220,7 +220,7 @@ def main():
         this_users = users_df[users_df['fact'] == hsh]
         this_x = cred_stance_prediction(model, this_fact, this_users)
         this_y = facts_test['true'].iloc[idx]
-        X.append(int(this_x[-1]))
+        X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
