@@ -276,11 +276,16 @@ def main():
                 'avg_unique_char', 'avg_hashtags', 'avg_special_symbol', 'avg_exlamationM', 'avg_len_description',
                 'avg_len_name', 'avg_time_retweet', 'avg_verified', 'avg_count_distinct_words', 'avg_multiQueExlM',
                 'avg_upperCase', 'avg_count_distinct_hashtags']
-    result = []
-    #for i in range(len(features)):
-    result.append(feature_pred(features, 10))
-    print(result)
-    print(np.argmin(np.asarray(result)))
+    for k in range(20):
+        result = []
+        for i in range(len(features)):
+            this_f = features.pop(i)
+            result.append(feature_pred(this_f, 10))
+        print(max(result))
+        print(np.argmin(np.asarray(result)))
+        features.pop(np.argmin(np.asarray(result)))
+    print(features)
+
 
 if __name__ == "__main__":
     main()
