@@ -79,12 +79,16 @@ def cred_stance_prediction(model, this_fact, this_users):
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
         probs = model.predict_proba(text)
-        print('probability: {}'.format(probs))
         return probs
 
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
-        return float(((sent * cred) + 1) / 2)
+        if sent > 0.5:
+            return cred
+        if sent < 0.5:
+            return 1 - cred
+        else:
+            return float(((sent * cred) + 1) / 2)
 
     this_users = this_users.sort_values('fact_text_ts')
 
@@ -98,7 +102,6 @@ def cred_stance_prediction(model, this_fact, this_users):
         for idx,tweet in enumerate(relevant_tweets):
             if idx > 200: break
             user_cred.append(get_credibility(tweet['text']))
-
         user_cred = np.average(user_cred)
         assertions.append(get_support(u['fact_text'], user_cred))
     result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
@@ -111,7 +114,6 @@ def only_cred_support_deny_pred(model, this_fact, this_users):
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
         probs = model.predict_proba(text)
-        print('probability: {}'.format(probs))
         return probs
 
     def get_support(user, cred):

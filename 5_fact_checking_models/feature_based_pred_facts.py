@@ -18,6 +18,7 @@ from nltk.corpus import wordnet as wn
 from sklearn import metrics
 from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.metrics import precision_recall_fscore_support
 
 from sklearn.model_selection import train_test_split, cross_val_score
@@ -27,17 +28,17 @@ from sklearn.svm import LinearSVC, SVC
 from sklearn.tree import DecisionTreeClassifier
 import seaborn as sns
 
-sid = SentimentIntensityAnalyzer()
-
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
-NEW_DATA = True
+NEW_DATA = False
+if NEW_DATA:
+    sid = SentimentIntensityAnalyzer()
+    num_cores = multiprocessing.cpu_count()
+    num_jobs = round(num_cores * 3 / 4)
 
-num_cores = multiprocessing.cpu_count()
-num_jobs = round(num_cores * 3 / 4)
 
 def get_features(fact, transactions, users):
     if fact['true'] == 'unknown': print(fact); return
@@ -226,7 +227,7 @@ def get_features(fact, transactions, users):
     }
 
 
-def feature_pred(features, ldak):
+def feature_pred(features, chik, ldak):
     global users
     wn.ensure_loaded()
     facts = gt.get_fact_topics(DIR)
@@ -242,8 +243,10 @@ def feature_pred(features, ldak):
         facts = facts[cond & cond2]
         facts = Parallel(n_jobs=num_jobs)(
             delayed(get_features)
-            (fact, transactions[transactions['fact'] == fact['hash']],[u for u in users if int(u.user_id) in
-                                                                       list(transactions[transactions['fact'] == fact['hash']]['user_id'].values)])
+            (fact, transactions[transactions['fact'] == fact['hash']], [u for u in users if int(u.user_id) in
+                                                                        list(transactions[
+                                                                                 transactions['fact'] == fact['hash']][
+                                                                                 'user_id'].values)])
             for idx, fact in facts.iterrows())
         facts = pd.DataFrame(facts)
         with open('model_data/feature_data', 'wb') as tmpfile:
@@ -252,39 +255,36 @@ def feature_pred(features, ldak):
         with open('model_data/feature_data', 'rb') as tmpfile:
             facts = pickle.load(tmpfile)
 
-    print(facts.describe())
     X = facts[list(features)].values
     y = facts['y'].values
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    std_clf = make_pipeline(StandardScaler(),PCA(n_components=ldak),  SVC(C=1, gamma=1))
+    std_clf = make_pipeline(StandardScaler(), PCA(n_components=ldak), SVC(C=1, gamma=1))
     std_clf.fit(X_train, y_train)
     pred_test_std = std_clf.predict(X_test)
     precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred_test_std, average='macro')
     score = metrics.accuracy_score(y_test, pred_test_std)
-    print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+    print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
-    scores = cross_val_score(std_clf, X, y, cv=5)
+    scores = cross_val_score(std_clf, X, y, cv=3)
     print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
     return scores.mean()
 
 
 def main():
-    features = ['avg_mentions', 'avg_emoticons', 'avg_links', 'avg_questionM', 'avg_personal_pronoun_first',
-                'avg_sent_pos', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'share_most_freq_author', 'lvl_size',
-                'avg_followers', 'avg_friends', 'avg_status_cnt', 'avg_reg_age', 'avg_len', 'avg_words',
-                'avg_unique_char', 'avg_hashtags', 'avg_special_symbol', 'avg_exlamationM', 'avg_len_description',
-                'avg_len_name', 'avg_time_retweet', 'avg_verified', 'avg_count_distinct_words', 'avg_multiQueExlM',
-                'avg_upperCase', 'avg_count_distinct_hashtags']
-    for k in range(20):
-        result = []
-        for i in range(len(features)):
-            this_f = features.pop(i)
-            result.append(feature_pred(this_f, 10))
-        print(max(result))
-        print(np.argmin(np.asarray(result)))
-        features.pop(np.argmin(np.asarray(result)))
-    print(features)
+    import copy
+    not_in_list = ['share_most_freq_author', 'avg_reg_age', 'avg_questionM', 'avg_emoticons', 'avg_friends',
+                   'avg_words', 'avg_personal_pronoun_first', 'avg_followers',
+                   'avg_len_description', 'avg_hashtags', 'avg_status_cnt', 'avg_mentions', 'avg_exlamationM',
+                   'avg_verified', 'avg_multiQueExlM', 'avg_upperCase', 'avg_count_distinct_hashtags']
+    features = ['avg_links', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'lvl_size',
+                'avg_len', 'avg_unique_char', 'avg_special_symbol',
+                'avg_len_name', 'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos'
+                ]
+    r = []
+    for i in range(10):
+        r.append(feature_pred(features, 15, 10))
+    print(np.argmax(r))
 
 
 if __name__ == "__main__":

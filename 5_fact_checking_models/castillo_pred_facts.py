@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
-NEW_DATA = True
+NEW_DATA = False
 
 def get_features(fact, transactions, users):
     if fact['true'] == 'unknown': print(fact); return
@@ -207,7 +207,7 @@ def main():
     score = metrics.accuracy_score(y_test, pred_test_std)
     print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
             score, precision, recall, fscore))
-    scores = cross_val_score(std_clf, X, y, cv=5)
+    scores = cross_val_score(std_clf, X, y, cv=3)
     print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
 
