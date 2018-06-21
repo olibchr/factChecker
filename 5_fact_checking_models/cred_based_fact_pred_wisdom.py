@@ -25,6 +25,9 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn.model_selection import train_test_split
 from keras.models import load_model
 from gensim.models import KeyedVectors
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 sid = SentimentIntensityAnalyzer()
 
@@ -84,11 +87,11 @@ def cred_stance_prediction(model, this_fact, this_users):
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
         if sent > 0.5:
-            return cred
-        if sent < 0.5:
-            return 1 - cred
+            return cred, True
+        if sent < -0.5:
+            return 1 - cred, True
         else:
-            return float(((sent * cred) + 1) / 2)
+            return float(((sent * cred) + 1) / 2), False
 
     this_users = this_users.sort_values('fact_text_ts')
 
@@ -103,8 +106,11 @@ def cred_stance_prediction(model, this_fact, this_users):
             if idx > 200: break
             user_cred.append(get_credibility(tweet['text']))
         user_cred = np.average(user_cred)
-        assertions.append(get_support(u['fact_text'], user_cred))
-    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+        pred, T = get_support(u['fact_text'], user_cred)
+        if T:
+            assertions.append(pred)
+        assertions.append(pred)
+    result = [(np.average(assertions[:i + 1])) for i in range(len(assertions))]
     return result
 
 
@@ -207,17 +213,22 @@ def main():
         word_to_idx = construct['map']
 
     print('Making cred*stance predictions')
-    pred = []
+    X = []
     y = []
     for idx, hsh in enumerate(facts_test['hash'].values):
         this_fact = facts[facts['hash'] == hsh]
         this_users = users_df[users_df['fact'] == hsh]
-        pred_n = cred_stance_prediction(model, this_fact, this_users)
+        this_x = cred_stance_prediction(model, this_fact, this_users)
         this_y = facts_test['true'].iloc[idx]
-        pred.append(int(pred_n[-1]))
+        X.append(int(this_x[-1]))
         y.append(int(this_y))
-    score = metrics.accuracy_score(y, pred)
-    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf.fit(X_train, y_train)
+    pred = std_clf.predict(X_test)
+
+    score = metrics.accuracy_score(y_test, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
 
@@ -227,12 +238,17 @@ def main():
     for idx, hsh in enumerate(facts_test['hash'].values):
         this_fact = facts[facts['hash'] == hsh]
         this_users = users_df[users_df['fact'] == hsh]
-        pred_n = only_cred_support_deny_pred(model, this_fact, this_users)
-        this_y = int(this_fact['true'])
-        pred.append(int(pred_n[-1]))
+        this_x = only_cred_support_deny_pred(model, this_fact, this_users)
+        this_y = facts_test['true'].iloc[idx]
+        X.append(int(this_x[-1]))
         y.append(int(this_y))
-    score = metrics.accuracy_score(y, pred)
-    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y, pred, average='macro')
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf.fit(X_train, y_train)
+    pred = std_clf.predict(X_test)
+
+    score = metrics.accuracy_score(y_test, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
 
