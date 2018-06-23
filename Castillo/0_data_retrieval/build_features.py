@@ -59,6 +59,7 @@ def tokenize_text(text):
 
 
 def was_user_correct(user, facts, transactions):
+    user.was_correct = -1
     for tr in transactions:
         if str(tr.user_id) == str(user.user_id):
             transaction = tr
@@ -71,15 +72,14 @@ def was_user_correct(user, facts, transactions):
             break
     for fact in facts:
         if fact.hash == transaction.fact:
-            user.text = transaction.text
-            if (str(fact.true) == '1' and transaction.stance == 'supporting') or (
-                            str(fact.true) == '0' and transaction.stance == 'denying'):
+            user.fact_text = transaction.text
+            stance = sid.polarity_scores(user.fact_text)['compound']
+            if (str(fact.true) == '1' and stance > 0.5) or (
+                            str(fact.true) == '0' and stance < -0.5):
                 user.was_correct = 1
-            elif(str(fact.true) == '1' and transaction.stance == 'denying') or \
-                    (str(fact.true) == '0' and transaction.stance == 'supporting'):
+            elif(str(fact.true) == '1' and stance < -0.5) or \
+                    (str(fact.true) == '0' and stance > 0.5):
                 user.was_correct = 0
-            else:
-                user.was_correct = -1
             print(fact.true, transaction.stance, user.was_correct)
     return user
 
@@ -129,6 +129,7 @@ def time_til_retweet(user):
     user.avg_time_to_retweet = average_timedelta
     return user
 
+
 def get_data():
     fact_file = glob.glob(DIR + 'facts.json')[0]
     transactions_file = glob.glob(DIR + 'factTransaction.json')[0]
@@ -136,6 +137,7 @@ def get_data():
     transactions = json.load(open(transactions_file), object_hook=decoder)
     transactions = sorted(transactions, reverse=True, key=lambda t: t.user_id)
     return facts, transactions
+
 
 def store_result(user):
     with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
@@ -151,7 +153,7 @@ def main():
     wn.ensure_loaded()
     users = get_users()
     facts, transactions = get_data()
-    users = [was_user_correct(user, facts, transactions) for user in users]
+    users =  Parallel(n_jobs=num_jobs)(delayed(was_user_correct)(user, facts, transactions) for user in users)
     print("Linguistic features..")
     users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
     print("Calculating tweet sentiment for each user")
