@@ -67,7 +67,6 @@ def get_corpus():
 
 
 def get_fact_topics(DIR = STAND_DIR):
-    print("Build fact topics")
     fact_file = glob.glob(DIR + 'facts.json')[0]
     facts_df = pd.read_json(fact_file)
     remove_digits = str.maketrans('', '', digits)

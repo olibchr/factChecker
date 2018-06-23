@@ -200,7 +200,7 @@ def main():
     #plt.show()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    std_clf = make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=0))
+    std_clf = make_pipeline(StandardScaler(), DecisionTreeClassifier(random_state=42))
     std_clf.fit(X_train, y_train)
     pred_test_std = std_clf.predict(X_test)
     precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred_test_std, average='macro')

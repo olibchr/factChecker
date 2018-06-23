@@ -239,7 +239,7 @@ def feature_pred(features, chik, ldak):
 
         tr_hsh = transactions['fact'].values
         cond = facts['hash'].isin(tr_hsh)
-        cond2 = facts['true'] != 'unknown'
+        cond2 = facts['true'] == 1 or facts['true'] == 0
         facts = facts[cond & cond2]
         facts = Parallel(n_jobs=num_jobs)(
             delayed(get_features)
@@ -276,15 +276,14 @@ def main():
     not_in_list = ['share_most_freq_author', 'avg_reg_age', 'avg_questionM', 'avg_emoticons', 'avg_friends',
                    'avg_words', 'avg_personal_pronoun_first', 'avg_followers',
                    'avg_len_description', 'avg_hashtags', 'avg_status_cnt', 'avg_mentions', 'avg_exlamationM',
-                   'avg_verified', 'avg_multiQueExlM', 'avg_upperCase', 'avg_count_distinct_hashtags']
+                   'avg_verified', 'avg_multiQueExlM', 'avg_upperCase', 'avg_count_distinct_hashtags', 'avg_unique_char', 'avg_len_name']
+
     features = ['avg_links', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'lvl_size',
-                'avg_len', 'avg_unique_char', 'avg_special_symbol',
-                'avg_len_name', 'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos'
+                'avg_len', 'avg_special_symbol',
+                'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos'
                 ]
     r = []
-    for i in range(10):
-        r.append(feature_pred(features, 15, 10))
-    print(np.argmax(r))
+    r.append(feature_pred(features, 15, 8))
 
 
 if __name__ == "__main__":

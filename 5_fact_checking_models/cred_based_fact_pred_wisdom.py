@@ -1,9 +1,11 @@
 from __future__ import print_function
 
 import multiprocessing
+import json
 import os
 import pickle
 import sys
+from datetime import datetime
 from collections import Counter, defaultdict
 import re
 import math
@@ -40,6 +42,7 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 
 NEW_MODEL = False
+NEW_CRED = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -76,14 +79,7 @@ def get_relevant_tweets(user, i=0.8):
     return user
 
 
-def cred_stance_prediction(model, this_fact, this_users):
-    def get_credibility(text):
-        text = gt.get_tokenize_text(text)
-        text = [word_to_idx[w] for w in text if w in word_to_idx]
-        text = sequence.pad_sequences([text], maxlen=12)
-        probs = model.predict_proba(text)
-        return probs
-
+def cred_stance_prediction(this_users):
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
         if sent > 0.5:
@@ -94,18 +90,11 @@ def cred_stance_prediction(model, this_fact, this_users):
             return float(((sent * cred) + 1) / 2), False
 
     this_users = this_users.sort_values('fact_text_ts')
-
     assertions = []
-    assertions.append(float(get_credibility(this_fact['text'].values[0])))
+    #assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
-        user_cred = []
-        user_cred.append(get_credibility(u['fact_text']))
-        relevant_tweets = u.features['relevant_tweets']
-        for idx,tweet in enumerate(relevant_tweets):
-            if idx > 200: break
-            user_cred.append(get_credibility(tweet['text']))
-        user_cred = np.average(user_cred)
+        user_cred = u.credibility
         pred, T = get_support(u['fact_text'], user_cred)
         if T:
             assertions.append(pred)
@@ -114,14 +103,7 @@ def cred_stance_prediction(model, this_fact, this_users):
     return result
 
 
-def only_cred_support_deny_pred(model, this_fact, this_users):
-    def get_credibility(text):
-        text = gt.get_tokenize_text(text)
-        text = [word_to_idx[w] for w in text if w in word_to_idx]
-        text = sequence.pad_sequences([text], maxlen=12)
-        probs = model.predict_proba(text)
-        return probs
-
+def only_cred_support_deny_pred(this_users):
     def get_support(user, cred):
         if user.stance == 1:
             return cred
@@ -133,22 +115,43 @@ def only_cred_support_deny_pred(model, this_fact, this_users):
 
     this_users = this_users.sort_values('fact_text_ts')
     assertions = []
-    assertions.append(float(get_credibility(this_fact['text'].values[0])))
+    # Maybe this one should be somehow enabled
+    #assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
-        user_cred = []
-        user_cred.append(get_credibility(u['fact_text']))
-        relevant_tweets = u.features['relevant_tweets']
-        for idx,tweet in enumerate(relevant_tweets):
-            if idx > 200: break
-            user_cred.append(get_credibility(tweet['text']))
-        user_cred = np.average(user_cred)
+        user_cred = u.credibility
         user_pred = get_support(u, user_cred)
         if u.stance != -1:
             assertions.append(user_pred)
         assertions.append(user_pred)
     result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
     return result
+
+
+def prebuild_cred(model, user):
+    def get_credibility(text):
+        text = gt.get_tokenize_text(text)
+        text = [word_to_idx[w] for w in text if w in word_to_idx]
+        text = sequence.pad_sequences([text], maxlen=12)
+        probs = model.predict_proba(text)
+        return probs
+    user_cred = []
+    relevant_tweets = user.features['relevant_tweets']
+    for idx,tweet in enumerate(relevant_tweets):
+        if idx > 200: break
+        user_cred.append(get_credibility(tweet['text']))
+    user.credibility = np.average(user_cred)
+    return user
+
+
+def datetime_converter(o):
+    if isinstance(o, datetime):
+        return o.__str__()
+
+
+def store_result(user):
+    with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
+        out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
 
 
 def main():
@@ -174,7 +177,6 @@ def main():
         users = gt.get_users()
         print('Building new users & model')
         users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-        users_df = pd.DataFrame([vars(u) for u in users])
 
         # Prepping lstm model
         top_words = 50000
@@ -202,6 +204,11 @@ def main():
         scores = model.evaluate(X_test, y_test, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
+        # Build credibility scores for all users on their topic
+        print('Computing credibility')
+        users = [prebuild_cred(u) for u in users]
+        [store_result(u) for u in users]
+        users_df = pd.DataFrame([vars(u) for u in users])
         with open('model_data/cred_pred_data','wb') as tmpfile:
             pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
     else:
@@ -212,13 +219,13 @@ def main():
         users_df = construct['users']
         word_to_idx = construct['map']
 
+
     print('Making cred*stance predictions')
     X = []
     y = []
     for idx, hsh in enumerate(facts_test['hash'].values):
-        this_fact = facts[facts['hash'] == hsh]
         this_users = users_df[users_df['fact'] == hsh]
-        this_x = cred_stance_prediction(model, this_fact, this_users)
+        this_x = cred_stance_prediction(this_users)
         this_y = facts_test['true'].iloc[idx]
         X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
@@ -238,9 +245,8 @@ def main():
     X = []
     y = []
     for idx, hsh in enumerate(facts_test['hash'].values):
-        this_fact = facts[facts['hash'] == hsh]
         this_users = users_df[users_df['fact'] == hsh]
-        this_x = only_cred_support_deny_pred(model, this_fact, this_users)
+        this_x = only_cred_support_deny_pred(this_users)
         this_y = facts_test['true'].iloc[idx]
         X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))

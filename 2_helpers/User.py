@@ -21,3 +21,4 @@ class User():
         # Annotated data
         self.stance = stance
         self.certainty = certainty
+        self.credibility = credibility
