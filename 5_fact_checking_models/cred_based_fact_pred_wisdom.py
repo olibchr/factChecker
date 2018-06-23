@@ -30,6 +30,9 @@ from gensim.models import KeyedVectors
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+import types
+import tempfile
+import keras.models
 
 sid = SentimentIntensityAnalyzer()
 
@@ -46,6 +49,28 @@ NEW_CRED = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
+
+
+def make_keras_picklable():
+    def __getstate__(self):
+        model_str = ""
+        with tempfile.NamedTemporaryFile(suffix='.hdf5', delete=True) as fd:
+            keras.models.save_model(self, fd.name, overwrite=True)
+            model_str = fd.read()
+        d = { 'model_str': model_str }
+        return d
+
+    def __setstate__(self, state):
+        with tempfile.NamedTemporaryFile(suffix='.hdf5', delete=True) as fd:
+            fd.write(state['model_str'])
+            fd.flush()
+            model = keras.models.load_model(fd.name)
+        self.__dict__ = model.__dict__
+
+
+    cls = keras.models.Model
+    cls.__getstate__ = __getstate__
+    cls.__setstate__ = __setstate__
 
 
 def train_test_split_on_facts(X, y, user_order, facts_train, users):
@@ -173,6 +198,7 @@ def main():
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
 
+    make_keras_picklable()
     if NEW_MODEL:
         users = gt.get_users()
         print('Building new users & model')
@@ -206,7 +232,7 @@ def main():
 
         # Build credibility scores for all users on their topic
         print('Computing credibility')
-        users = [prebuild_cred(u) for u in users]
+        users = [prebuild_cred(model, u) for u in users]
         [store_result(u) for u in users]
         users_df = pd.DataFrame([vars(u) for u in users])
         with open('model_data/cred_pred_data','wb') as tmpfile:
