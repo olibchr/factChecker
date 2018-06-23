@@ -51,28 +51,6 @@ word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_mo
                                                  binary=True, unicode_errors='ignore')
 
 
-def make_keras_picklable():
-    def __getstate__(self):
-        model_str = ""
-        with tempfile.NamedTemporaryFile(suffix='.hdf5', delete=True) as fd:
-            keras.models.save_model(self, fd.name, overwrite=True)
-            model_str = fd.read()
-        d = { 'model_str': model_str }
-        return d
-
-    def __setstate__(self, state):
-        with tempfile.NamedTemporaryFile(suffix='.hdf5', delete=True) as fd:
-            fd.write(state['model_str'])
-            fd.flush()
-            model = keras.models.load_model(fd.name)
-        self.__dict__ = model.__dict__
-
-
-    cls = keras.models.Model
-    cls.__getstate__ = __getstate__
-    cls.__setstate__ = __setstate__
-
-
 def train_test_split_on_facts(X, y, user_order, facts_train, users):
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
@@ -154,6 +132,7 @@ def only_cred_support_deny_pred(this_users):
 
 
 def prebuild_cred(model, user):
+    print(user.user_id)
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
@@ -198,12 +177,8 @@ def main():
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
 
-    make_keras_picklable()
     if NEW_MODEL:
         users = gt.get_users()
-        print('Building new users & model')
-        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-
         # Prepping lstm model
         top_words = 50000
         X, y, user_order = lstm_cred.get_prebuilt_data()
@@ -230,11 +205,13 @@ def main():
         scores = model.evaluate(X_test, y_test, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
+        print('Building new users & model')
+        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
         # Build credibility scores for all users on their topic
         print('Computing credibility')
-        users = Parallel(n_jobs=num_jobs)(delayed(prebuild_cred)(model, u) for u in users)
+        users = [prebuild_cred(model, u) for u in users]
         users_df = pd.DataFrame([vars(u) for u in users])
-        
+
         [store_result(u) for u in users]
         with open('model_data/cred_pred_data','wb') as tmpfile:
             pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
