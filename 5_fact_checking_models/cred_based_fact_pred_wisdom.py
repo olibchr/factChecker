@@ -42,9 +42,9 @@ import lstm_pred_credibility as lstm_cred
 import getters as gt
 
 num_cores = multiprocessing.cpu_count()
-num_jobs = round(num_cores * 3 / 4)
+num_jobs = round(num_cores * 7 / 8)
 
-NEW_MODEL = False
+NEW_MODEL = True
 NEW_CRED = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
@@ -232,9 +232,10 @@ def main():
 
         # Build credibility scores for all users on their topic
         print('Computing credibility')
-        users = [prebuild_cred(model, u) for u in users]
-        [store_result(u) for u in users]
+        users = Parallel(n_jobs=num_jobs)(delayed(prebuild_cred)(model, u) for u in users)
         users_df = pd.DataFrame([vars(u) for u in users])
+        
+        [store_result(u) for u in users]
         with open('model_data/cred_pred_data','wb') as tmpfile:
             pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
     else:
