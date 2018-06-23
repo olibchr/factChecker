@@ -32,8 +32,8 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
-NEW_DATA = False
+DIR = os.path.dirname(__file__) + '../../5_Data/'
+NEW_DATA = True
 if NEW_DATA:
     sid = SentimentIntensityAnalyzer()
     num_cores = multiprocessing.cpu_count()
