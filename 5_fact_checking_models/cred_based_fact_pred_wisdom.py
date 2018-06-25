@@ -81,6 +81,28 @@ def get_relevant_tweets(user, i=0.8):
     return user
 
 
+def get_relevant_tweets_test_set(user, X_test, i=0.8):
+    relevant_tweets = []
+    if user.fact not in fact_to_words: return user
+    if user.tweets is None: return user
+    if user.features is None: user.features = {}
+    user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
+    for tweet in user.tweets:
+        distance_to_topic = []
+        tokens = gt.get_tokenize_text(tweet['text'])
+        for token in tokens:
+            if token not in word_vectors.vocab: continue
+            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+            distance_to_topic.append(increment)
+        if np.average(np.asarray(distance_to_topic)) < i:
+            t_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
+            if t_vec in X_test:
+                relevant_tweets.append(tweet)
+    user.features['relevant_tweets'] = relevant_tweets
+    print(user.user_id, len(user.features['relevant_tweets']))
+    return user
+
+
 def cred_stance_prediction(this_users):
     def get_support(text, cred):
         sent = sid.polarity_scores(text)['compound']
@@ -209,8 +231,9 @@ def main():
         top_words = 50000
         X, y, user_order = lstm_cred.get_prebuilt_data()
         X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-        X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
-        X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+        #X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
+        #X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
         X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
         max_tweet_length = 12
         X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
@@ -232,7 +255,9 @@ def main():
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
         print('Building new users & model')
-        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+        #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
+
         # Build credibility scores for all users on their topic
         print('Computing credibility')
         users = [prebuild_cred(model, u) for u in users]
