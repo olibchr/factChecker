@@ -23,7 +23,7 @@ if ALT_ACCOUNT:
     OAUTH_TOKEN = '978935525464858624-uBlhj4nIUr2eEJghiNkSzFO25hcHW2I'
     OAUTH_TOKEN_SECRET = 'eqgP2jzCzJVqcWxaqwTbFeHWKjDvMEKD6YR78UNhse6qp'
 
-DIR = os.path.dirname(__file__) + '../../../5_DataCastillo/'
+DIR = os.path.dirname(__file__) + '../../../5_Data/'
 
 
 def datetime_converter(o):
