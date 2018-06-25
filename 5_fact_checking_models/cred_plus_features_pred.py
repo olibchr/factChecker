@@ -93,7 +93,7 @@ def cred_stance_prediction(this_users):
 
     this_users = this_users.sort_values('fact_text_ts')
     assertions = []
-    #assertions.append(float(get_credibility(this_fact['text'].values[0])))
+    # assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
@@ -118,7 +118,7 @@ def only_cred_support_deny_pred(this_users):
     this_users = this_users.sort_values('fact_text_ts')
     assertions = []
     # Maybe this one should be somehow enabled
-    #assertions.append(float(get_credibility(this_fact['text'].values[0])))
+    # assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
@@ -139,35 +139,38 @@ def feature_cred_stance(this_users):
         else:
             sent = sid.polarity_scores(u['fact_text'])['compound']
             return float(((sent * cred) + 1) / 2)
+
     # Would only work with a sequential model
     this_users = this_users.sort_values('fact_text_ts')
     creds = []
     stances = []
     # Maybe this one should be somehow enabled
-    #assertions.append(float(get_credibility(this_fact['text'].values[0])))
+    # assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
         user_pred = get_support(u, user_cred)
         creds.append(user_pred)
-        stances = u.stance if u.stance != -1 else (sid.polarity_scores(u['fact_text'])['compound'] +1) / 2
-    #result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+        stances = u.stance if u.stance != -1 else (sid.polarity_scores(u['fact_text'])['compound'] + 1) / 2
+    # result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
     return None
 
 
 def prebuild_cred(model, user):
     print(user.user_id)
+
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
         text = sequence.pad_sequences([text], maxlen=12)
         probs = model.predict_proba(text)
         return probs
+
     user_cred = []
     user_cred.append(get_credibility(user.fact_text))
     if user.features is None or 'relevant_tweets' not in user.features: user.credibility = user_cred[0]; return user
     relevant_tweets = user.features['relevant_tweets']
-    for idx,tweet in enumerate(relevant_tweets):
+    for idx, tweet in enumerate(relevant_tweets):
         if idx > 200: break
         user_cred.append(get_credibility(tweet['text']))
     user.credibility = np.average(user_cred)
@@ -203,89 +206,28 @@ def main():
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
 
-    if NEW_MODEL:
-        users = gt.get_users()
-        # Prepping lstm model
-        top_words = 50000
-        X, y, user_order = lstm_cred.get_prebuilt_data()
-        X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-        X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
-        X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
-        X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
-        max_tweet_length = 12
-        X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
-        X_test = sequence.pad_sequences(X_test, maxlen=max_tweet_length)
+    # Credibility data
+    print('Loading users & model')
+    with open('model_data/cred_pred_data', 'rb') as tmpfile:
+        construct = pickle.load(tmpfile)
+    users_df = construct['users']
+    word_to_idx = construct['map']
+    # Feature data
+    with open('model_data/feature_data', 'rb') as tmpfile:
+        fact_features = pickle.load(tmpfile)
+    features = ['avg_links', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'lvl_size', 'avg_len', 'avg_special_symbol',
+                'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos']
 
-        # Training lstm model
-        embedding_vecor_length = 32
-        model = Sequential()
-        model.add(Embedding(top_words, embedding_vecor_length, input_length=max_tweet_length))
-        model.add(Dropout(0.2))
-        model.add(LSTM(100))
-        model.add(Dropout(0.2))
-        model.add(Dense(1, activation='sigmoid'))
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        print(model.summary())
-        model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
-        model.save('model_data/cred_model.h5')
-        scores = model.evaluate(X_test, y_test, verbose=0)
-        print("Accuracy: %.2f%%" % (scores[1] * 100))
-
-        print('Building new users & model')
-        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-        # Build credibility scores for all users on their topic
-        print('Computing credibility')
-        users = [prebuild_cred(model, u) for u in users]
-        users_df = pd.DataFrame([vars(u) for u in users])
-
-        [store_result(u) for u in users]
-        with open('model_data/cred_pred_data','wb') as tmpfile:
-            pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
-    else:
-        print('Loading users & model')
-        model = load_model('model_data/cred_model.h5')
-        with open('model_data/cred_pred_data','rb') as tmpfile:
-            construct = pickle.load(tmpfile)
-        users_df = construct['users']
-        word_to_idx = construct['map']
-
-
-    print('Making cred*stance predictions')
-    X = []
-    y = []
-    for idx, hsh in enumerate(facts_test['hash'].values):
-        this_users = users_df[users_df['fact'] == hsh]
-        this_x = cred_stance_prediction(this_users)
-        this_y = facts_test['true'].iloc[idx]
-        X.append((int(this_x[-1]), np.std(this_x)))
-        y.append(int(this_y))
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
-    std_clf.fit(X_train, y_train)
-    pred = std_clf.predict(X_test)
-
-    score = metrics.accuracy_score(y_test, pred)
-    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
-    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score, precision, recall, fscore))
-    acc_scores = cross_val_score(std_clf, X, y, cv=3)
-    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
-    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
-    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
-    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
-    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
-    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
-    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
-
-
-    print('Making cred*stance predictions')
+    print('Making cred*stance +best features predictions')
     X = []
     y = []
     for idx, hsh in enumerate(facts_test['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x = only_cred_support_deny_pred(this_users)
+        this_features = fact_features[fact_features['hash'] == hsh][list(features)].values
+        print(this_features.shape)
         this_y = facts_test['true'].iloc[idx]
-        X.append((int(this_x[-1]), np.std(this_x)))
+        X.append([int(this_x[-1]), np.std(this_x)].extend(this_features))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
