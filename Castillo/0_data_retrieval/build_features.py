@@ -48,8 +48,7 @@ def get_users():
     users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        users.append(user)
-    return users
+        yield user
 
 
 def tokenize_text(text):
@@ -60,6 +59,7 @@ def tokenize_text(text):
 
 def was_user_correct(user, facts, transactions):
     user.was_correct = -1
+    transaction = transactions[0]
     for tr in transactions:
         if str(tr.user_id) == str(user.user_id):
             transaction = tr
@@ -81,7 +81,8 @@ def was_user_correct(user, facts, transactions):
                     (str(fact.true) == '0' and stance > 0.5):
                 user.was_correct = 0
             print(fact.true, transaction.stance, user.was_correct)
-    return user
+            break
+    yield user
 
 
 def linguistic_f(user):
@@ -97,7 +98,7 @@ def linguistic_f(user):
     if user.features is None: user.features = {}; print(user.user_id)
     user.features['pos_words'] = user_pos_words
     user.features['neg_words'] = user_neg_words
-    return user
+    yield user
 
 
 def feature_user_tweet_sentiment(user):
@@ -109,7 +110,7 @@ def feature_user_tweet_sentiment(user):
     #density, _ = np.histogram(tweet_sents, bins=bins, density=True)
     #user.sent_tweets_density = density / density.sum()
     user.sent_tweets_avg = np.average(tweet_sents)
-    return user
+    yield user
 
 
 def time_til_retweet(user):
@@ -127,7 +128,7 @@ def time_til_retweet(user):
 
     average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
     user.avg_time_to_retweet = average_timedelta
-    return user
+    yield user
 
 
 def get_data():
@@ -141,7 +142,7 @@ def get_data():
 
 def store_result(user):
     with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
-        out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
+        out_file.write(str(json.dumps(user.__dict__, default=datetime_converter)) + '\n')
 
 
 def datetime_converter(o):
@@ -153,7 +154,7 @@ def main():
     wn.ensure_loaded()
     users = get_users()
     facts, transactions = get_data()
-    users =  Parallel(n_jobs=num_jobs)(delayed(was_user_correct)(user, facts, transactions) for user in users)
+    users = Parallel(n_jobs=num_jobs)(delayed(was_user_correct)(user, facts, transactions) for user in users)
     print("Linguistic features..")
     users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
     print("Calculating tweet sentiment for each user")

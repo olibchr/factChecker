@@ -45,7 +45,6 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
 NEW_MODEL = True
-NEW_CRED = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -131,6 +130,32 @@ def only_cred_support_deny_pred(this_users):
     return result
 
 
+def feature_cred_stance(this_users):
+    def get_support(user, cred):
+        if user.stance == 1:
+            return cred
+        if user.stance == 0:
+            return 1 - cred
+        else:
+            sent = sid.polarity_scores(u['fact_text'])['compound']
+            return float(((sent * cred) + 1) / 2)
+
+    this_users = this_users.sort_values('fact_text_ts')
+    assertions = []
+    # Maybe this one should be somehow enabled
+    #assertions.append(float(get_credibility(this_fact['text'].values[0])))
+
+    for idx, u in this_users.iterrows():
+        user_cred = u.credibility
+        user_pred = get_support(u, user_cred)
+        if u.stance != -1:
+            assertions.append(user_pred)
+        assertions.append(user_pred)
+    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+    return result
+
+
+
 def prebuild_cred(model, user):
     print(user.user_id)
     def get_credibility(text):
@@ -140,6 +165,8 @@ def prebuild_cred(model, user):
         probs = model.predict_proba(text)
         return probs
     user_cred = []
+    user_cred.append(get_credibility(user.fact_text))
+    if user.features is None or 'relevant_tweets' not in user.features: user.credibility = user_cred[0]; return user
     relevant_tweets = user.features['relevant_tweets']
     for idx,tweet in enumerate(relevant_tweets):
         if idx > 200: break

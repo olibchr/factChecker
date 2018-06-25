@@ -33,7 +33,7 @@ def plot_results_from_was_correct_prection_with_adding_useful_tokens_to_fact_rep
     # plt.ylabel('F1 %')
     # plt.show()
 
-def plot_results_lstm_early():
+def plot_results_lstm_early_user():
     # F1 score of user credibility. Plot of increasing N (how many tweets on topic improve prediction)
     # Add useful tokens of a tweet to the fact representation after computing the distance
     data = [0.5818,0.7509, 0.7317, 0.746, 0.8622, 0.8284, 0.8144, 0.8989, 0.8501, 0.9467]
@@ -43,7 +43,30 @@ def plot_results_lstm_early():
     ax = sns.tsplot(data=data, time=n)
     ax.set(xlabel='Credibility prediction with n data points', ylabel='F1 Score')
     plt.show()
+def plot_results_lstm_early_rumor():
+    # F1 score of user credibility. Plot of increasing N (how many tweets on topic improve prediction)
+    # Add useful tokens of a tweet to the fact representation after computing the distance
+    data = [0.6367,0.7031, 0.7289, 0.7091, 0.6913, 0.7505, 0.7305, 0.7212, 0.7770]
+    n = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    df = pd.DataFrame({'data': data, 'n': n})
+
+    ax = sns.tsplot(data=data, time=n)
+    ax.set(xlabel='Credibility prediction after n tweets', ylabel='F1 Score')
+    plt.show()
+
+def plot_results_lstm_dist_vocab():
+    # F1 score of user credibility. Plot of increasing N (how many tweets on topic improve prediction)
+    # Add useful tokens of a tweet to the fact representation after computing the distance
+    data = [0.8217, 0.8448, 0.8531, 0.8599, 0.8600, 0.8607, 0.8616, 0.8302, 0.8247]
+    tweet_len = [5.524, 6.45446741, 7.025, 7.531, 7.8398, 8.087, 8.477, 0, 0]
+    n = [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000]
+    df = pd.DataFrame({'data': data, 'n': n})
+
+    ax = sns.tsplot(data=data, time=n)
+    ax.set(xlabel='Credibility prediction after n tweets', ylabel='F1 Score')
+    plt.show()
 
 #plot_results_from_was_correct_prediction()
 #plot_results_from_was_correct_prection_with_adding_useful_tokens_to_fact_representation()
-plot_results_lstm_early()
+# plot_results_lstm_early()
+plot_results_lstm_early_rumor()
