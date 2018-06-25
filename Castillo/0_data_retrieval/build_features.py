@@ -41,8 +41,7 @@ print(len(neg_words), neg_words[:10])
 sid = SentimentIntensityAnalyzer()
 
 
-def get_users():
-    user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
+def get_users(user_files):
     print('{} users'.format(len(user_files)))
     if len(user_files) < 10: print('WRONG DIR?')
     users = []
@@ -72,7 +71,7 @@ def was_user_correct(user, facts, transactions):
             user.fact_text_ts = transaction.timestamp
             user.stance = 0 if transaction.stance == 'denying' else 1 if transaction.stance == 'supporting' else 2 if transaction.stance == 'comment' else 3
             break
-    if transaction is None: yield user
+    if transaction is None: return user
     for fact in facts:
         if fact.hash == transaction.fact:
             user.fact_text = transaction.text
@@ -154,7 +153,12 @@ def datetime_converter(o):
 
 def main():
     wn.ensure_loaded()
-    users = get_users()
+    # batch
+    i = sys.argv[1]
+    user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
+    r = 1960
+    user_files = user_files[(i-1)*r:min(r*i,len(user_files))]
+    users = get_users(user_files)
     facts, transactions = get_data()
     users = Parallel(n_jobs=num_jobs)(delayed(was_user_correct)(user, facts, transactions) for user in users)
     print("Linguistic features..")
