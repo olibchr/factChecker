@@ -147,7 +147,7 @@ def store_result(user):
 
 
 def datetime_converter(o):
-    if isinstance(o, datetime):
+    if isinstance(o, datetime.datetime):
         return o.__str__()
 
 
