@@ -45,10 +45,10 @@ from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-NEW_CORPUS = False
-BUILD_NEW_SPARSE = False
+NEW_CORPUS = True
+BUILD_NEW_SPARSE = True
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../../5_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
@@ -61,8 +61,8 @@ user_order, users = [],[]
 word_to_idx = {}
 fact_to_words = {}
 bow_corpus_cnt = {}
-#if BUILD_NEW_SPARSE:
-#word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
+if BUILD_NEW_SPARSE or NEW_CORPUS:
+    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
 word_vectors = 0#KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
@@ -178,38 +178,6 @@ def build_user_vector(user, i):
     return package
 
 
-def build_user_vector_retweets_topic_independent(user, i):
-    global fact_to_words
-    if i % 50 == 0: print(i)
-    user_data = {}
-    if not user.tweets: print("PROBLEM DUE TO: {}".format(user.user_id)); return
-
-    # If X doesnt need to be rebuild, comment out
-    for tweet in user.tweets:
-        tokens = tokenize_text(tweet['text'], only_retweets=True)
-        for token in tokens:
-            if token not in word_to_idx: continue
-            if token in user_data:
-                user_data[word_to_idx[token]] += 1
-            else:
-                user_data[word_to_idx[token]] = 1
-
-    this_position = []
-    this_data = []
-    for tuple in user_data.items():
-        this_position.append(tuple[0])
-        this_data.append(tuple[1])
-
-    package = {
-        'index': i,
-        'positions': this_position,
-        'data': this_data,
-        'user_id': user.user_id,
-        'y': int(user.was_correct)
-    }
-    return package
-
-
 def build_sparse_matrix_word2vec(users, retweets_only=False):
     def rebuild_sparse(users):
         global fact_to_words
@@ -274,7 +242,7 @@ def build_sparse_matrix_word2vec(users, retweets_only=False):
 
 def build_fact_topics():
     print("Build fact topics")
-    fact_file = glob.glob(DIR + 'facts_annotated.json')[0]
+    fact_file = glob.glob(DIR + 'facts.json')[0]
     facts_df = pd.read_json(fact_file)
     remove_digits = str.maketrans('', '', digits)
     facts_df['text_parsed'] = facts_df['text'].map(lambda t: tokenize_text(t.translate(remove_digits)))
@@ -417,92 +385,6 @@ def visualizations(X,y):
     X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
     sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
     plt.show()
-
-
-def model_param_grid_search(X,y):
-    from matplotlib.colors import Normalize
-    class MidpointNormalize(Normalize):
-
-        def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
-            self.midpoint = midpoint
-            Normalize.__init__(self, vmin, vmax, clip)
-
-        def __call__(self, value, clip=None):
-            x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
-            return np.ma.masked_array(np.interp(value, x, y))
-
-    svd = TruncatedSVD(2)
-    normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd, normalizer)
-    X_2d = lsa.fit_transform(X,y)
-
-    print("Do some magic")
-    C_range = np.logspace(-2, 10, 13)
-    gamma_range = np.logspace(-9, 3, 13)
-    param_grid = dict(gamma=gamma_range, C=C_range)
-    cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
-    grid = GridSearchCV(SVC(), param_grid=param_grid, cv=cv)
-    grid.fit(X, y)
-
-    C_2d_range = [1e-2, 1, 1e2]
-    gamma_2d_range = [1e-1, 1, 1e1]
-    classifiers = []
-    for C in C_2d_range:
-        for gamma in gamma_2d_range:
-            clf = SVC(C=C, gamma=gamma)
-            clf.fit(X_2d, y)
-            classifiers.append((C, gamma, clf))
-    print("Do some more magic")
-    plt.figure(figsize=(8, 6))
-    xx, yy = np.meshgrid(np.linspace(-3, 3, 200), np.linspace(-3, 3, 200))
-    for (k, (C, gamma, clf)) in enumerate(classifiers):
-        # evaluate decision function in a grid
-        Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
-        Z = Z.reshape(xx.shape)
-
-        # visualize decision function for these parameters
-        plt.subplot(len(C_2d_range), len(gamma_2d_range), k + 1)
-        plt.title("gamma=10^%d, C=10^%d" % (np.log10(gamma), np.log10(C)),
-                  size='medium')
-
-        # visualize parameter's effect on decision function
-        plt.pcolormesh(xx, yy, -Z, cmap=plt.cm.RdBu)
-        plt.scatter(X_2d[:, 0], X_2d[:, 1], c=y, cmap=plt.cm.RdBu_r,
-                    edgecolors='k')
-        plt.xticks(())
-        plt.yticks(())
-        plt.axis('tight')
-
-    scores = grid.cv_results_['mean_test_score'].reshape(len(C_range),
-                                                         len(gamma_range))
-
-    plt.figure(figsize=(8, 6))
-    plt.subplots_adjust(left=.2, right=0.95, bottom=0.15, top=0.95)
-    plt.imshow(scores, interpolation='nearest', cmap=plt.cm.hot,
-               norm=MidpointNormalize(vmin=0.2, midpoint=0.92))
-    plt.xlabel('gamma')
-    plt.ylabel('C')
-    plt.colorbar()
-    plt.xticks(np.arange(len(gamma_range)), gamma_range, rotation=45)
-    plt.yticks(np.arange(len(C_range)), C_range)
-    plt.title('Validation accuracy')
-    plt.show()
-    pass
-
-
-def classification_analysis(X,y,pred):
-    idx_to_word = {idx: k for k, idx in word_to_idx.items()}
-    print(metrics.accuracy_score(y, pred))
-    match = y==pred
-    users_df = pd.DataFrame([vars(s) for s in users])
-    mismatched_users = user_order[~match]
-    mismatched_users_df = users_df[users_df['user_id'].isin(mismatched_users)]
-    print(mismatched_users_df.describe())
-    print(mismatched_users_df)
-    missed_X = X[~match].toarray()
-    missed_X_sum = missed_X.sum(axis=1)
-    missed_X_sum = np.argsort(missed_X_sum)[-50:]
-    print('Common terms for users that were incorrect: {}'.format([idx_to_word[xrs] for xrs in missed_X_sum]))
 
 
 def delete_rows_csr(mat, indices):
