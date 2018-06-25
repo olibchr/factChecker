@@ -219,13 +219,13 @@ def main():
                 'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos', 'cred_pred', 'cred_pred_std']
 
     print('Making cred*stance +best features predictions')
-    facts_test['cred_pred'] = facts_test['hash'].map(lambda x: only_cred_support_deny_pred(users_df[users_df['fact'] == x]))
-    facts_test['cred_pred_std'] = facts_test['cred_pred'].map(lambda x: np.std(x))
-    facts_test['cred_pred'] = facts_test['cred_pred'].map(lambda x: x[-1])
-    facts_test.set_index('hash').join(fact_features.set_index('hash'))
-    X = facts_test[features].values
-    y = facts_test['y'].values
-    
+    facts['cred_pred'] = facts['hash'].map(lambda x: only_cred_support_deny_pred(users_df[users_df['fact'] == x]))
+    facts['cred_pred_std'] = facts['cred_pred'].map(lambda x: np.std(x))
+    facts['cred_pred'] = facts['cred_pred'].map(lambda x: x[-1])
+    facts.set_index('hash').join(fact_features.set_index('hash'), rsuffix='_other')
+    X = facts[features].values
+    y = facts['y'].values
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
     std_clf.fit(X_train, y_train)
