@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
 DIR = os.path.dirname(__file__) + '../../5_Data/'
-NEW_DATA = True
+NEW_DATA = False
 if NEW_DATA:
     sid = SentimentIntensityAnalyzer()
     num_cores = multiprocessing.cpu_count()
@@ -238,6 +238,7 @@ def feature_pred(features, chik, ldak):
         print(transactions.describe())
 
         tr_hsh = transactions['fact'].values
+        # if castillo: comment cond2 out
         cond = facts['hash'].isin(tr_hsh)
         cond2 = facts['true'] == 1 or facts['true'] == 0
         facts = facts[cond & cond2]
@@ -266,9 +267,16 @@ def feature_pred(features, chik, ldak):
     score = metrics.accuracy_score(y_test, pred_test_std)
     print("Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
-    scores = cross_val_score(std_clf, X, y, cv=3)
-    print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
-    return scores.mean()
+    acc_scores = cross_val_score(std_clf, X, y, cv=3)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
+
+    return acc_scores.mean()
 
 
 def main():

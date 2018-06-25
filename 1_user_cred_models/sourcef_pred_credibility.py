@@ -508,8 +508,14 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
     score = metrics.accuracy_score(y_test, pred_test_std)
     print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
-    scores = cross_val_score(std_clf, X, y, cv=5)
-    print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+    acc_scores = cross_val_score(std_clf, X, y, cv=3)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
     # return evaluation(X, y, X_train, X_test, y_train, y_test)
 

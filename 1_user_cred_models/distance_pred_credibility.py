@@ -353,8 +353,6 @@ def train_test_split_on_facts(X, y, user_order, users, n):
 
 def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
     def benchmark(clf):
-        scores = cross_val_score(clf, X, y, cv=5)
-
         clf.fit(X_train_imp, y_train)
         pred = clf.predict(X_test_imp)
         # print(X_test_imp.shape, y_test.shape, pred.shape)
@@ -371,13 +369,20 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
             score2, precision2, recall2, fscore2))
 
-        print("\t Cross validated Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+        acc_scores = cross_val_score(clf, X, y, cv=3)
+        pr_scores = cross_val_score(clf, X, y, scoring='precision', cv=3)
+        re_scores = cross_val_score(clf, X, y, scoring='recall', cv=3)
+        f1_scores = cross_val_score(clf, X, y, scoring='f1', cv=3)
+        print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+        print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+        print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+        print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
         skplt.metrics.plot_roc_curve(y_train, pred)
         plt.show()
 
         # classification_analysis(X,y, clf.predict(X))
-        return [fscore, fscore2, scores.mean()]
+        return [fscore, fscore2, acc_scores.mean()]
 
     print('&' * 80)
     print("Evaluation")
