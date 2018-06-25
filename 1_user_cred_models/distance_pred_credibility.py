@@ -22,7 +22,7 @@ from nltk.tokenize import RegexpTokenizer
 from numpy.core.multiarray import interp
 from scipy.sparse import lil_matrix, csr_matrix
 from sklearn import metrics, preprocessing
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, PCA
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.metrics import precision_recall_fscore_support, roc_curve, auc
@@ -378,8 +378,8 @@ def evaluation(X, y, X_train=None, X_test=None, y_train=None, y_test=None):
         print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
         print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
-        skplt.metrics.plot_roc_curve(y_train, pred)
-        plt.show()
+        # skplt.metrics.plot_roc_curve(y_train, pred)
+        # plt.show()
 
         # classification_analysis(X,y, clf.predict(X))
         return [fscore, fscore2, acc_scores.mean()]
@@ -548,9 +548,9 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
 
-    X = SelectKBest(chi2, k=chik).fit_transform(X, y)
-    X = transformer.fit_transform(X, y)
-    X = np.asarray(lsa.fit_transform(X, y))
+    # X = SelectKBest(chi2, k=chik).fit_transform(X, y)
+    # X = transformer.fit_transform(X, y)
+    # X = np.asarray(lsa.fit_transform(X, y))
 
     # X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
     X_train, X_test, y_train, y_test = train_test_split(X, y)
@@ -576,6 +576,21 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     # sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
     # plt.show()
 
+    std_clf = make_pipeline(SelectKBest(chi2, k=chik), TfidfTransformer(smooth_idf=True), preprocessing.StandardScaler(with_mean=False), TruncatedSVD(svdk), SVC(C=1, gamma=1))
+    std_clf.fit(X_train, y_train)
+    pred_test_std = std_clf.predict(X_test)
+    precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred_test_std, average='macro')
+    score = metrics.accuracy_score(y_test, pred_test_std)
+    print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
+    acc_scores = cross_val_score(std_clf, X, y, cv=3)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
     print(Counter(y), Counter(y_train), Counter(y_test))
     return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)

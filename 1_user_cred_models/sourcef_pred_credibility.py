@@ -46,7 +46,7 @@ from metrics import ndcg_score
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 BUILD_NEW_DATA = False
-LDA_TOPIC = False
+LDA_TOPIC = True
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -60,7 +60,8 @@ lda = ()
 users = ()
 lda_text_to_id = {}
 lda_topics_per_text = []
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+if BUILD_NEW_DATA:
+    word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 sid = SentimentIntensityAnalyzer()
 
 
@@ -508,10 +509,10 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
     score = metrics.accuracy_score(y_test, pred_test_std)
     print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
-    acc_scores = cross_val_score(std_clf, X, y, cv=3)
-    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
-    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
-    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    acc_scores = cross_val_score(std_clf, X, y, cv=5)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=5)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=5)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=5)
     print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
     print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
     print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
