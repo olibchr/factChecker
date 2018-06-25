@@ -48,7 +48,8 @@ def get_users():
     users = []
     for user_file in user_files:
         user = json.loads(open(user_file).readline(), object_hook=decoder)
-        yield user
+        users.append(user)
+    return users
 
 
 def tokenize_text(text):
@@ -58,6 +59,7 @@ def tokenize_text(text):
 
 
 def was_user_correct(user, facts, transactions):
+    print(user.user_id)
     user.was_correct = -1
     transaction = transactions[0]
     for tr in transactions:
@@ -70,6 +72,7 @@ def was_user_correct(user, facts, transactions):
             user.fact_text_ts = transaction.timestamp
             user.stance = 0 if transaction.stance == 'denying' else 1 if transaction.stance == 'supporting' else 2 if transaction.stance == 'comment' else 3
             break
+    if transaction is None: yield user
     for fact in facts:
         if fact.hash == transaction.fact:
             user.fact_text = transaction.text
@@ -80,9 +83,8 @@ def was_user_correct(user, facts, transactions):
             elif(str(fact.true) == '1' and stance < -0.5) or \
                     (str(fact.true) == '0' and stance > 0.5):
                 user.was_correct = 0
-            print(fact.true, transaction.stance, user.was_correct)
             break
-    yield user
+    return user
 
 
 def linguistic_f(user):
@@ -98,7 +100,7 @@ def linguistic_f(user):
     if user.features is None: user.features = {}; print(user.user_id)
     user.features['pos_words'] = user_pos_words
     user.features['neg_words'] = user_neg_words
-    yield user
+    return user
 
 
 def feature_user_tweet_sentiment(user):
@@ -110,7 +112,7 @@ def feature_user_tweet_sentiment(user):
     #density, _ = np.histogram(tweet_sents, bins=bins, density=True)
     #user.sent_tweets_density = density / density.sum()
     user.sent_tweets_avg = np.average(tweet_sents)
-    yield user
+    return user
 
 
 def time_til_retweet(user):
@@ -128,7 +130,7 @@ def time_til_retweet(user):
 
     average_timedelta = round(float((sum(time_btw_rt, datetime.timedelta(0)) / len(time_btw_rt)).seconds) / 60)
     user.avg_time_to_retweet = average_timedelta
-    yield user
+    return user
 
 
 def get_data():
