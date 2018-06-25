@@ -155,7 +155,7 @@ def main():
     wn.ensure_loaded()
     # batch
     i = int(sys.argv[1])
-    user_files = glob.glob(DIR + 'user_tweets/' + 'user_*.json')
+    user_files = sorted(glob.glob(DIR + 'user_tweets/' + 'user_*.json'))
     r = 1960
     user_files = user_files[(i-1)*r:min(r*i,len(user_files))]
     users = get_users(user_files)
