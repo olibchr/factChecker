@@ -38,18 +38,16 @@ import seaborn as sns
 
 sns.set(style="ticks")
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
-sys.path.insert(0, os.path.dirname(__file__) + '../5_fact_checking_models')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from decoder import decoder
-from metrics import ndcg_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
-BUILD_NEW_DATA = False
-LDA_TOPIC = True
+BUILD_NEW_DATA = True
+LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../5_Data/'
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 

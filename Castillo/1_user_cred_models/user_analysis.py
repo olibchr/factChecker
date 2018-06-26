@@ -44,7 +44,7 @@ import seaborn as sns
 sns.set(style="ticks")
 
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -52,7 +52,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = False
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../5_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))

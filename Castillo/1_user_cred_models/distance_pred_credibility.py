@@ -40,7 +40,7 @@ import seaborn as sns
 import random
 import scikitplot as skplt
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)

@@ -40,18 +40,18 @@ from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.model_selection import train_test_split
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = False
+BUILD_NEW_DATA = True
 LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../5_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))
