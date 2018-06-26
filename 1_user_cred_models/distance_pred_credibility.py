@@ -43,7 +43,7 @@ import scikitplot as skplt
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
 
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+#warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = False
@@ -583,17 +583,17 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     score = metrics.accuracy_score(y_test, pred_test_std)
     print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
-    acc_scores = cross_val_score(std_clf, X, y, cv=3)
-    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
-    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
-    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    acc_scores = cross_val_score(std_clf, X, y, cv=5)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=5)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=5)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=5)
     print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
     print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
     print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
     print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
     print(Counter(y), Counter(y_train), Counter(y_test))
-    return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
+    # return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
 
 
 def main():

@@ -99,7 +99,7 @@ def get_relevant_tweets_test_set(user, X_test, i=0.8):
             if t_vec in X_test:
                 relevant_tweets.append(tweet)
     user.features['relevant_tweets'] = relevant_tweets
-    print(user.user_id, len(user.features['relevant_tweets']))
+    # print(user.user_id, len(user.features['relevant_tweets']))
     return user
 
 
@@ -178,7 +178,7 @@ def feature_cred_stance(this_users):
 
 
 def prebuild_cred(model, user):
-    print(user.user_id)
+    # print(user.user_id)
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
