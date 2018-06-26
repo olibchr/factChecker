@@ -94,6 +94,16 @@ def build_transactions(tweet_to_fact, fact_to_cred):
     return transactions
 
 
+def stats():
+    print('Number of facts: {}'.format(len(FACTS)))
+    print('Fact Veracity: {}'. format(Counter(f.true for f in FACTS)))
+    print('\n----------------------------------\n')
+    print('Number of Transactions: {}'.format(len((TRANSACTIONS))))
+    print('Number of Users: {}'.format(len(set([t.user_id for t in TRANSACTIONS]))))
+    print('Stance Distribution: {}'.format(Counter([t.stance for t in TRANSACTIONS])))
+    print('Certainty Distribution: {}'.format(Counter([t.certainty for t in TRANSACTIONS])))
+
+
 
 def store_result():
     with open(OUT + 'facts.json', 'w') as out_file:
@@ -111,4 +121,5 @@ FACTS = build_facts(fact_to_cred, fact_to_type, tweet_to_fact)
 
 TRANSACTIONS = build_transactions(tweet_to_fact, fact_to_cred)
 
-store_result()
+stats()
+# store_result()

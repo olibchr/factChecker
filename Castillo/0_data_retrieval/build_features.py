@@ -69,7 +69,7 @@ def was_user_correct(user, facts, transactions):
             user.fact = transaction.fact
             user.fact_text = transaction.text
             user.fact_text_ts = transaction.timestamp
-            user.stance = 0 if transaction.stance == 'denying' else 1 if transaction.stance == 'supporting' else 2 if transaction.stance == 'comment' else 3
+            user.stance = transaction.stance
             break
     if transaction is None: return user
     for fact in facts:
@@ -161,14 +161,14 @@ def main():
     users = get_users(user_files)
     facts, transactions = get_data()
     users = Parallel(n_jobs=num_jobs)(delayed(was_user_correct)(user, facts, transactions) for user in users)
-    print("Linguistic features..")
-    users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
-    print("Calculating tweet sentiment for each user")
-    users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
-    print("Avg time to retweet")
-    users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
-    print([u.sent_tweets_avg for u in users[:10]])
-    print([u.avg_time_to_retweet for u in users[:10]])
+    # print("Linguistic features..")
+    # users = Parallel(n_jobs=num_jobs)(delayed(linguistic_f)(user) for user in users)
+    # print("Calculating tweet sentiment for each user")
+    # users = Parallel(n_jobs=num_jobs)(delayed(feature_user_tweet_sentiment)(user) for user in users)
+    # print("Avg time to retweet")
+    # users = Parallel(n_jobs=num_jobs)(delayed(time_til_retweet)(user) for user in users)
+    # print([u.sent_tweets_avg for u in users[:10]])
+    # print([u.avg_time_to_retweet for u in users[:10]])
     [store_result(user) for user in users]
 
 

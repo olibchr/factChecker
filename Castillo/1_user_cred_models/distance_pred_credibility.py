@@ -9,6 +9,7 @@ import warnings
 from collections import Counter, defaultdict
 from itertools import cycle
 from string import digits
+from dateutil import parser
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,7 +46,7 @@ from decoder import decoder
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-NEW_CORPUS = True
+NEW_CORPUS = False
 BUILD_NEW_SPARSE = True
 
 DIR = os.path.dirname(__file__) + '../../../5_Data/'
@@ -185,7 +186,8 @@ def build_sparse_matrix_word2vec(users, retweets_only=False):
         _, transactions = get_data()
         fact_topics = build_fact_topics()
         fact_to_words = {r['hash']: [w for w in r['fact_terms'] if w in word_vectors.vocab] for index, r in fact_topics[['hash', 'fact_terms']].iterrows()}
-        users = sorted(users, key=lambda x: x.fact_text_ts)
+        print("NO TS: {}".format([u.user_id for u in users if u.fact_text_ts is None]))
+        users = sorted(users, key=lambda x: parser.parse(x.fact_text_ts))
         for user in users:
             if not user.tweets: users.pop(users.index(user))
             for t in transactions:
