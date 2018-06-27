@@ -20,6 +20,7 @@ from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from numpy.core.multiarray import interp
+from dateutil import parser
 from scipy.sparse import lil_matrix, csr_matrix
 from sklearn import metrics, preprocessing
 from sklearn.decomposition import TruncatedSVD, PCA

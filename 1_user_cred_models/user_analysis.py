@@ -46,6 +46,7 @@ sns.set(style="ticks")
 
 sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
+import getters as gt
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -454,6 +455,28 @@ def main():
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
     users = get_users()
+    facts = gt.get_fact_topics()
+    transactions = gt.get_transactions()
+    users_df = pd.DataFrame([vars(u) for u in users])
+    print(users_df.describe())
+    print(users_df[users_df['stance']==0].describe())
+    print(users_df[users_df['stance']==1].describe())
+    print(users_df[users_df['stance']==2].describe())
+    print(users_df[users_df['stance']==3].describe())
+    users_df['f_t'] = users_df['fact'].map(lambda x: facts[facts['hash'] == x]['true'].values[0])
+    c_true = users_df['f_t'] == '1'
+    c_fal = users_df['f_t'] == '0'
+    c_fal1 = users_df['f_t'] == 0
+    c_den = users_df['stance'] == 0
+    c_sup = users_df['stance'] == 1
+    print(users_df[c_true & c_sup].describe())
+    print(users_df[c_fal | c_fal1][c_den].describe())
+    print(users_df[c_fal | c_fal1][c_sup].describe())
+    print(users_df[c_true & c_den].describe())
+    print(users_df[users_df['was_correct'] == 1].describe())
+    print(users_df[users_df['was_correct'] == 0].describe())
+    print(len([t for u in users for t in u.tweets if u.tweets is not None]))
+
 
     corpus_analysis(bow_corpus, word_to_idx, idx_to_word)
     # temporal_analysis(get_users())

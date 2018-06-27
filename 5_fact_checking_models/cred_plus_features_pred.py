@@ -222,7 +222,7 @@ def main():
     facts['cred_pred'] = facts['hash'].map(lambda x: only_cred_support_deny_pred(users_df[users_df['fact'] == x]))
     facts['cred_pred_std'] = facts['cred_pred'].map(lambda x: np.std(x))
     facts['cred_pred'] = facts['cred_pred'].map(lambda x: x[-1])
-    facts.set_index('hash').join(fact_features.set_index('hash'), rsuffix='_other')
+    facts = facts.set_index('hash').join(fact_features.set_index('hash'), rsuffix='_other')
     X = facts[features].values
     y = facts['y'].values
 
