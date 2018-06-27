@@ -51,7 +51,7 @@ BUILD_NEW_DATA = True
 LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
-DIR = os.path.dirname(__file__) + '../../5_Data/'
+DIR = os.path.dirname(__file__) + '../../../5_Data/'
 
 WNL = WordNetLemmatizer()
 NLTK_STOPWORDS = set(stopwords.words('english'))

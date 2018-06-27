@@ -47,7 +47,7 @@ def extract_entity_names(t):
 
 def get_linked_entities_spotlight(facts):
     sparql = SPARQLWrapper("http://dbpedia.org/sparql")
-
+    print(len(facts))
     for fact in facts:
         print("FACT: " + fact.text)
         if fact.text is None: print(fact.hash); continue
@@ -72,6 +72,7 @@ def get_linked_entities_spotlight(facts):
             results = sparql.query().convert()
             for result in results["results"]["bindings"]:
                 fact.set_wp_link(result["isPrimaryTopicOf"]["value"])
+    print(len(facts))
 
 
 def store_result(facts):

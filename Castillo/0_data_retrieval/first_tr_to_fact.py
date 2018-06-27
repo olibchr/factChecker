@@ -15,16 +15,23 @@ def get_data():
     print(transactions[2].timestamp)
     return facts, transactions
 
-facts, transactions = get_data()
-for f in facts:
-    for t in transactions:
+def get_t_text(f, tr):
+    for i, t in enumerate(tr):
         if f.hash == t.fact:
             f.text = t.text
             break
-for f in facts:
+        if i == len(tr)-1: return
     f.text = f.text.strip()
     if len(f.text) == 0:
-        facts.remove(f)
+        get_t_text(f, tr[1:])
+
+facts, transactions = get_data()
+for f in facts:
+    get_t_text(f, transactions)
+
+[facts.remove(f) for f in facts if len(f.text) == 0]
+print(len(facts))
+
 
 with open(DIR + 'facts.json', 'w') as out_file:
     out_file.write(json.dumps([f.__dict__ for f in facts]))

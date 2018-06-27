@@ -47,7 +47,7 @@ BUILD_NEW_DATA = True
 LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
-DIR = os.path.dirname(__file__) + '../../5_Data/'
+DIR = os.path.dirname(__file__) + '../../../5_Data/'
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 3 / 4)
 

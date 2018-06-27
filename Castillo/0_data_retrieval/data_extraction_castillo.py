@@ -69,6 +69,8 @@ def build_facts(fact_to_cred, fact_to_type, fact_to_user):
         # <RUMOR_TPYE, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET, ?HASH>
         this_fact = Fact(type, '', '', true, 0, 0, 0, hash=f[0])
         facts.append(this_fact)
+
+    print("Remaining facts: {}".format(len(facts)))
     return facts
 
 
@@ -101,7 +103,6 @@ def stats():
     print('Number of Transactions: {}'.format(len((TRANSACTIONS))))
     print('Number of Users: {}'.format(len(set([t.user_id for t in TRANSACTIONS]))))
     print('Stance Distribution: {}'.format(Counter([t.stance for t in TRANSACTIONS])))
-    print('Certainty Distribution: {}'.format(Counter([t.certainty for t in TRANSACTIONS])))
 
 
 
@@ -122,4 +123,4 @@ FACTS = build_facts(fact_to_cred, fact_to_type, tweet_to_fact)
 TRANSACTIONS = build_transactions(tweet_to_fact, fact_to_cred)
 
 stats()
-# store_result()
+store_result()
