@@ -62,9 +62,7 @@ user_order, users = [],[]
 word_to_idx = {}
 fact_to_words = {}
 bow_corpus_cnt = {}
-if BUILD_NEW_SPARSE or NEW_CORPUS:
-    word_vectors = KeyedVectors.load_word2vec_format('model_data/GoogleNews-vectors-negative300.bin', binary=True)
-word_vectors = 0#KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
+word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin', binary=True, unicode_errors='ignore')
 
 
 def datetime_converter(o):
@@ -501,8 +499,8 @@ def main():
     N = 0
     # for chik, svdk in exp:
     #    r= []
-    for N in range(15):
-        results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
+    # for N in range(15):
+    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, -1))
     print(np.average(np.asarray(results), axis=1))
 
 

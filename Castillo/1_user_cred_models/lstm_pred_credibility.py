@@ -47,7 +47,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = True
+BUILD_NEW_DATA = False
 LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
@@ -485,9 +485,9 @@ def lstm_pred(n = 0):
     X, y, user_order = balance_classes(X,y,user_order)
     print(Counter(y))
 
-    # X_train, X_test, y_train, y_test = train_test_split(X,y)
+    X_train, X_test, y_train, y_test = train_test_split(X,y)
     # X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, idx_to_word,top_words)
     print(Counter(y_train), Counter(y_test))
@@ -532,8 +532,8 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
-    for n in range(0,10,1):
-        lstm_pred(n)
+    #for n in range(0,10,1):
+    lstm_pred(-1)
 
 
 if __name__ == "__main__":

@@ -470,7 +470,7 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
     # Set up the matplotlib figure
     # Draw the heatmap with the mask and correct aspect ratio
     f, ax = plt.subplots(figsize=(11, 9))
-    sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    # sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
     # plt.show()
 
     features = ['avg_words', 'avg_retweets', 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_emoticons', 'avg_links',
