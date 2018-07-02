@@ -44,65 +44,7 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
-NEW_MODEL = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
-word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
-                                                 binary=True, unicode_errors='ignore')
-
-
-def train_test_split_on_facts(X, y, user_order, facts_train, users):
-    user_to_fact = {user.user_id: user.fact for user in users}
-    fact_order = [user_to_fact[uid] for uid in user_order]
-    train_indeces = np.asarray([True if f in facts_train else False for idx, f in enumerate(fact_order)])
-    X_train = X[train_indeces]
-    y_train = y[train_indeces]
-    X_test = X[~train_indeces]
-    y_test = y[~train_indeces]
-    return X_train, X_test, y_train, y_test
-
-
-def get_relevant_tweets(user, i=0.8):
-    relevant_tweets = []
-    if user.fact not in fact_to_words: return user
-    if user.tweets is None: return user
-    if user.features is None: user.features = {}
-    user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
-    for tweet in user.tweets:
-        distance_to_topic = []
-        tokens = gt.get_tokenize_text(tweet['text'])
-        for token in tokens:
-            if token not in word_vectors.vocab: continue
-            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
-            distance_to_topic.append(increment)
-        if np.average(np.asarray(distance_to_topic)) < i:
-            relevant_tweets.append(tweet)
-    user.features['relevant_tweets'] = relevant_tweets
-    print(user.user_id, len(user.features['relevant_tweets']))
-    return user
-
-
-def cred_stance_prediction(this_users):
-    def get_support(text, cred):
-        sent = sid.polarity_scores(text)['compound']
-        if sent > 0.5:
-            return cred, True
-        if sent < -0.5:
-            return 1 - cred, True
-        else:
-            return float(((sent * cred) + 1) / 2), False
-
-    this_users = this_users.sort_values('fact_text_ts')
-    assertions = []
-    # assertions.append(float(get_credibility(this_fact['text'].values[0])))
-
-    for idx, u in this_users.iterrows():
-        user_cred = u.credibility
-        pred, T = get_support(u['fact_text'], user_cred)
-        if T:
-            assertions.append(pred)
-        assertions.append(pred)
-    result = [(np.average(assertions[:i + 1])) for i in range(len(assertions))]
-    return result
 
 
 def only_cred_support_deny_pred(this_users):
@@ -130,63 +72,6 @@ def only_cred_support_deny_pred(this_users):
     return result
 
 
-def feature_cred_stance(this_users):
-    def get_support(user, cred):
-        if user.stance == 1:
-            return cred
-        if user.stance == 0:
-            return 1 - cred
-        else:
-            sent = sid.polarity_scores(u['fact_text'])['compound']
-            return float(((sent * cred) + 1) / 2)
-
-    # Would only work with a sequential model
-    this_users = this_users.sort_values('fact_text_ts')
-    creds = []
-    stances = []
-    # Maybe this one should be somehow enabled
-    # assertions.append(float(get_credibility(this_fact['text'].values[0])))
-
-    for idx, u in this_users.iterrows():
-        user_cred = u.credibility
-        user_pred = get_support(u, user_cred)
-        creds.append(user_pred)
-        stances = u.stance if u.stance != -1 else (sid.polarity_scores(u['fact_text'])['compound'] + 1) / 2
-    # result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
-    return None
-
-
-def prebuild_cred(model, user):
-    print(user.user_id)
-
-    def get_credibility(text):
-        text = gt.get_tokenize_text(text)
-        text = [word_to_idx[w] for w in text if w in word_to_idx]
-        text = sequence.pad_sequences([text], maxlen=12)
-        probs = model.predict_proba(text)
-        return probs
-
-    user_cred = []
-    user_cred.append(get_credibility(user.fact_text))
-    if user.features is None or 'relevant_tweets' not in user.features: user.credibility = user_cred[0]; return user
-    relevant_tweets = user.features['relevant_tweets']
-    for idx, tweet in enumerate(relevant_tweets):
-        if idx > 200: break
-        user_cred.append(get_credibility(tweet['text']))
-    user.credibility = np.average(user_cred)
-    return user
-
-
-def datetime_converter(o):
-    if isinstance(o, datetime):
-        return o.__str__()
-
-
-def store_result(user):
-    with open(DIR + 'user_tweets/' + 'user_' + str(user.user_id) + '.json', 'w') as out_file:
-        out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
-
-
 def main():
     global bow_corpus
     global word_to_idx, idx_to_word, fact_to_words
@@ -196,10 +81,6 @@ def main():
     bow_corpus = gt.get_corpus()
     facts = gt.get_fact_topics()
     facts = facts[facts['true'] != 'unknown']
-
-    facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
-    facts_train = facts[facts['hash'].isin(facts_train)]
-    facts_test = facts[facts['hash'].isin(facts_test)]
 
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}

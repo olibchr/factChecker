@@ -45,7 +45,7 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
 NEW_MODEL = True
-DIR = os.path.dirname(__file__) + '../../3_Data/'
+DIR = os.path.dirname(__file__) + '../../../5_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
 
@@ -54,6 +54,25 @@ def train_test_split_on_facts(X, y, user_order, facts_train, users):
     user_to_fact = {user.user_id: user.fact for user in users}
     fact_order = [user_to_fact[uid] for uid in user_order]
     train_indeces = np.asarray([True if f in facts_train else False for idx, f in enumerate(fact_order)])
+    X_train = X[train_indeces]
+    y_train = y[train_indeces]
+    X_test = X[~train_indeces]
+    y_test = y[~train_indeces]
+    return X_train, X_test, y_train, y_test
+
+
+def train_test_split_every_user(X, y, user_order, test_size = 0.2):
+    user_to_num_instances = defaultdict(lambda: 0)
+    user_to_num_instances_train = {u:0 for u in list(set(user_order))}
+    for u in user_order: user_to_num_instances[u] += 1
+    train_indeces = []
+    for u in user_order:
+        if user_to_num_instances_train[u] >= (1-test_size)*user_to_num_instances[u]:
+            train_indeces.append(False)
+        else:
+            train_indeces.append(True)
+            user_to_num_instances_train[u] += 1
+    train_indeces = np.asarray(train_indeces)
     X_train = X[train_indeces]
     y_train = y[train_indeces]
     X_test = X[~train_indeces]
@@ -78,6 +97,28 @@ def get_relevant_tweets(user, i=0.8):
             relevant_tweets.append(tweet)
     user.features['relevant_tweets'] = relevant_tweets
     print(user.user_id, len(user.features['relevant_tweets']))
+    return user
+
+
+def get_relevant_tweets_test_set(user, X_test, i=0.8):
+    relevant_tweets = []
+    if user.fact not in fact_to_words: return user
+    if user.tweets is None: return user
+    if user.features is None: user.features = {}
+    user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
+    for tweet in user.tweets:
+        distance_to_topic = []
+        tokens = gt.get_tokenize_text(tweet['text'])
+        for token in tokens:
+            if token not in word_vectors.vocab: continue
+            increment = np.average(word_vectors.distances(token, other_words=user_fact_words))
+            distance_to_topic.append(increment)
+        if np.average(np.asarray(distance_to_topic)) < i:
+            t_vec = [word_to_idx[t] for t in tokens if t in word_to_idx]
+            if t_vec in X_test:
+                relevant_tweets.append(tweet)
+    user.features['relevant_tweets'] = relevant_tweets
+    # print(user.user_id, len(user.features['relevant_tweets']))
     return user
 
 
@@ -117,17 +158,19 @@ def only_cred_support_deny_pred(this_users):
 
     this_users = this_users.sort_values('fact_text_ts')
     assertions = []
+    cred_to_fact_text = {}
     # Maybe this one should be somehow enabled
     #assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
         user_pred = get_support(u, user_cred)
+        cred_to_fact_text[user_cred] = u.fact_text
         if u.stance != -1:
             assertions.append(user_pred)
         assertions.append(user_pred)
     result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
-    return result
+    return result, cred_to_fact_text
 
 
 def feature_cred_stance(this_users):
@@ -156,7 +199,7 @@ def feature_cred_stance(this_users):
 
 
 def prebuild_cred(model, user):
-    print(user.user_id)
+    # print(user.user_id)
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
         text = [word_to_idx[w] for w in text if w in word_to_idx]
@@ -194,10 +237,6 @@ def main():
     facts = gt.get_fact_topics()
     facts = facts[facts['true'] != 'unknown']
 
-    facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
-    facts_train = facts[facts['hash'].isin(facts_train)]
-    facts_test = facts[facts['hash'].isin(facts_test)]
-
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
@@ -209,8 +248,12 @@ def main():
         top_words = 50000
         X, y, user_order = lstm_cred.get_prebuilt_data()
         X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
-        X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
+
+        #X_train, X_test, y_train, y_test = train_test_split_every_user(X, y, user_order)
+        #X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
         X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+
         X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
         max_tweet_length = 12
         X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
@@ -233,6 +276,8 @@ def main():
 
         print('Building new users & model')
         users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+        #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
+
         # Build credibility scores for all users on their topic
         print('Computing credibility')
         users = [prebuild_cred(model, u) for u in users]
@@ -243,20 +288,19 @@ def main():
             pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
     else:
         print('Loading users & model')
-        model = load_model('model_data/cred_model.h5')
         with open('model_data/cred_pred_data','rb') as tmpfile:
             construct = pickle.load(tmpfile)
         users_df = construct['users']
         word_to_idx = construct['map']
 
 
-    print('Making cred*stance predictions')
+    print('Making cred*sent predictions')
     X = []
     y = []
-    for idx, hsh in enumerate(facts_test['hash'].values):
+    for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x = cred_stance_prediction(this_users)
-        this_y = facts_test['true'].iloc[idx]
+        this_y = facts['true'].iloc[idx]
         X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
@@ -281,16 +325,19 @@ def main():
     print('Making cred*stance predictions')
     X = []
     y = []
-    for idx, hsh in enumerate(facts_test['hash'].values):
+    all_evidence = []
+    for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
-        this_x = only_cred_support_deny_pred(this_users)
-        this_y = facts_test['true'].iloc[idx]
+        this_x, evidence = sorted(only_cred_support_deny_pred(this_users), reverse=True, key=lambda x: x[0])
+        #print(evidence if len(evidence) <3 else evidence[:3])
+        this_y = facts['true'].iloc[idx]
         X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
     std_clf.fit(X_train, y_train)
     pred = std_clf.predict(X_test)
+
 
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')

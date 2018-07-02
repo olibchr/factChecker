@@ -60,8 +60,9 @@ def train_test_split_on_facts(X, y, user_order, facts_train, users):
     y_test = y[~train_indeces]
     return X_train, X_test, y_train, y_test
 
+
 def train_test_split_every_user(X, y, user_order, test_size = 0.2):
-    user_to_num_instances = defaultdict(lambda x: 0)
+    user_to_num_instances = defaultdict(lambda: 0)
     user_to_num_instances_train = {u:0 for u in list(set(user_order))}
     for u in user_order: user_to_num_instances[u] += 1
     train_indeces = []
@@ -236,10 +237,6 @@ def main():
     facts = gt.get_fact_topics()
     facts = facts[facts['true'] != 'unknown']
 
-    facts_train, facts_test, _, _ = train_test_split(facts['hash'].values, [0] * len(facts.index))
-    facts_train = facts[facts['hash'].isin(facts_train)]
-    facts_test = facts[facts['hash'].isin(facts_test)]
-
     bow_corpus_tmp = [w[0] for w in bow_corpus.items() if w[1] > 2]
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
@@ -256,7 +253,7 @@ def main():
         #X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
         #X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
         #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
-        
+
         X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
         max_tweet_length = 12
         X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
@@ -291,7 +288,6 @@ def main():
             pickle.dump({'users':users_df, 'map': word_to_idx}, tmpfile)
     else:
         print('Loading users & model')
-        model = load_model('model_data/cred_model.h5')
         with open('model_data/cred_pred_data','rb') as tmpfile:
             construct = pickle.load(tmpfile)
         users_df = construct['users']
