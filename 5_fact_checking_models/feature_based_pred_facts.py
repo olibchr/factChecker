@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import getters as gt
 
-DIR = os.path.dirname(__file__) + '../../5_Data/'
+DIR = os.path.dirname(__file__) + '../../3_Data/'
 NEW_DATA = False
 if NEW_DATA:
     sid = SentimentIntensityAnalyzer()
@@ -240,7 +240,7 @@ def feature_pred(features, chik, ldak):
         tr_hsh = transactions['fact'].values
         # if castillo: comment cond2 out
         cond = facts['hash'].isin(tr_hsh)
-        cond2 = facts['true'] == 1 or facts['true'] == 0
+        cond2 = facts['true'] == 1 | facts['true'] == 0
         facts = facts[cond & cond2]
         facts = Parallel(n_jobs=num_jobs)(
             delayed(get_features)
@@ -256,6 +256,7 @@ def feature_pred(features, chik, ldak):
         with open('model_data/feature_data', 'rb') as tmpfile:
             facts = pickle.load(tmpfile)
 
+    print(facts[list(features)].describe())
     X = facts[list(features)].values
     y = facts['y'].values
 
