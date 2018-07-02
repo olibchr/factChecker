@@ -450,7 +450,7 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
         users_with_features, num_rel_tweets = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user, proximity) for i, user in enumerate(users_with_tweets))
-        print(num_rel_tweets)
+        print(sum(num_rel_tweets), np.average(num_rel_tweets))
         with open('model_data/user_features.pkl', 'wb') as tmpfile:
             pickle.dump(users_with_features, tmpfile)
     else:

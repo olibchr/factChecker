@@ -57,16 +57,27 @@ def plot_results_lstm_early_rumor():
 def plot_results_lstm_dist_vocab():
     # F1 score of user credibility. Plot of increasing N (how many tweets on topic improve prediction)
     # Add useful tokens of a tweet to the fact representation after computing the distance
-    data = [0.8217, 0.8448, 0.8531, 0.8599, 0.8600, 0.8607, 0.8616, 0.8302, 0.8247]
-    tweet_len = [5.524, 6.45446741, 7.025, 7.531, 7.8398, 8.087, 8.477, 0, 0]
-    n = [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000]
-    df = pd.DataFrame({'data': data, 'n': n})
+    data = [0.8217, 0.8448, 0.8531, 0.8599, 0.8600, 0.8607, 0.8616]
+    tweet_len = [5.524, 6.45446741, 7.025, 7.531, 7.8398, 8.087, 8.477]
+    n = [10000, 20000, 30000, 40000, 50000, 60000, 70000]
+    df = pd.DataFrame({'data': data, 'tweet-len': tweet_len,'n': n})
 
-    ax = sns.tsplot(data=data, time=n)
-    ax.set(xlabel='Credibility prediction after n tweets', ylabel='F1 Score')
+    fig, ax1 = plt.subplots()
+    ax1.plot(n, data, 'b-')
+    ax1.set_xlabel('Vocabulary size')
+    ax1.set_ylabel('F1 score', color='b')
+    ax1.tick_params('y', colors='b')
+
+    ax2 = ax1.twinx()
+    ax2.plot(n, tweet_len, 'g-')
+    ax2.set_ylabel('Avg sequence length', color='g')
+    ax2.tick_params('y', colors='g')
+
+    fig.tight_layout()
     plt.show()
 
 #plot_results_from_was_correct_prediction()
 #plot_results_from_was_correct_prection_with_adding_useful_tokens_to_fact_representation()
 # plot_results_lstm_early()
-plot_results_lstm_early_rumor()
+# plot_results_lstm_early_rumor()
+plot_results_lstm_dist_vocab()
