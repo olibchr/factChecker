@@ -60,6 +60,24 @@ def train_test_split_on_facts(X, y, user_order, facts_train, users):
     y_test = y[~train_indeces]
     return X_train, X_test, y_train, y_test
 
+def train_test_split_every_user(X, y, user_order, test_size = 0.2):
+    user_to_num_instances = defaultdict(lambda x: 0)
+    user_to_num_instances_train = {u:0 for u in list(set(user_order))}
+    for u in user_order: user_to_num_instances[u] += 1
+    train_indeces = []
+    for u in user_order:
+        if user_to_num_instances_train[u] >= (1-test_size)*user_to_num_instances[u]:
+            train_indeces.append(False)
+        else:
+            train_indeces.append(True)
+            user_to_num_instances_train[u] += 1
+    train_indeces = np.asarray(train_indeces)
+    X_train = X[train_indeces]
+    y_train = y[train_indeces]
+    X_test = X[~train_indeces]
+    y_test = y[~train_indeces]
+    return X_train, X_test, y_train, y_test
+
 
 def get_relevant_tweets(user, i=0.8):
     relevant_tweets = []
@@ -139,17 +157,19 @@ def only_cred_support_deny_pred(this_users):
 
     this_users = this_users.sort_values('fact_text_ts')
     assertions = []
+    cred_to_fact_text = {}
     # Maybe this one should be somehow enabled
     #assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
         user_pred = get_support(u, user_cred)
+        cred_to_fact_text[user_cred] = u.fact_text
         if u.stance != -1:
             assertions.append(user_pred)
         assertions.append(user_pred)
     result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
-    return result
+    return result, cred_to_fact_text
 
 
 def feature_cred_stance(this_users):
@@ -231,9 +251,12 @@ def main():
         top_words = 50000
         X, y, user_order = lstm_cred.get_prebuilt_data()
         X, y, user_order = lstm_cred.balance_classes(X, y, user_order)
+
+        X_train, X_test, y_train, y_test = train_test_split_every_user(X, y, user_order)
         #X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, facts_train.values, users)
-        X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
+        #X_train, X_test, y_train, y_test = lstm_cred.train_test_split_on_users(X, y, user_order, users, 100)
         #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+        
         X_train, X_test, word_to_idx = lstm_cred.keep_n_best_words(X_train, y_train, X_test, y_test, idx_to_word, top_words)
         max_tweet_length = 12
         X_train = sequence.pad_sequences(X_train, maxlen=max_tweet_length)
@@ -275,13 +298,13 @@ def main():
         word_to_idx = construct['map']
 
 
-    print('Making cred*stance predictions')
+    print('Making cred*sent predictions')
     X = []
     y = []
-    for idx, hsh in enumerate(facts_test['hash'].values):
+    for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x = cred_stance_prediction(this_users)
-        this_y = facts_test['true'].iloc[idx]
+        this_y = facts['true'].iloc[idx]
         X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
@@ -306,16 +329,19 @@ def main():
     print('Making cred*stance predictions')
     X = []
     y = []
-    for idx, hsh in enumerate(facts_test['hash'].values):
+    all_evidence = []
+    for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
-        this_x = only_cred_support_deny_pred(this_users)
-        this_y = facts_test['true'].iloc[idx]
+        this_x, evidence = sorted(only_cred_support_deny_pred(this_users), reverse=True, key=lambda x: x[0])
+        print(evidence if len(evidence) <3 else evidence[:3])
+        this_y = facts['true'].iloc[idx]
         X.append((int(this_x[-1]), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
     std_clf.fit(X_train, y_train)
     pred = std_clf.predict(X_test)
+
 
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')

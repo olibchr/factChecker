@@ -47,7 +47,7 @@ from decoder import decoder
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 NEW_CORPUS = False
-BUILD_NEW_SPARSE = True
+BUILD_NEW_SPARSE = False
 
 DIR = os.path.dirname(__file__) + '../../../5_Data/'
 
