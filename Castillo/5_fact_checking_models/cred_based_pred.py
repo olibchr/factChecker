@@ -36,7 +36,7 @@ import keras.models
 
 sid = SentimentIntensityAnalyzer()
 
-sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
+sys.path.insert(0, os.path.dirname(__file__) + '../../2_helpers')
 sys.path.insert(0, os.path.dirname(__file__) + '../1_user_cred_models')
 import lstm_pred_credibility as lstm_cred
 import getters as gt
@@ -44,7 +44,7 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
-NEW_MODEL = True
+NEW_MODEL = False
 DIR = os.path.dirname(__file__) + '../../../5_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -158,14 +158,14 @@ def only_cred_support_deny_pred(this_users):
 
     this_users = this_users.sort_values('fact_text_ts')
     assertions = []
-    cred_to_fact_text = {}
+    cred_to_fact_text = []
     # Maybe this one should be somehow enabled
     #assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
         user_pred = get_support(u, user_cred)
-        cred_to_fact_text[user_cred] = u.fact_text
+        cred_to_fact_text.append([user_cred,u.fact_text])
         if u.stance != -1:
             assertions.append(user_pred)
         assertions.append(user_pred)
@@ -328,10 +328,12 @@ def main():
     all_evidence = []
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
-        this_x, evidence = sorted(only_cred_support_deny_pred(this_users), reverse=True, key=lambda x: x[0])
-        #print(evidence if len(evidence) <3 else evidence[:3])
+        this_x, evidence = only_cred_support_deny_pred(this_users)
         this_y = facts['true'].iloc[idx]
-        X.append((int(this_x[-1]), np.std(this_x)))
+        evidence = sorted(evidence, reverse=True, key=lambda x: x[0])
+        # print(facts[facts['hash']==hsh]['text'].values, int(this_y), this_x[-1])
+        # print(evidence if len(evidence) <3 else evidence[:3])
+        X.append((this_x[-1], np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
