@@ -45,6 +45,7 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
 NEW_MODEL = True
+NEW_REL_TWEETS = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -274,9 +275,17 @@ def main():
         scores = model.evaluate(X_test, y_test, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-        print('Building new users & model')
-        #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
+        if NEW_REL_TWEETS:
+            print('Building new relevant tweets')
+            users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+            #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
+            user_to_rel_tweet = {user.user_id: user.features['relevant_tweets'] for user in users}
+            with open('model_data/relevant_tweets.pkl','wb') as tmpfile:
+                pickle.dump(user_to_rel_tweet, tmpfile)
+        else:
+            with open('model_data/relevant_tweets.pkl','rb') as tmpfile:
+                user_to_rel_tweet = pickle.load(tmpfile)
+            for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id]
 
         # Build credibility scores for all users on their topic
         print('Computing credibility')
@@ -331,8 +340,8 @@ def main():
         this_x, evidence = only_cred_support_deny_pred(this_users)
         this_y = facts['true'].iloc[idx]
         evidence = sorted(evidence, reverse=True, key=lambda x: x[0])
-        print(facts[facts['hash']==hsh]['text'].values, int(this_y), int(this_x[-1]))
-        print(evidence if len(evidence) <3 else evidence[:3])
+        #print(facts[facts['hash']==hsh]['text'].values, int(this_y), this_x[-1])
+        #print(evidence if len(evidence) <3 else evidence[:3])
         X.append((this_x[-1], np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
