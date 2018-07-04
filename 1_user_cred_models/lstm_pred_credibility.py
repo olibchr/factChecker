@@ -532,8 +532,8 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
 
-    for n in range(0,10,1):
-        lstm_pred(n)
+    #for n in range(0,10,1):
+    lstm_pred(-1)
 
 
 if __name__ == "__main__":

@@ -83,9 +83,9 @@ def train_test_split_every_user(X, y, user_order, test_size = 0.2):
 
 def get_relevant_tweets(user, i=0.8):
     relevant_tweets = []
+    if user.features is None: user.features = {}
     if user.fact not in fact_to_words: return user
     if user.tweets is None: return user
-    if user.features is None: user.features = {}
     user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -103,9 +103,9 @@ def get_relevant_tweets(user, i=0.8):
 
 def get_relevant_tweets_test_set(user, X_test, i=0.8):
     relevant_tweets = []
+    if user.features is None: user.features = {}
     if user.fact not in fact_to_words: return user
     if user.tweets is None: return user
-    if user.features is None: user.features = {}
     user_fact_words = [fw for fw in fact_to_words[user.fact] if fw in word_vectors.vocab]
     for tweet in user.tweets:
         distance_to_topic = []
@@ -279,7 +279,7 @@ def main():
             print('Building new relevant tweets')
             users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
             #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
-            user_to_rel_tweet = {user.user_id: user.features['relevant_tweets'] for user in users}
+            user_to_rel_tweet = {user.user_id: user.features['relevant_tweets'] for user in users if 'relevant_tweets' in user.features}
             with open('model_data/relevant_tweets.pkl','wb') as tmpfile:
                 pickle.dump(user_to_rel_tweet, tmpfile)
         else:
