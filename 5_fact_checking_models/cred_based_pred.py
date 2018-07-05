@@ -97,7 +97,7 @@ def get_relevant_tweets(user, i=0.8):
         if np.average(np.asarray(distance_to_topic)) < i:
             relevant_tweets.append(tweet)
     user.features['relevant_tweets'] = relevant_tweets
-    print(user.user_id, len(user.features['relevant_tweets']))
+    # print(user.user_id, len(user.features['relevant_tweets']))
     return user
 
 
@@ -143,7 +143,7 @@ def cred_stance_prediction(this_users):
         if T:
             assertions.append(pred)
         assertions.append(pred)
-    result = [(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+    result = [np.average(assertions[:i + 1]) for i in range(len(assertions))]
     return result
 
 

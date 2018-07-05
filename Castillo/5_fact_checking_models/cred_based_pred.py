@@ -143,7 +143,7 @@ def cred_stance_prediction(this_users):
         if T:
             assertions.append(pred)
         assertions.append(pred)
-    result = [(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+    result = [np.average(assertions[:i + 1]) for i in range(len(assertions))]
     return result
 
 
@@ -163,7 +163,7 @@ def only_cred_support_deny_pred(this_users):
     # Maybe this one should be somehow enabled
     #assertions.append(float(get_credibility(this_fact['text'].values[0])))
 
-    print(Counter([user.stance for user in this_users.iterrows()]))
+    stances = []
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
         user_pred = get_support(u, user_cred)
@@ -171,7 +171,9 @@ def only_cred_support_deny_pred(this_users):
         if u.stance != -1:
             assertions.append(user_pred)
         assertions.append(user_pred)
-    result = [round(np.average(assertions[:i + 1])) for i in range(len(assertions))]
+        stances.append(u.stance)
+    print(Counter(stances))
+    result = [np.average(assertions[:i + 1]) for i in range(len(assertions))]
     return result, cred_to_fact_text
 
 
@@ -311,7 +313,7 @@ def main():
         this_users = users_df[users_df['fact'] == hsh]
         this_x = cred_stance_prediction(this_users)
         this_y = facts['true'].iloc[idx]
-        X.append((int(this_x[-1]), np.std(this_x)))
+        X.append((this_x[-1], np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
