@@ -45,7 +45,7 @@ num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
 NEW_MODEL = False
-NEW_REL_TWEETS = True
+NEW_REL_TWEETS = False
 DIR = os.path.dirname(__file__) + '../../../5_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -168,11 +168,11 @@ def only_cred_support_deny_pred(this_users):
         user_cred = u.credibility
         user_pred = get_support(u, user_cred)
         cred_to_fact_text.append([user_cred,u.fact_text])
-        if u.stance != -1:
+        if u.stance == 1 or u.stance == 0:
             assertions.append(user_pred)
+        #elif len(assertions) == 0:
         assertions.append(user_pred)
         stances.append(u.stance)
-    print(Counter(stances))
     result = [np.average(assertions[:i + 1]) for i in range(len(assertions))]
     return result, cred_to_fact_text
 
@@ -288,7 +288,9 @@ def main():
         else:
             with open('model_data/relevant_tweets.pkl','rb') as tmpfile:
                 user_to_rel_tweet = pickle.load(tmpfile)
-            for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id]
+            for user in users:
+                if 'relevant_tweets' in user.features:
+                    user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id]
 
         # Build credibility scores for all users on their topic
         print('Computing credibility')
@@ -347,6 +349,8 @@ def main():
         # print(evidence if len(evidence) <3 else evidence[:3])
         X.append((this_x[-1], np.std(this_x)))
         y.append(int(this_y))
+    print(X[:20])
+    print(y[:20])
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
     std_clf.fit(X_train, y_train)
