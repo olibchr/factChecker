@@ -144,7 +144,7 @@ def cred_stance_prediction(this_users):
             assertions.append(pred)
         assertions.append(pred)
     result = [np.average(assertions[:i + 1]) for i in range(len(assertions))]
-    return result
+    return assertions
 
 
 def only_cred_support_deny_pred(this_users):
@@ -174,7 +174,7 @@ def only_cred_support_deny_pred(this_users):
         assertions.append(user_pred)
         stances.append(u.stance)
     result = [np.average(assertions[:i + 1]) for i in range(len(assertions))]
-    return result, cred_to_fact_text
+    return assertions, cred_to_fact_text
 
 
 def feature_cred_stance(this_users):
@@ -315,7 +315,7 @@ def main():
         this_users = users_df[users_df['fact'] == hsh]
         this_x = cred_stance_prediction(this_users)
         this_y = facts['true'].iloc[idx]
-        X.append((this_x[-1], np.std(this_x)))
+        X.append((np.average(this_x), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
@@ -347,7 +347,7 @@ def main():
         evidence = sorted(evidence, reverse=True, key=lambda x: x[0])
         # print(facts[facts['hash']==hsh]['text'].values, int(this_y), this_x[-1])
         # print(evidence if len(evidence) <3 else evidence[:3])
-        X.append((this_x[-1], np.std(this_x)))
+        X.append((np.average(this_x), np.std(this_x)))
         y.append(int(this_y))
     print(X[:20])
     print(y[:20])
