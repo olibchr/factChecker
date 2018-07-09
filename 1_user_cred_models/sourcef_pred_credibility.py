@@ -319,7 +319,7 @@ def build_features_for_user(user, i=0.8):
     len_description = len(user.features['description']) if 'description' in user.features else 0
     len_name = len(user.features['name']) if 'name' in user.features else 0
 
-    return {
+    user_features = {
         'user_id': user.user_id,
         'y': user.was_correct,
         'avg_len': avg_len,
@@ -355,7 +355,8 @@ def build_features_for_user(user, i=0.8):
         'len_description': len_description,
         'len_name': len_name,
         'reg_age': reg_age
-    }, len(relevant_tweets)
+    }
+    return user_features, len(relevant_tweets)
 
 
 def model_param_grid_search(X, y):
