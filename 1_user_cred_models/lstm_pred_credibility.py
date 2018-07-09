@@ -47,8 +47,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # fix random seed for reproducibility
 np.random.seed(7)
 
-BUILD_NEW_DATA = False
-LDA_TOPIC = False
+BUILD_NEW_DATA = True
+LDA_TOPIC = True
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -485,9 +485,9 @@ def lstm_pred(n = 0):
     X, y, user_order = balance_classes(X,y,user_order)
     print(Counter(y))
 
-    # X_train, X_test, y_train, y_test = train_test_split(X,y)
+    X_train, X_test, y_train, y_test = train_test_split(X,y)
     # X_train, X_test, y_train, y_test = train_test_split_on_users(X,y, user_order, users, n)
-    X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
+    # X_train, X_test, y_train, y_test = train_test_split_on_facts(X,y, user_order, users, n)
 
     X_train, X_test, new_word_to_idx = keep_n_best_words(X_train,y_train, X_test, y_test, idx_to_word,top_words)
     print(Counter(y_train), Counter(y_test))
