@@ -354,9 +354,10 @@ def build_features_for_user(user, i=0.8):
         'time_retweet': time_retweet,
         'len_description': len_description,
         'len_name': len_name,
-        'reg_age': reg_age
+        'reg_age': reg_age,
+        'rel_tweets':len(relevant_tweets),
     }
-    return user_features, len(relevant_tweets)
+    return user_features
 
 
 def model_param_grid_search(X, y):
@@ -449,9 +450,9 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
         fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in
                          fact_topics[['hash', 'fact_terms']].iterrows()}
         users_with_tweets = [u for u in users if len(u.tweets) > 0]
-        users_with_features, num_rel_tweets = Parallel(n_jobs=num_jobs)(
+        users_with_features = Parallel(n_jobs=num_jobs)(
             delayed(build_features_for_user)(user, proximity) for i, user in enumerate(users_with_tweets))
-        print(sum(num_rel_tweets), np.average(num_rel_tweets))
+        print(sum(users_with_features['rel_tweets'].values()), np.average(users_with_features['rel_tweets'].values()))
         with open('model_data/user_features.pkl', 'wb') as tmpfile:
             pickle.dump(users_with_features, tmpfile)
     else:
@@ -473,10 +474,10 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
     mask[np.triu_indices_from(mask)] = True
     # Set up the matplotlib figure
     # Draw the heatmap with the mask and correct aspect ratio
-    f, ax = plt.subplots(figsize=(11, 9))
-    f.subplots_adjust(hspace=2, wspace=2)
-    sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
-    plt.show()
+    # f, ax = plt.subplots(figsize=(11, 9))
+    # f.subplots_adjust(hspace=2, wspace=2)
+    # sns.heatmap(corr, mask=mask, cmap=sns.diverging_palette(220, 10, as_cmap=True), vmax=.3, center=0, square=True, linewidths=.5, cbar_kws={"shrink": .5})
+    # plt.show()
 
     features = ['avg_words', 'avg_retweets', 'avg_tweet_is_retweet', 'avg_special_symbol', 'avg_emoticons', 'avg_links',
                 'friends', 'time_retweet', 'len_description', 'avg_sent_neg', 'avg_count_distinct_words',
@@ -493,16 +494,16 @@ def sourcef_pred(chi_k=15, ldak=5, proximity=0.8):
     X_2d = lsa.fit_transform(X, y)
     X_2d = normalize(X_2d, axis=0)
     # 2d plot of X
-    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
-    sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    # X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    # sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    # # plt.show()
+    #
+    # fig = plt.figure()
+    # fig.subplots_adjust(hspace=0.2, wspace=0.7)
+    # for i in range(1, len(features) + 1):
+    #     ax = fig.add_subplot(3, 5, i)
+    #     sns.boxplot(x="y", y=features[i - 1], data=users_df, palette="Set3")
     # plt.show()
-
-    fig = plt.figure()
-    fig.subplots_adjust(hspace=0.2, wspace=0.7)
-    for i in range(1, len(features) + 1):
-        ax = fig.add_subplot(3, 5, i)
-        sns.boxplot(x="y", y=features[i - 1], data=users_df, palette="Set3")
-    plt.show()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15)
     std_clf = make_pipeline(StandardScaler(), PCA(n_components=ldak), SVC(C=1, gamma=1))
