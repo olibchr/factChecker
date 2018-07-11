@@ -542,7 +542,7 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     X, y, user_order = build_sparse_matrix_word2vec(users)
     X,y,user_order = balance_classes(X,y,user_order)
-
+    print(X.shape)
     transformer = TfidfTransformer(smooth_idf=True)
     std_scale = preprocessing.StandardScaler(with_mean=False)
     svd = TruncatedSVD(svdk)

@@ -29,7 +29,7 @@ from keras.models import load_model
 from gensim.models import KeyedVectors
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 import types
 import tempfile
 import keras.models
@@ -318,7 +318,7 @@ def main():
         X.append((np.average(this_x), np.std(this_x)))
         y.append(int(this_y))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf = make_pipeline(StandardScaler(), LinearSVC)
     std_clf.fit(X_train, y_train)
     pred = std_clf.predict(X_test)
 
@@ -352,7 +352,7 @@ def main():
     print(X[:20])
     print(y[:20])
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf = make_pipeline(StandardScaler(), LinearSVC())
     std_clf.fit(X_train, y_train)
     pred = std_clf.predict(X_test)
 
@@ -365,6 +365,10 @@ def main():
     pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
     re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
     f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    print(acc_scores)
+    print(pr_scores)
+    print(re_scores)
+    print(f1_scores)
     print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
     print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
     print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))

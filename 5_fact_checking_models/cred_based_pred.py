@@ -44,8 +44,8 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
-NEW_MODEL = True
-NEW_REL_TWEETS = True
+NEW_MODEL = False
+NEW_REL_TWEETS = False
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
