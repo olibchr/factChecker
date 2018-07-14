@@ -43,6 +43,20 @@ def plot_results_lstm_early_user():
     ax = sns.tsplot(data=data, time=n)
     ax.set(xlabel='Credibility prediction with n data points', ylabel='F1 Score')
     plt.show()
+
+def plot_results_lstm_early_user_low():
+    # F1 score of user credibility. Plot of increasing N (how many tweets on topic improve prediction)
+    # Add useful tokens of a tweet to the fact representation after computing the distance
+    data = [0.5818,0.6589,0.6257,0.6581,0.6642,0.6323,0.6601,0.7403,0.6801,0.6744,
+            0.7509, 0.7317, 0.746, 0.8622, 0.8284, 0.8144, 0.8989, 0.8501, 0.9467]
+    n = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+    df = pd.DataFrame({'data': data, 'n': n})
+
+    ax = sns.tsplot(data=data, time=n)
+    ax.set(xlabel='Credibility prediction with n data points', ylabel='F1 Score')
+    plt.show()
+
+
 def plot_results_lstm_early_rumor():
     # F1 score of user credibility. Plot of increasing N (how many tweets on topic improve prediction)
     # Add useful tokens of a tweet to the fact representation after computing the distance
@@ -78,6 +92,7 @@ def plot_results_lstm_dist_vocab():
 
 #plot_results_from_was_correct_prediction()
 #plot_results_from_was_correct_prection_with_adding_useful_tokens_to_fact_representation()
+plot_results_lstm_early_user_low()
 # plot_results_lstm_early()
 # plot_results_lstm_early_rumor()
-plot_results_lstm_dist_vocab()
+#plot_results_lstm_dist_vocab()
