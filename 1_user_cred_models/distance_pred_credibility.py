@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(__file__) + '../2_helpers')
 from decoder import decoder
 
 #warnings.filterwarnings("ignore", category=DeprecationWarning)
-
+sns.set(style="ticks")
 NEW_CORPUS = False
 BUILD_NEW_SPARSE = False
 
@@ -549,8 +549,8 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
     normalizer = Normalizer(copy=False)
     lsa = make_pipeline(svd, normalizer)
 
-    # X = SelectKBest(chi2, k=chik).fit_transform(X, y)
-    # X = transformer.fit_transform(X, y)
+    X = SelectKBest(chi2, k=chik).fit_transform(X, y)
+    X = transformer.fit_transform(X, y)
     # X = np.asarray(lsa.fit_transform(X, y))
 
     # X_train, X_test, y_train, y_test = train_test_split_on_facts(X, y, user_order, users, n=N)
@@ -568,30 +568,43 @@ def truth_prediction_for_users(users, idx_to_word, chik, svdk, N):
 
     svd = TruncatedSVD(2)
     normalizer = Normalizer(copy=False)
-    lsa = make_pipeline(svd)
+    lsa = make_pipeline(preprocessing.StandardScaler(with_mean=False), svd)
     X_2d = lsa.fit_transform(X, y)
     X_2d = normalize(X_2d, axis=0)
 
     # 2d plot of X
-    # X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
-    # sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
+    X2d_df = pd.DataFrame({'x1': X_2d[:, 0], 'x2': X_2d[:, 1], 'y': y})
+    sns.lmplot(data=X2d_df, x='x1', y='x2', hue='y')
     # plt.show()
+    #exit()
 
-    std_clf = make_pipeline(SelectKBest(chi2, k=chik), TfidfTransformer(smooth_idf=True), preprocessing.StandardScaler(with_mean=False), TruncatedSVD(svdk), SVC(C=1, gamma=1))
+    std_clf = make_pipeline(preprocessing.StandardScaler(with_mean=False), TruncatedSVD(svdk), SVC(C=1, gamma=1))
     std_clf.fit(X_train, y_train)
     pred_test_std = std_clf.predict(X_test)
     precision, recall, fscore, sup = precision_recall_fscore_support(y_test, pred_test_std, average='macro')
     score = metrics.accuracy_score(y_test, pred_test_std)
     print("Random split: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
-    acc_scores = cross_val_score(std_clf, X, y, cv=5)
-    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=5)
-    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=5)
-    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=5)
-    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
-    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
-    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
-    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
+    # acc_scores = cross_val_score(std_clf, X, y, cv=5)
+    # pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=5)
+    # re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=5)
+    # f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=5)
+    # print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+    # print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+    # print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+    # print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
+
+    sns.set('talk', 'whitegrid', 'dark', font_scale=1.5, font='Ricty',
+        rc={"lines.linewidth": 2, 'grid.linestyle': '--'})
+    fpr, tpr, _ = roc_curve(y_test, pred_test_std)
+    roc_auc = auc(fpr, tpr)
+    lw = 2
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange',
+         lw=lw, label='ROC curve (AUC = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.legend(loc="lower right")
+    plt.show()
 
     print(Counter(y), Counter(y_train), Counter(y_test))
     # return evaluation(X, y, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
@@ -618,8 +631,9 @@ def main():
     N = 0
     # for chik, svdk in exp:
     #    r= []
-    for N in range(15):
-        results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
+    #for N in range(15):
+
+    results.append(truth_prediction_for_users(users, idx_to_word, 10000, 20, N))
     print(np.average(np.asarray(results), axis=1))
 
 
