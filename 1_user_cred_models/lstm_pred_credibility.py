@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 np.random.seed(7)
 
 BUILD_NEW_DATA = True
-LDA_TOPIC = True
+LDA_TOPIC = False
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
