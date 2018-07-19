@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 np.random.seed(7)
 
 BUILD_NEW_DATA = True
-LDA_TOPIC = False
+LDA_TOPIC = True
 NEW_LDA_MODEL = False
 
 DIR = os.path.dirname(__file__) + '../../3_Data/'
@@ -203,11 +203,12 @@ def lda_analysis(users):
                              for i in topic.argsort()[:-n_top_words - 1:-1]])
         print(message)
     print()
-    return lda
+    return lda_text_to_id, lda_topics_per_text
 
 
 def get_series_from_user(user):
     def topic_overlap(t1, t2):
+        global lda_text_to_id, lda_topics_per_text
         # todo: params to test
         n_topics = 5
         threshold = 2
@@ -467,12 +468,12 @@ def balance_classes(X,y, user_order):
 
 
 def lstm_pred(n = 0):
-    global lda, users
+    global users, lda_text_to_id, lda_topics_per_text
     print(n)
     top_words = 50000
 
     if BUILD_NEW_DATA:
-        if LDA_TOPIC: lda = lda_analysis(users)
+        if LDA_TOPIC: lda_text_to_id, lda_topics_per_text = lda_analysis(users)
         print("Retrieving data and shaping")
         users = [u for u in users if u.tweets]
         users_relevant_tweets = build_dataset(users)
