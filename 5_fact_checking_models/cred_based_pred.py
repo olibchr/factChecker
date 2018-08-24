@@ -371,7 +371,7 @@ def main():
     all_evidence = []
     with open('model_data/faulty_stances.json', 'rb') as tmpfile:
         f_stances = json.load(tmpfile)
-    print(f_stances[:10])
+    # print(f_stances[:10])
     users_df['true_stance'] = users_df['stance']
     users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[x])
     for idx, hsh in enumerate(facts['hash'].values):
