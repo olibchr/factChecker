@@ -16,7 +16,7 @@ def decoder(o):
                     avg_time_to_retweet=obj['avg_time_to_retweet'] if 'avg_time_to_retweet' in obj.keys() else None,
                     sent_tweets_avg=obj['sent_tweets_avg'] if 'sent_tweets_avg' in obj.keys() else None,
                     credibility=obj['credibility'] if 'credibility' in obj.keys() else None,
-                    tweet_id=obj['credibility'] if 'credibility' in obj.keys() else None
+                    tweet_id=obj['tweet_id'] if 'tweet_id' in obj.keys() else None
                     )
     def fact_decoder(obj):
         # <RUMOR_TPYE, HASH, TOPIC, TEXT, TRUE, PROVEN_FALSE, TURNAROUND, SOURCE_TWEET>
