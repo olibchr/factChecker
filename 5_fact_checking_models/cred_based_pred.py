@@ -363,6 +363,41 @@ def main():
     print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
     print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
+    # Pred with faulty stance
+
+    print('Making cred * faulty stance predictions')
+    X = []
+    y = []
+    all_evidence = []
+    with open('model_data/faulty_stances.json', 'rb') as tmpfile:
+        f_stances = json.load(tmpfile)
+    print(f_stances[:10])
+    users_df['true_stance'] = users_df['stance']
+    users_df['stance'] = users_df['user_id'].map(lambda x: f_stances[x])
+    for idx, hsh in enumerate(facts['hash'].values):
+        this_users = users_df[users_df['fact'] == hsh]
+        this_x, evidence = only_cred_support_deny_pred(this_users)
+        this_y = facts['true'].iloc[idx]
+        X.append((this_x[-1], np.std(this_x)))
+        y.append(int(this_y))
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf.fit(X_train, y_train)
+    pred = std_clf.predict(X_test)
+
+
+    score = metrics.accuracy_score(y_test, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
+    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
+    acc_scores = cross_val_score(std_clf, X, y, cv=3)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
 if __name__ == "__main__":
     main()
