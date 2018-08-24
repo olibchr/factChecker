@@ -117,6 +117,7 @@ def was_user_correct(user, facts, transactions):
             user.fact_text = transaction.text
             user.fact_text_ts = transaction.timestamp
             user.stance = 0 if transaction.stance == 'denying' else 1 if transaction.stance == 'supporting' else 2 if transaction.stance == 'comment' else 3
+            user.tweet_id = transaction.id
             break
     for fact in facts:
         if fact.hash == transaction.fact:

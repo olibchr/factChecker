@@ -373,7 +373,7 @@ def main():
         f_stances = json.load(tmpfile)
     print(f_stances[:10])
     users_df['true_stance'] = users_df['stance']
-    users_df['stance'] = users_df['user_id'].map(lambda x: f_stances[x])
+    users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[x])
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
