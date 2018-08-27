@@ -47,6 +47,7 @@ num_jobs = round(num_cores * 7 / 8)
 
 NEW_MODEL = False
 NEW_REL_TWEETS = False
+NEW_CRED = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -200,7 +201,7 @@ def feature_cred_stance(this_users):
     return None
 
 
-def prebuild_cred(model, user):
+def prebuild_cred(model, user, k_tweets = 200):
     # print(user.user_id)
     def get_credibility(text):
         text = gt.get_tokenize_text(text)
@@ -213,7 +214,7 @@ def prebuild_cred(model, user):
     if user.features is None or 'relevant_tweets' not in user.features: user.credibility = user_cred[0]; return user
     relevant_tweets = user.features['relevant_tweets']
     for idx,tweet in enumerate(relevant_tweets):
-        if idx > 200: break
+        if idx > k_tweets: break
         user_cred.append(get_credibility(tweet['text']))
     user.credibility = np.average(user_cred)
     return user
@@ -229,7 +230,7 @@ def store_result(user):
         out_file.write(json.dumps(user.__dict__, default=datetime_converter) + '\n')
 
 
-def main():
+def main(k_tweets):
     global bow_corpus
     global word_to_idx, idx_to_word, fact_to_words
     global bow_corpus_top_n
@@ -243,9 +244,9 @@ def main():
     word_to_idx = {k: idx for idx, k in enumerate(bow_corpus_tmp)}
     idx_to_word = {idx: k for k, idx in word_to_idx.items()}
     fact_to_words = {r['hash']: [w for w in r['fact_terms']] for index, r in facts[['hash', 'fact_terms']].iterrows()}
+    users = gt.get_users()
 
     if NEW_MODEL:
-        users = gt.get_users()
         # Prepping lstm model
         top_words = 50000
         X, y, user_order = lstm_cred.get_prebuilt_data()
@@ -270,27 +271,30 @@ def main():
         model.add(Dropout(0.2))
         model.add(Dense(1, activation='sigmoid'))
         model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        print(model.summary())
+        #print(model.summary())
         model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
         model.save('model_data/cred_model.h5')
-        scores = model.evaluate(X_test, y_test, verbose=0)
-        print("Accuracy: %.2f%%" % (scores[1] * 100))
+        #scores = model.evaluate(X_test, y_test, verbose=0)
+        #print("Accuracy: %.2f%%" % (scores[1] * 100))
+    else:
+        model = load_model('model_data/cred_model.h5')
 
-        if NEW_REL_TWEETS:
-            print('Building new relevant tweets')
-            users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
-            #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
-            user_to_rel_tweet = {user.user_id: user.features['relevant_tweets'] for user in users if 'relevant_tweets' in user.features}
-            with open('model_data/relevant_tweets.pkl','wb') as tmpfile:
-                pickle.dump(user_to_rel_tweet, tmpfile)
-        else:
-            with open('model_data/relevant_tweets.pkl','rb') as tmpfile:
-                user_to_rel_tweet = pickle.load(tmpfile)
-            for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id]
+    if NEW_REL_TWEETS:
+        print('Building new relevant tweets')
+        users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets)(user) for user in users)
+        #users = Parallel(n_jobs=num_jobs)(delayed(get_relevant_tweets_test_set)(user, X_test) for user in users)
+        user_to_rel_tweet = {user.user_id: user.features['relevant_tweets'] for user in users if 'relevant_tweets' in user.features}
+        with open('model_data/relevant_tweets.pkl','wb') as tmpfile:
+            pickle.dump(user_to_rel_tweet, tmpfile)
+    else:
+        with open('model_data/relevant_tweets.pkl','rb') as tmpfile:
+            user_to_rel_tweet = pickle.load(tmpfile)
+        for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id]
 
+    if NEW_CRED:
         # Build credibility scores for all users on their topic
         print('Computing credibility')
-        users = [prebuild_cred(model, u) for u in users]
+        users = [prebuild_cred(model, u, k_tweets) for u in users]
         users_df = pd.DataFrame([vars(u) for u in users])
 
         [store_result(u) for u in users]
@@ -302,35 +306,6 @@ def main():
             construct = pickle.load(tmpfile)
         users_df = construct['users']
         word_to_idx = construct['map']
-
-
-    print('Making cred*sent predictions')
-    X = []
-    y = []
-    for idx, hsh in enumerate(facts['hash'].values):
-        this_users = users_df[users_df['fact'] == hsh]
-        this_x = cred_stance_prediction(this_users)
-        this_y = facts['true'].iloc[idx]
-        X.append((this_x[-1], np.std(this_x)))
-        y.append(int(this_y))
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
-    std_clf.fit(X_train, y_train)
-    pred = std_clf.predict(X_test)
-
-    score = metrics.accuracy_score(y_test, pred)
-    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
-    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score, precision, recall, fscore))
-    acc_scores = cross_val_score(std_clf, X, y, cv=3)
-    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
-    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
-    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
-    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
-    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
-    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
-    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
-
 
     print('Making cred*stance predictions')
     X = []
@@ -420,7 +395,6 @@ def main():
     X = []
     y = []
     users_df['stance'] = users_df['true_stance']
-    #print(fact_features)
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
@@ -435,12 +409,12 @@ def main():
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
 
+    print(X)
     X_train_cred = np.asarray(X_train)[:,:2]
     X_test_cred = np.asarray(X_test)[:,:2]
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_cred , y_train)
     pred_cred = std_clf.predict_proba(X_test_cred)
-    print(pred_cred )
 
     X_train_feat = np.asarray(X_train)[:,2:]
     X_test_feat = np.asarray(X_test)[:,2:]
@@ -452,7 +426,7 @@ def main():
     pred_proba = np.add(pred_cred, pred_feat)
     print(pred_proba)
 
-    pred = np.argmax(np.divide(pred_proba,2))
+    pred = [np.argmax(x) for x in np.divide(pred_proba,2)]
     print(pred)
 
     score = metrics.accuracy_score(y_test, pred)
@@ -470,4 +444,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    k_tweets = [1, 5, 10, 20, 50, 70, 100, 150, 200, 300, 500, 700]
+    for i in k_tweets:
+        print('k_tweets: {}'.format(k_tweets))
+        main(k_tweets)
+    #k_tweets = 200
+    #main(k_tweets)
