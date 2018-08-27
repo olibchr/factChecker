@@ -371,9 +371,10 @@ def main():
     all_evidence = []
     with open('model_data/faulty_stances.json', 'rb') as tmpfile:
         f_stances = json.load(tmpfile)
-    # print(f_stances[:10])
+    #print(f_stances)
+    print(sum([1 for x in users_df['tweet_id'].values if str(x) not in f_stances]))
     users_df['true_stance'] = users_df['stance']
-    users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[x])
+    users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[str(x)] if str(x) in f_stances else users_df[users_df['tweet_id'] == x]['true_stance'])
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
@@ -398,6 +399,34 @@ def main():
     print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
     print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
     print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
+
+
+
+
+    exit()
+    # Pred with cred and standard features
+    with open('model_data/feature_data', 'rb') as tmpfile:
+        fact_features = pickle.load(tmpfile)
+    features = ['avg_links', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'lvl_size', 'avg_len', 'avg_special_symbol',
+                'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos']
+    print('Making cred * stance plus standard feature predictions')
+    X = []
+    y = []
+    all_evidence = []
+    with open('model_data/faulty_stances.json', 'rb') as tmpfile:
+        f_stances = json.load(tmpfile)
+    # print(f_stances[:10])
+    users_df['stance'] = users_df['true_stance']
+    for idx, hsh in enumerate(facts['hash'].values):
+        this_users = users_df[users_df['fact'] == hsh]
+        this_x, evidence = only_cred_support_deny_pred(this_users)
+        this_y = facts['true'].iloc[idx]
+        X.append((this_x[-1], np.std(this_x)))
+        y.append(int(this_y))
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf.fit(X_train, y_train)
+    pred = std_clf.predict(X_test)
 
 if __name__ == "__main__":
     main()
