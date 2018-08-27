@@ -440,17 +440,21 @@ def main():
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_cred , y_train)
     pred_cred = std_clf.predict_log_proba(X_test_cred)
+    print(pred_cred )
 
     X_train_feat = np.asarray(X_train)[:,2:]
     X_test_feat = np.asarray(X_test)[:,2:]
     std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_feat, y_train)
     pred_feat= std_clf.predict_log_proba(X_test_feat)
+    print(pred_feat)
 
     pred_proba = np.add(pred_cred, pred_feat)
     print(pred_proba)
-    pred = np.divide(pred_proba,2)
 
+    pred = np.round(np.divide(pred_proba,2))
+    print(pred)
+    
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
