@@ -420,14 +420,13 @@ def main():
     X = []
     y = []
     users_df['stance'] = users_df['true_stance']
-    print(fact_features)
+    #print(fact_features)
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
         this_y = facts['true'].iloc[idx]
 
         this_fact_features = [0] * len(features)
-        print(hsh)
         if hsh in fact_features['hash']:
             this_fact_features = fact_features[['hash'] == hsh][list(features)].values
 
@@ -438,13 +437,13 @@ def main():
 
     X_train_cred = np.asarray(X_train)[:,:2]
     X_test_cred = np.asarray(X_test)[:,:2]
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
+    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_cred , y_train)
     pred_cred = std_clf.predict_log_proba(X_test_cred)
 
     X_train_feat = np.asarray(X_train)[:,2:]
     X_test_feat = np.asarray(X_test)[:,2:]
-    std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1))
+    std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_feat, y_train)
     pred_feat= std_clf.predict_log_proba(X_test_feat)
 
