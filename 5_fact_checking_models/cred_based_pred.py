@@ -33,6 +33,7 @@ from sklearn.svm import SVC
 import types
 import tempfile
 import keras.models
+from sklearn.decomposition import PCA
 
 sid = SentimentIntensityAnalyzer()
 
@@ -380,10 +381,10 @@ def main():
         elif v == 3: this_val = 3
         f_stances[k] = this_val
 
-    print(sum([1 for x in users_df['tweet_id'].values if str(x) not in f_stances]))
+    #print(sum([1 for x in users_df['tweet_id'].values if str(x) not in f_stances]))
     users_df['true_stance'] = users_df['stance']
     users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[str(x)] if str(x) in f_stances else users_df[users_df['tweet_id'] == x]['true_stance'].values[0])
-    print(users_df[['stance', 'true_stance']])
+    #print(users_df[['stance', 'true_stance']])
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
@@ -410,32 +411,57 @@ def main():
     print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
 
-
-
-    exit()
     # Pred with cred and standard features
+    print('Making cred * stance plus standard feature predictions')
     with open('model_data/feature_data', 'rb') as tmpfile:
         fact_features = pickle.load(tmpfile)
     features = ['avg_links', 'avg_sent_neg', 'avg_sentiment', 'fr_has_url', 'lvl_size', 'avg_len', 'avg_special_symbol',
                 'avg_time_retweet', 'avg_count_distinct_words', 'avg_sent_pos']
-    print('Making cred * stance plus standard feature predictions')
+
     X = []
     y = []
-    all_evidence = []
-    with open('model_data/faulty_stances.json', 'rb') as tmpfile:
-        f_stances = json.load(tmpfile)
-    # print(f_stances[:10])
     users_df['stance'] = users_df['true_stance']
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
         this_y = facts['true'].iloc[idx]
-        X.append((this_x[-1], np.std(this_x)))
+
+        this_fact_features = fact_features[['hash'] == hsh][list(features)].values
+
+        X.append([this_x[-1], np.std(this_x)] + this_fact_features)
         y.append(int(this_y))
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+
+    X_train_cred = np.asarray(X_train)[:,:2]
+    X_test_cred = np.asarray(X_test)[:,:2]
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1))
-    std_clf.fit(X_train, y_train)
-    pred = std_clf.predict(X_test)
+    std_clf.fit(X_train_cred , y_train)
+    pred_cred = std_clf.predict_log_proba(X_test_cred)
+
+    X_train_feat = np.asarray(X_train)[:,2:]
+    X_test_feat = np.asarray(X_test)[:,2:]
+    std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1))
+    std_clf.fit(X_train_feat, y_train)
+    pred_feat= std_clf.predict_log_proba(X_test_feat)
+
+    pred_proba = np.add(pred_cred, pred_feat)
+    print(pred_proba)
+    pred= np.divide(pred_proba,2)
+
+    score = metrics.accuracy_score(y_test, pred)
+    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
+    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+        score, precision, recall, fscore))
+    acc_scores = cross_val_score(std_clf, X, y, cv=3)
+    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
+    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
+    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
+    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
+    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
+    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
+    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
+
 
 if __name__ == "__main__":
     main()
