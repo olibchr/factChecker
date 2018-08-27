@@ -166,7 +166,6 @@ def only_cred_support_deny_pred(this_users):
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
-        print(u.stance)
         user_pred = get_support(u, user_cred)
         cred_to_fact_text.append([user_cred,u.fact_text])
         if u.stance != -1:
@@ -421,12 +420,16 @@ def main():
     X = []
     y = []
     users_df['stance'] = users_df['true_stance']
+    print(fact_features)
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
         this_y = facts['true'].iloc[idx]
 
-        this_fact_features = fact_features[['hash'] == hsh][list(features)].values
+        this_fact_features = [0] * len(features)
+        print(hsh)
+        if hsh in fact_features['hash']:
+            this_fact_features = fact_features[['hash'] == hsh][list(features)].values
 
         X.append([this_x[-1], np.std(this_x)] + this_fact_features)
         y.append(int(this_y))
@@ -447,7 +450,7 @@ def main():
 
     pred_proba = np.add(pred_cred, pred_feat)
     print(pred_proba)
-    pred= np.divide(pred_proba,2)
+    pred = np.divide(pred_proba,2)
 
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
