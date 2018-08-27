@@ -47,7 +47,7 @@ num_jobs = round(num_cores * 7 / 8)
 
 NEW_MODEL = False
 NEW_REL_TWEETS = False
-NEW_CRED = True
+NEW_CRED = False
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -444,9 +444,9 @@ def main(k_tweets):
 
 
 if __name__ == "__main__":
-    k_tweets = [1, 5, 10, 20, 50, 70, 100, 150, 200, 300, 500, 700]
-    for i in k_tweets:
-        print('k_tweets: {}'.format(k_tweets))
-        main(k_tweets)
-    #k_tweets = 200
-    #main(k_tweets)
+    # k_tweets = [1, 5, 10, 20, 50, 70, 100, 150, 200, 300, 500, 700]
+    # for i in k_tweets:
+    #     print('k_tweets: {}'.format(k_tweets))
+    #     main(k_tweets)
+    k_tweets = 200
+    main(k_tweets)
