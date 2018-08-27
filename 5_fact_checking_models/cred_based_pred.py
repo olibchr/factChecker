@@ -289,7 +289,7 @@ def main(k_tweets):
     else:
         with open('model_data/relevant_tweets.pkl','rb') as tmpfile:
             user_to_rel_tweet = pickle.load(tmpfile)
-        for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id]
+        for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id] if 'relevant_tweets' in user.features else []
 
     if NEW_CRED:
         # Build credibility scores for all users on their topic
