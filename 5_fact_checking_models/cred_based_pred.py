@@ -165,6 +165,7 @@ def only_cred_support_deny_pred(this_users):
 
     for idx, u in this_users.iterrows():
         user_cred = u.credibility
+        print(u.stance)
         user_pred = get_support(u, user_cred)
         cred_to_fact_text.append([user_cred,u.fact_text])
         if u.stance != -1:
@@ -370,11 +371,19 @@ def main():
     y = []
     all_evidence = []
     with open('model_data/faulty_stances.json', 'rb') as tmpfile:
-        f_stances = json.load(tmpfile)
-    #print(f_stances)
+        f_stances_raw = json.load(tmpfile)
+    f_stances = {}
+    for k,v in f_stances_raw.items():
+        this_val = 0
+        if v == 0: this_val = 1
+        elif v == 1: this_val = 2
+        elif v == 3: this_val = 3
+        f_stances[k] = this_val
+
     print(sum([1 for x in users_df['tweet_id'].values if str(x) not in f_stances]))
     users_df['true_stance'] = users_df['stance']
-    users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[str(x)] if str(x) in f_stances else users_df[users_df['tweet_id'] == x]['true_stance'])
+    users_df['stance'] = users_df['tweet_id'].map(lambda x: f_stances[str(x)] if str(x) in f_stances else users_df[users_df['tweet_id'] == x]['true_stance'].values[0])
+    print(users_df[['stance', 'true_stance']])
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
