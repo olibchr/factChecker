@@ -402,9 +402,10 @@ def main(k_tweets):
         this_y = facts['true'].iloc[idx]
 
         this_fact_features = [0] * len(features)
+        print(hsh)
         if hsh in fact_features['hash'].values:
-            print(fact_features[['hash'] ==hsh])
-            this_fact_features = fact_features[['hash'] == hsh][list(features)].values
+            print(fact_features[fact_features['hash'] == hsh])
+            this_fact_features = fact_features[fact_features['hash'] == hsh][list(features)].values
 
         X.append([this_x[-1], np.std(this_x)] + this_fact_features)
         y.append(int(this_y))
