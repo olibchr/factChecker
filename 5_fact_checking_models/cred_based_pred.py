@@ -395,13 +395,14 @@ def main(k_tweets):
     X = []
     y = []
     users_df['stance'] = users_df['true_stance']
+    print(fact_features['hash'])
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
         this_y = facts['true'].iloc[idx]
 
         this_fact_features = [0] * len(features)
-        if hsh in fact_features['hash']:
+        if hsh in fact_features['hash'].values:
             this_fact_features = fact_features[['hash'] == hsh][list(features)].values
 
         X.append([this_x[-1], np.std(this_x)] + this_fact_features)
