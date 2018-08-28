@@ -395,7 +395,7 @@ def main(k_tweets):
     X = []
     y = []
     users_df['stance'] = users_df['true_stance']
-    print(fact_features['hash'])
+    #print(fact_features['hash'])
     for idx, hsh in enumerate(facts['hash'].values):
         this_users = users_df[users_df['fact'] == hsh]
         this_x, evidence = only_cred_support_deny_pred(this_users)
@@ -403,6 +403,7 @@ def main(k_tweets):
 
         this_fact_features = [0] * len(features)
         if hsh in fact_features['hash'].values:
+            print(fact_features[['hash'] ==hsh])
             this_fact_features = fact_features[['hash'] == hsh][list(features)].values
 
         X.append([this_x[-1], np.std(this_x)] + this_fact_features)
@@ -410,7 +411,7 @@ def main(k_tweets):
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
 
-    print(X)
+    #print(X)
     X_train_cred = np.asarray(X_train)[:,:2]
     X_test_cred = np.asarray(X_test)[:,:2]
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
@@ -425,10 +426,10 @@ def main(k_tweets):
     print(pred_feat)
 
     pred_proba = np.add(pred_cred, pred_feat)
-    print(pred_proba)
+    #print(pred_proba)
 
     pred = [np.argmax(x) for x in np.divide(pred_proba,2)]
-    print(pred)
+    #print(pred)
 
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
