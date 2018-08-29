@@ -45,10 +45,13 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
-EXP1 = True
 NEW_MODEL = False
 NEW_REL_TWEETS = False
 NEW_CRED = False
+EXP1 = False
+if EXP1:
+    NEW_MODEL = True
+    NEW_CRED = True
 DIR = os.path.dirname(__file__) + '../../3_Data/'
 word_vectors = KeyedVectors.load_word2vec_format('model_data/word2vec_twitter_model/word2vec_twitter_model.bin',
                                                  binary=True, unicode_errors='ignore')
@@ -417,7 +420,7 @@ def main(k_tweets):
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
 
-    #print(X)
+    print(X[:10])
     X_train_cred = np.asarray(X_train)[:,:2]
     X_test_cred = np.asarray(X_test)[:,:2]
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
