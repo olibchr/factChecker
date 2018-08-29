@@ -45,6 +45,7 @@ import getters as gt
 num_cores = multiprocessing.cpu_count()
 num_jobs = round(num_cores * 7 / 8)
 
+EXP1 = True
 NEW_MODEL = False
 NEW_REL_TWEETS = False
 NEW_CRED = False
@@ -339,6 +340,9 @@ def main(k_tweets):
     print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
     print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
 
+    if EXP1:
+        return
+
     # Pred with faulty stance
 
     print('Making cred * faulty stance predictions')
@@ -407,7 +411,8 @@ def main(k_tweets):
             print(fact_features[fact_features['hash'] == hsh])
             this_fact_features = fact_features[fact_features['hash'] == hsh][list(features)].values
 
-        X.append([this_x[-1], np.std(this_x)] + this_fact_features)
+        X.append(np.concatenate(([this_x[-1], np.std(this_x)], this_fact_features), axis=None))
+        #X.append([this_x[-1], np.std(this_x)] + this_fact_features)
         y.append(int(this_y))
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
@@ -424,7 +429,7 @@ def main(k_tweets):
     std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_feat, y_train)
     pred_feat= std_clf.predict_proba(X_test_feat)
-    print(pred_feat)
+    #print(pred_feat)
 
     pred_proba = np.add(pred_cred, pred_feat)
     #print(pred_proba)
@@ -447,9 +452,11 @@ def main(k_tweets):
 
 
 if __name__ == "__main__":
-    # k_tweets = [1, 5, 10, 20, 50, 70, 100, 150, 200, 300, 500, 700]
-    # for i in k_tweets:
-    #     print('k_tweets: {}'.format(k_tweets))
-    #     main(k_tweets)
-    k_tweets = 200
-    main(k_tweets)
+    if EXP1:
+        k_tweets = [1, 5, 10, 20, 50, 70, 100, 150, 200, 300, 500, 700]
+        for i in k_tweets:
+            print('k_tweets: {}'.format(k_tweets))
+            main(i)
+    else:
+        k_tweets = 200
+        main(k_tweets)
