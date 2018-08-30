@@ -416,46 +416,38 @@ def main(k_tweets):
         #X.append([this_x[-1], np.std(this_x)] + this_fact_features)
         y.append(int(this_y))
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
+    from sklearn.model_selection import KFold # import KFold
+    kf = KFold(n_splits=3) # Define the split - into 2 folds
+    kf.get_n_splits(X) # returns the number of splitting iterations in the cross-validator
+    for train_index, test_index in kf.split(X):
+        X_train, X_test, y_train, y_test = X[train_index], X[test_index], y[train_index], y[test_index]
+    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
 
-    print(X[:10])
-    X_train_cred = np.asarray(X_train)[:,:2]
-    X_test_cred = np.asarray(X_test)[:,:2]
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
-    std_clf.fit(X_train_cred , y_train)
-    pred_cred = std_clf.predict_proba(X_test_cred)
-    print(cross_val_score(std_clf, X, y, cv=3))
+        X_train_cred = np.asarray(X_train)[:,:2]
+        X_test_cred = np.asarray(X_test)[:,:2]
+        std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
+        std_clf.fit(X_train_cred , y_train)
+        pred_cred = std_clf.predict_proba(X_test_cred)
 
-    X_train_feat = np.asarray(X_train)[:,2:]
-    X_test_feat = np.asarray(X_test)[:,2:]
-    std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1, probability=True))
-    std_clf.fit(X_train_feat, y_train)
-    pred_feat= std_clf.predict_proba(X_test_feat)
+        X_train_feat = np.asarray(X_train)[:,2:]
+        X_test_feat = np.asarray(X_test)[:,2:]
+        std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1, probability=True))
+        std_clf.fit(X_train_feat, y_train)
+        pred_feat= std_clf.predict_proba(X_test_feat)
 
-    print(pred_feat)
+        #print(pred_feat)
 
-    pred_proba = np.add(pred_cred, pred_feat)
-    print(pred_proba)
+        pred_proba = np.add(pred_cred, pred_feat)
+        #print(pred_proba)
 
-    pred = [np.argmax(x) for x in np.divide(pred_proba,2)]
-    print(pred)
-    print(y_test)
+        pred = [np.argmax(x) for x in np.divide(pred_proba,2)]
+        print(pred)
+        print(y_test)
 
-    score = metrics.accuracy_score(y_test, pred)
-    precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
-    print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
-        score, precision, recall, fscore))
-
-    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
-    std_clf.fit(X_train , y_train)
-    acc_scores = cross_val_score(std_clf, X, y, cv=3)
-    pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
-    re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
-    f1_scores = cross_val_score(std_clf, X, y, scoring='f1', cv=3)
-    print("\t Cross validated Accuracy: %0.3f (+/- %0.3f)" % (acc_scores.mean(), acc_scores.std() * 2))
-    print("\t Cross validated Precision: %0.3f (+/- %0.3f)" % (pr_scores.mean(), pr_scores.std() * 2))
-    print("\t Cross validated Recall: %0.3f (+/- %0.3f)" % (re_scores.mean(), re_scores.std() * 2))
-    print("\t Cross validated F1: %0.3f (+/- %0.3f)" % (f1_scores.mean(), f1_scores.std() * 2))
+        score = metrics.accuracy_score(y_test, pred)
+        precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
+        print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
+            score, precision, recall, fscore))
 
 
 if __name__ == "__main__":
