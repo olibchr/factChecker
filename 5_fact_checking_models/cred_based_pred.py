@@ -276,7 +276,7 @@ def main(k_tweets):
         model.add(Dense(1, activation='sigmoid'))
         model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
         #print(model.summary())
-        model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64)
+        model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=5, batch_size=64, verbose=0)
         model.save('model_data/cred_model.h5')
         #scores = model.evaluate(X_test, y_test, verbose=0)
         #print("Accuracy: %.2f%%" % (scores[1] * 100))
@@ -447,8 +447,7 @@ def main(k_tweets):
         score, precision, recall, fscore))
 
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
-    std_clf.fit(pred_proba, y_train)
-
+    std_clf.fit(X_train , y_train)
     acc_scores = cross_val_score(std_clf, X, y, cv=3)
     pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
     re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
