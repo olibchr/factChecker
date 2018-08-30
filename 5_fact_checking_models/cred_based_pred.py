@@ -293,7 +293,7 @@ def main(k_tweets):
     else:
         with open('model_data/relevant_tweets.pkl','rb') as tmpfile:
             user_to_rel_tweet = pickle.load(tmpfile)
-        for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id] if 'relevant_tweets' in user.features else []
+        for user in users: user.features['relevant_tweets'] = user_to_rel_tweet[user.user_id] if 'relevant_tweets' in user.features and user.user_id in user_to_rel_tweet else []
 
     if NEW_CRED:
         # Build credibility scores for all users on their topic
@@ -409,9 +409,7 @@ def main(k_tweets):
         this_y = facts['true'].iloc[idx]
 
         this_fact_features = [0] * len(features)
-        print(hsh)
         if hsh in fact_features['hash'].values:
-            print(fact_features[fact_features['hash'] == hsh])
             this_fact_features = fact_features[fact_features['hash'] == hsh][list(features)].values
 
         X.append(np.concatenate(([this_x[-1], np.std(this_x)], this_fact_features), axis=None))
@@ -426,24 +424,31 @@ def main(k_tweets):
     std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_cred , y_train)
     pred_cred = std_clf.predict_proba(X_test_cred)
+    print(cross_val_score(std_clf, X, y, cv=3))
 
     X_train_feat = np.asarray(X_train)[:,2:]
     X_test_feat = np.asarray(X_test)[:,2:]
     std_clf = make_pipeline(StandardScaler(), PCA(n_components=8), SVC(C=1, gamma=1, probability=True))
     std_clf.fit(X_train_feat, y_train)
     pred_feat= std_clf.predict_proba(X_test_feat)
-    #print(pred_feat)
+
+    print(pred_feat)
 
     pred_proba = np.add(pred_cred, pred_feat)
-    #print(pred_proba)
+    print(pred_proba)
 
     pred = [np.argmax(x) for x in np.divide(pred_proba,2)]
-    #print(pred)
+    print(pred)
+    print(y_test)
 
     score = metrics.accuracy_score(y_test, pred)
     precision, recall, fscore, sup = metrics.precision_recall_fscore_support(y_test, pred, average='macro')
     print("Rumors: Accuracy: %0.3f, Precision: %0.3f, Recall: %0.3f, F1 score: %0.3f" % (
         score, precision, recall, fscore))
+
+    std_clf = make_pipeline(StandardScaler(), SVC(C=1, gamma=1, probability=True))
+    std_clf.fit(pred_proba, y_train)
+
     acc_scores = cross_val_score(std_clf, X, y, cv=3)
     pr_scores = cross_val_score(std_clf, X, y, scoring='precision', cv=3)
     re_scores = cross_val_score(std_clf, X, y, scoring='recall', cv=3)
