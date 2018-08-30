@@ -420,7 +420,7 @@ def main(k_tweets):
     kf = KFold(n_splits=3) # Define the split - into 2 folds
     kf.get_n_splits(X) # returns the number of splitting iterations in the cross-validator
     for train_index, test_index in kf.split(X):
-        X_train, X_test, y_train, y_test = X[train_index], X[test_index], y[train_index], y[test_index]
+        X_train, X_test, y_train, y_test = np.asarray(X)[train_index], np.asarray(X)[test_index], np.asarray(y)[train_index], np.asarray(y)[test_index]
     #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
 
         X_train_cred = np.asarray(X_train)[:,:2]
